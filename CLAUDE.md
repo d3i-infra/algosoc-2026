@@ -35,5 +35,5 @@ runtime in `packages/python` (Poetry).
 - Python tests: `pnpm test`
 - JS unit tests: `pnpm --filter @eyra/feldspar test`
 - Typecheck: `pnpm typecheck:py`
-- E2E (Playwright): `pnpm test:e2e`
+- E2E (Playwright): `VITE_PLATFORM=e2etest pnpm test:e2e` (the e2etest platform is the example platform plus a fault-injection trigger; excluded from release discovery)
 - Memory benchmarks: `scripts/benchmarks/` (see its README)

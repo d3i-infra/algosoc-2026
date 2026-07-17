@@ -32,7 +32,7 @@ Per-platform deployment builds are produced by `release.sh`, which loops setting
 ## Guidance
 
 - Produce deployable per-platform zips with `release.sh` (one per platform); don't add runtime platform detection in Python — `VITE_PLATFORM` is fixed at build time.
-- The platform list is derived from `configs/`: adding a platform to a release means generating its config (`pnpm generate-config <platform>`), never editing a hardcoded list in `release.sh`.
+- The platform list is derived from `configs/`: adding a platform to a release means generating its config (`pnpm generate-config <platform>`), never editing a hardcoded list in `release.sh`. Sole carve-out: discovery skips the test-only `e2etest` platform (Playwright fault injection) so it can never ship implicitly; an explicit `VITE_PLATFORM=e2etest` release still builds it.
 - Preserve the `VITE_PLATFORM` thread — `release.sh → worker_engine.ts → py_worker.js → main.py → script.py` — when touching any of those files. `VITE_PLATFORM` is required — `check-deps.sh` guards dev mode, and a bundle built without a platform is *invalid*: it must fail explicitly (build-time refusal, or a clear participant-facing message), never an unhandled traceback.
 - Don't reintroduce the removed Earthly build pipeline (`_build_release.yml`, `forbids`); `gh-pages.yml` validates the template build. (The separate `release.yml` — a GitHub release on a `v*` tag from CHANGELOG — is unrelated to per-platform deployment.)
 

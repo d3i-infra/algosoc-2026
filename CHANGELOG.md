@@ -6,6 +6,34 @@ Earlier releases used sequential numbering (#1-#5) matching the upstream
 
 ## [Unreleased]
 
+### Breaking
+
+* **The error flow no longer exits with code 0.** After a recoverable
+  Python error, the consent-gated error-report flow now terminates
+  with `CommandSystemExit(1, "Error flow completed")` instead of the
+  success exit, so hosts no longer record errored participants as
+  completed ("Done" with zero donations, #123). Errored sessions stay
+  pending in mono and the participant lands on a new "Task not
+  completed" acknowledgment page instead of a stale error page.
+  ADR-0036 records the contract: exit 0 means completed, error-end is
+  nonzero. **Migration:** hosts and forks must not interpret a nonzero
+  `CommandSystemExit` as completion; d3i-infra/mono already shows a
+  flash and keeps the task pending. Forks that customized
+  `error_flow()` should adopt the terminal
+  `ph.render_task_incomplete_page()` yield and keep the exit `info`
+  free of exception text.
+
+### Added
+
+* A test-only `e2etest` platform (fault injection for the Playwright
+  suite): it delegates validation and extraction to the example
+  platform and raises intentionally when the uploaded zip contains a
+  file named `trigger_error.txt`, so the error-report flow is
+  exercised end-to-end (`tests/error-flow.spec.ts`). `release.sh`
+  excludes it from platform discovery; the e2e suite and error-flow
+  previews run with `VITE_PLATFORM=e2etest`. Production platforms
+  carry no trigger.
+
 ## v3.0.0 — 2026-07-16
 
 This release reworks how studies are built and shipped: every bundle

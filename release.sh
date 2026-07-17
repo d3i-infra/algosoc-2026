@@ -29,6 +29,9 @@ else
         [ -f "$config_file" ] || continue
         basename="${config_file##*/}"          # e.g. chatgpt_config.json
         platform="${basename%_config.json}"    # e.g. chatgpt
+        # e2etest is the Playwright fault-injection platform — never released.
+        # (An explicit VITE_PLATFORM=e2etest release still works, above.)
+        [ "$platform" = "e2etest" ] && continue
         platforms+=("$platform")
     done
 
