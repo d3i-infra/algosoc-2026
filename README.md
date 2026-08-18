@@ -1,3 +1,14 @@
+# AlgoSoc-2026
+
+This study will be executed in the LISS Panel
+Platforms of interest will be:
+
+- TikTok
+- YouTube
+- Instagram
+- Facebook
+- Google
+
 # The data donation task
 
 The data donation task (a fork of [Feldspar](https://github.com/eyra/feldspar)) is a front end that guides participants through the data donation steps, used in conjunction with Next.

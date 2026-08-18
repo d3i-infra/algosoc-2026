@@ -91,5 +91,4 @@ pytests/scenarios/*PRIVATE.json
 .~lock.*#
 
 # Config files (keep example configs)
-*_config.json
 !*example_config.json
