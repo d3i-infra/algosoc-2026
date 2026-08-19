@@ -54,6 +54,8 @@ jobs:
           cp packages/python/dist/*.whl packages/data-collector/public/
 
       - name: Build All Platforms
+        env:
+          NODE_ENV: development
         run: |
           CONFIGS_DIR="packages/python/port/configs"
           PREVIEW_DIR="preview"
