@@ -55,7 +55,7 @@ jobs:
 
       - name: Build All Platforms
         env:
-          NODE_ENV: development
+          VITE_STANDALONE: "true"
         run: |
           CONFIGS_DIR="packages/python/port/configs"
           PREVIEW_DIR="preview"
