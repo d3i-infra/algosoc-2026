@@ -9,6 +9,8 @@ Platforms of interest will be:
 - Facebook
 - Google
 
+Preview all platforms: [https://d3i-infra.github.io/algosoc-2026/](https://d3i-infra.github.io/algosoc-2026/)
+
 # The data donation task
 
 The data donation task (a fork of [Feldspar](https://github.com/eyra/feldspar)) is a front end that guides participants through the data donation steps, used in conjunction with Next.
