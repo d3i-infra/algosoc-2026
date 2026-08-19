@@ -56,6 +56,7 @@ class TableConfig:
     extractor_kwargs: dict[str, Any] = field(default_factory=dict)
     visualizations: list[dict[str, Any]] = field(default_factory=list)
     variables: list[str] | None = None
+    source_file: str = ""
 
 
 def _build_config(
@@ -97,6 +98,7 @@ def _build_config(
             extractor_kwargs=entry.get("extractor_kwargs", {}),
             visualizations=entry.get("visualizations", []),
             variables=entry.get("variables", None),
+            source_file=entry.get("documentation", {}).get("source_file", ""),
         ))
     return configs
 
@@ -164,7 +166,15 @@ def run_extraction(reader, errors: Counter, config: list[TableConfig]) -> Extrac
         )
         tables.append(table)
 
+    for t, cfg in zip(tables, config):
+        if t.data_frame.empty:
+            msg = f"We did not extract any data from {cfg.source_file}, could you check whether this is correct? This is for testing purposes."
+            t.description = props.Translatable({
+                k: v + " " + msg for k, v in t.description.translations.items()
+            })
+            t.data_frame = pd.DataFrame({"info": ["No data, see description"]})
+
     return ExtractionResult(
-        tables=[t for t in tables if not t.data_frame.empty],
+        tables=tables,
         errors=errors,
     )
