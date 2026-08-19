@@ -10,6 +10,7 @@ function App() {
     <div className="App">
       <ScriptHostComponent
         workerUrl="./py_worker.js"
+        locale="nl"
         standalone={import.meta.env.DEV || import.meta.env.VITE_STANDALONE === "true"}
         logLevel={import.meta.env.DEV ? "debug" : "info"}
         factories={[
