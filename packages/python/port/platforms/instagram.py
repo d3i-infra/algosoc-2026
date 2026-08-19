@@ -28,6 +28,7 @@ Platform info::
 """
 
 import logging
+import os
 from collections import Counter
 from typing import Any, Callable
 
@@ -1112,8 +1113,8 @@ def stories_published_to_df(
           "summary": "Each row represents one Instagram Story published by the participant.",
           "source_file": "stories.json",
           "columns": {
-            "Title": "Caption or title text of the story, if any.",
-            "URI": "Internal media URI of the story asset in the export archive.",
+            "Title": "Caption or title text of the story, or 'Story has no title' when empty.",
+            "Media type": "File extension of the story media asset (e.g. .jpg, .mp4).",
             "Date": "ISO 8601 timestamp of when the story was created."
           }
         }
@@ -1132,7 +1133,7 @@ def stories_published_to_df(
           },
           "headers": {
             "Title": {"en": "Title", "nl": "Titel"},
-            "URI": {"en": "URI", "nl": "URI"},
+            "Media type": {"en": "Media type", "nl": "Mediatype"},
             "Date": {"en": "Date", "nl": "Datum en tijd"}
           }
         }
@@ -1152,13 +1153,18 @@ def stories_published_to_df(
             items = data  # pyright: ignore
 
         for item in items:
+            title = eh.fix_latin1_string(item.get("title", ""))
+            if not title:
+                title = "Story has no title"
+            uri = item.get("uri", "")
+            ext = os.path.splitext(uri)[1] if uri else ""
             datapoints.append((
-                eh.fix_latin1_string(item.get("title", "")),
-                item.get("uri", ""),
+                title,
+                ext,
                 eh.epoch_to_iso(item.get("creation_timestamp", ""), errors=errors),
             ))
 
-        out = pd.DataFrame(datapoints, columns=["Title", "URI", "Date"])  # pyright: ignore
+        out = pd.DataFrame(datapoints, columns=["Title", "Media type", "Date"])  # pyright: ignore
         out = _sort_by_date(out, "Date")
 
     except Exception as e:
