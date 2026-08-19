@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AlgoSoc Platform Previews</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; background: #f5f5f5; padding: 2rem; }
+    h1 { margin-bottom: 1.5rem; color: #1a1a1a; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem; }
+    a.card {
+      display: block; padding: 1.5rem; background: #fff; border-radius: 8px;
+      text-decoration: none; color: #333; border: 1px solid #e0e0e0;
+      transition: box-shadow 0.15s, transform 0.15s;
+    }
+    a.card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); transform: translateY(-2px); }
+    .card .name { font-size: 1.25rem; font-weight: 600; text-transform: capitalize; }
+    .card .url { font-size: 0.85rem; color: #666; margin-top: 0.5rem; word-break: break-all; }
+  </style>
+</head>
+<body>
+  <h1>AlgoSoc Platform Previews</h1>
+  <div class="grid">
+    <a class="card" href="./example/">
+      <div class="name">example</div>
+      <div class="url">example/</div>
+    </a>
+    <a class="card" href="./facebook/">
+      <div class="name">facebook</div>
+      <div class="url">facebook/</div>
+    </a>
+    <a class="card" href="./instagram/">
+      <div class="name">instagram</div>
+      <div class="url">instagram/</div>
+    </a>
+    <a class="card" href="./tiktok/">
+      <div class="name">tiktok</div>
+      <div class="url">tiktok/</div>
+    </a>
+    <a class="card" href="./youtube/">
+      <div class="name">youtube</div>
+      <div class="url">youtube/</div>
+    </a>
+  </div>
+</body>
+</html>
