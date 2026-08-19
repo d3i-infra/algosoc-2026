@@ -192,93 +192,10 @@ def _extract_owner_details(label_values: list[dict[str, Any]]) -> tuple[str, str
 # ---------------------------------------------------------------------------
 # Per-table extraction functions
 # ---------------------------------------------------------------------------
-
-def followers_to_df(
-    reader: ZipArchiveReader,
-    errors: Counter,
-    *,
-    filename: str = "followers_1.json",
-) -> pd.DataFrame:
-    """Extract the list of followers into a DataFrame.
-
-    Handles both the newer bare top-level list format and the older format
-    where entries are wrapped under a ``"relationships_followers"`` key.
-
-    Parameters
-    ----------
-    reader:
-        Archive reader used to load JSON files from the DDP zip.
-    errors:
-        Mutable counter that accumulates error type counts encountered during
-        extraction.  Updated in-place.
-    filename:
-        Path inside the zip archive to read.  Defaults to
-        ``"followers_1.json"``.
-
-    Returns
-    -------
-    pd.DataFrame
-        Columns: ``Account``, ``URL``, ``Date``.
-        Empty DataFrame when the file is absent or parsing fails.
-
-    Table documentation::
-
-        {
-          "summary": "Each row represents one account that follows the participant on Instagram, including when they started following.",
-          "source_file": "followers_1.json",
-          "columns": {
-            "Account": "Username or display name of the follower account.",
-            "URL": "Direct URL to the follower's Instagram profile.",
-            "Date": "ISO 8601 timestamp of when the account started following the participant."
-          }
-        }
-
-    Table config::
-
-        {
-          "id": "instagram_followers",
-          "title": {"en": "Your Instagram followers", "nl": "Je Instagram-volgers"},
-          "description": {
-            "en": "List of accounts that follow you on Instagram.",
-            "nl": "Lijst van accounts die jou op Instagram volgen."
-          },
-          "headers": {
-            "Account": {"en": "Account", "nl": "Account"},
-            "URL": {"en": "URL", "nl": "URL"},
-            "Date": {"en": "Date", "nl": "Datum en tijd"}
-          }
-        }
-    """
-    result = reader.json(filename)
-    if not result.found:
-        return pd.DataFrame()
-    data = result.data
-
-    out = pd.DataFrame()
-    datapoints = []
-
-    try:
-        if isinstance(data, dict):
-            items = data.get("relationships_followers", [])
-        else:
-            items = data  # pyright: ignore
-
-        for item in items:
-            d = eh.dict_denester(item)
-            datapoints.append((
-                eh.fix_latin1_string(eh.find_item(d, "value") or eh.find_item(d, "title")),
-                eh.find_item(d, "href"),
-                eh.epoch_to_iso(eh.find_item(d, "timestamp"), errors=errors),
-            ))
-        out = pd.DataFrame(datapoints, columns=["Account", "URL", "Date"])  # pyright: ignore
-        out = _sort_by_date(out, "Date")
-
-    except Exception as e:
-        logger.error("Exception caught: %s", e)
-        errors[type(e).__name__] += 1
-
-    return out
-
+# Ordered to match the algosoc-2026 extraction list.
+# Extractors not in the list are commented out at the end.
+# Missing extractors are marked with TODO comments.
+# ---------------------------------------------------------------------------
 
 def following_to_df(
     reader: ZipArchiveReader,
@@ -354,102 +271,6 @@ def following_to_df(
                 eh.epoch_to_iso(eh.find_item(d, "timestamp"), errors=errors),
             ))
         out = pd.DataFrame(datapoints, columns=["Account", "URL", "Date"])  # pyright: ignore
-        out = _sort_by_date(out, "Date")
-
-    except Exception as e:
-        logger.error("Exception caught: %s", e)
-        errors[type(e).__name__] += 1
-
-    return out
-
-
-def ads_viewed_to_df(
-    reader: ZipArchiveReader,
-    errors: Counter,
-    *,
-    filename: str = "ads_viewed.json",
-) -> pd.DataFrame:
-    """Extract the list of viewed ads into a DataFrame.
-
-    Supports both the list-at-root format and the dict format keyed by
-    ``"impressions_history_ads_seen"``.
-
-    Parameters
-    ----------
-    reader:
-        Archive reader used to load JSON files from the DDP zip.
-    errors:
-        Mutable counter that accumulates error type counts encountered during
-        extraction.  Updated in-place.
-    filename:
-        Path inside the zip archive to read.  Defaults to
-        ``"ads_viewed.json"``.
-
-    Returns
-    -------
-    pd.DataFrame
-        Columns: ``Account name``, ``Name``, ``URL``, ``Date``.
-        Empty DataFrame when the file is absent or parsing fails.
-
-    Table documentation::
-
-        {
-          "summary": "Each row represents one advertisement impression shown to the participant on Instagram. Includes the advertiser identity and when the ad was displayed.",
-          "source_file": "ads_viewed.json",
-          "columns": {
-            "Account name": "Username of the advertiser's Instagram account.",
-            "Name": "Display name of the advertiser.",
-            "URL": "URL associated with the advertisement.",
-            "Date": "ISO 8601 timestamp of when the ad was shown to the participant."
-          }
-        }
-
-    Table config::
-
-        {
-          "id": "instagram_ads_viewed",
-          "title": {
-            "en": "Ads viewed on Instagram",
-            "nl": "Advertenties bekeken op Instagram"
-          },
-          "description": {
-            "en": "List of ads that you viewed on Instagram.",
-            "nl": "Lijst van advertenties die je op Instagram hebt bekeken."
-          },
-          "headers": {
-            "Account name": {"en": "Account name", "nl": "Accountnaam"},
-            "Name": {"en": "Name", "nl": "Naam"},
-            "URL": {"en": "URL", "nl": "URL"},
-            "Date": {"en": "Date", "nl": "Datum en tijd"}
-          }
-        }
-    """
-    result = reader.json(filename)
-    if not result.found:
-        return pd.DataFrame()
-    data = result.data
-
-    out = pd.DataFrame()
-    datapoints = []
-
-    try:
-        if isinstance(data, list):
-            items = data
-        elif isinstance(data, dict):
-            items = data.get("impressions_history_ads_seen", [])  # pyright: ignore
-        else:
-            items = []
-
-        for item in items:  # pyright: ignore
-            owner_name, owner_username, url = _extract_owner_details(item.get("label_values", []))
-            datapoints.append((
-                owner_username or owner_name,
-                owner_name,
-                url,
-                eh.epoch_to_iso(item.get("timestamp", ""), errors=errors),
-            ))
-
-        out = pd.DataFrame(datapoints, columns=["Account name", "Name", "URL", "Date"])  # pyright: ignore
         out = _sort_by_date(out, "Date")
 
     except Exception as e:
@@ -752,12 +573,18 @@ def post_comments_to_df(
 
     try:
         results = reader.json_all(filename_pattern)
+        
         if not results:
             return pd.DataFrame()
 
         for result in results:
             data = result.data
-            items = data if isinstance(data, list) else data.get("comments_media_comments", [])
+            if isinstance(data, list):
+                items = data
+            elif "string_map_data" in data:
+                items = [data]
+            else:
+                items = data.get("comments_media_comments", [])
             for item in items:  # pyright: ignore[assignment]
                 string_map_data = item.get("string_map_data", {})
                 comment = _first_present(string_map_data, ["Comment", "Opmerking"])
@@ -978,86 +805,6 @@ def liked_posts_to_df(
     return out
 
 
-def profile_searches_to_df(
-    reader: ZipArchiveReader,
-    errors: Counter,
-    *,
-    filename: str = "profile_searches.json",
-) -> pd.DataFrame:
-    """Extract the list of profile searches into a DataFrame.
-
-    Parameters
-    ----------
-    reader:
-        Archive reader used to load JSON files from the DDP zip.
-    errors:
-        Mutable counter that accumulates error type counts encountered during
-        extraction.  Updated in-place.
-    filename:
-        Path inside the zip archive to read.  Defaults to
-        ``"profile_searches.json"``.
-
-    Returns
-    -------
-    pd.DataFrame
-        Columns: ``Timestamp``, ``Name``.
-        Empty DataFrame when the file is absent or parsing fails.
-
-    Table documentation::
-
-        {
-          "summary": "Each row represents one profile search performed by the participant on Instagram, recording what was searched and when.",
-          "source_file": "profile_searches.json",
-          "columns": {
-            "Name": "Username or display name that was searched for.",
-            "Timestamp": "ISO 8601 timestamp of when the search was performed."
-          }
-        }
-
-    Table config::
-
-        {
-          "id": "instagram_profile_searches",
-          "title": {
-            "en": "Your Instagram profile searches",
-            "nl": "Je Instagram-profielzoekopdrachten"
-          },
-          "description": {
-            "en": "List of profiles you have searched for on Instagram.",
-            "nl": "Lijst van profielen die je op Instagram hebt gezocht."
-          },
-          "headers": {
-            "Name": {"en": "Name", "nl": "Naam"},
-            "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
-          }
-        }
-    """
-    result = reader.json(filename)
-    if not result.found:
-        return pd.DataFrame()
-    data = result.data
-
-    out = pd.DataFrame()
-    datapoints = []
-
-    try:
-        items = data["searches_user"]  # pyright: ignore
-        for item in items:
-            d = eh.dict_denester(item)
-            datapoints.append((
-                eh.epoch_to_iso(eh.find_item(d, "timestamp"), errors=errors),
-                eh.fix_latin1_string(eh.find_item(d, "title") or eh.find_item(d, "value")),
-            ))
-        out = pd.DataFrame(datapoints, columns=["Timestamp", "Name"])  # pyright: ignore
-        out = _sort_by_date(out, "Timestamp")
-
-    except Exception as e:
-        logger.error("Exception caught: %s", e)
-        errors[type(e).__name__] += 1
-
-    return out
-
-
 def story_likes_to_df(
     reader: ZipArchiveReader,
     errors: Counter,
@@ -1140,6 +887,555 @@ def story_likes_to_df(
 
         out = pd.DataFrame(datapoints, columns=["Account name", "Date"])  # pyright: ignore
         out = _sort_by_date(out, "Date")
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return out
+
+
+def saved_posts_to_df(
+    reader: ZipArchiveReader,
+    errors: Counter,
+    *,
+    filename: str = "saved_posts.json",
+) -> pd.DataFrame:
+    """Extract the list of saved posts into a DataFrame.
+
+    Parameters
+    ----------
+    reader:
+        Archive reader used to load JSON files from the DDP zip.
+    errors:
+        Mutable counter that accumulates error type counts encountered during
+        extraction.  Updated in-place.
+    filename:
+        Path inside the zip archive to read.  Defaults to
+        ``"saved_posts.json"``.
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: ``Title``, ``Value``, ``Timestamp``.
+        Empty DataFrame when the file is absent or parsing fails.
+
+    Table documentation::
+
+        {
+          "summary": "Each row represents one post the participant bookmarked (saved) on Instagram for later viewing.",
+          "source_file": "saved_posts.json",
+          "columns": {
+            "Title": "Concatenated title labels from the saved post metadata.",
+            "Value": "Concatenated values (caption, URL, owner info) from the saved post.",
+            "Timestamp": "ISO 8601 timestamp of when the post was saved."
+          }
+        }
+
+    Table config::
+
+        {
+          "id": "instagram_saved_posts",
+          "title": {
+            "en": "Your saved posts on Instagram",
+            "nl": "Je opgeslagen berichten op Instagram"
+          },
+          "description": {
+            "en": "List of posts you have saved on Instagram.",
+            "nl": "Lijst van berichten die je hebt opgeslagen op Instagram."
+          },
+          "headers": {
+            "Title": {"en": "Title", "nl": "Titel"},
+            "Value": {"en": "Value", "nl": "Waarde"},
+            "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
+          }
+        }
+    """
+    result = reader.json(filename)
+    if not result.found:
+        return pd.DataFrame()
+    data = result.data
+
+    out = pd.DataFrame()
+    datapoints = []
+
+    try:
+        items = data if isinstance(data, list) else data.get("saved_saved_media", [])  # pyright: ignore
+        for item in items:
+            d = eh.dict_denester(item)
+            value = " ".join(
+                eh.fix_latin1_string(str(v)) for v in eh.find_items(d, "value") if v
+            )
+            title = " ".join(
+                eh.fix_latin1_string(str(v)) for v in eh.find_items(d, "title") if v
+            )
+            datapoints.append((
+                title,
+                value,
+                eh.epoch_to_iso(item.get("timestamp", ""), errors=errors),
+            ))
+        out = pd.DataFrame(datapoints, columns=["Title", "Value", "Timestamp"])  # pyright: ignore
+        out = _sort_by_date(out, "Timestamp")
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return out
+
+
+# ---------------------------------------------------------------------------
+# RECREATED FROM algosoc-dd-old — NEEDS MANUAL VERIFICATION
+# Source: algosoc-dd-old/src/framework/processing/py/port/instagram.py parse_searches()
+# ---------------------------------------------------------------------------
+def word_or_phrase_searches_to_df(
+    reader: ZipArchiveReader,
+    errors: Counter,
+    *,
+    filename: str = "word_or_phrase_searches.json",
+) -> pd.DataFrame:
+    """Extract keyword searches into a DataFrame.
+
+    Reads the older ``string_map_data`` format keyed by
+    ``"searches_keyword"``.  Each entry contains a search term and timestamp.
+
+    Parameters
+    ----------
+    reader:
+        Archive reader used to load JSON files from the DDP zip.
+    errors:
+        Mutable counter that accumulates error type counts encountered during
+        extraction.  Updated in-place.
+    filename:
+        Path inside the zip archive to read.  Defaults to
+        ``"word_or_phrase_searches.json"``.
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: ``Search term``, ``Date``.
+        Empty DataFrame when the file is absent or parsing fails.
+
+    Table documentation::
+
+        {
+          "summary": "Each row represents one keyword or phrase search the participant performed on Instagram.",
+          "source_file": "word_or_phrase_searches.json",
+          "columns": {
+            "Search term": "The word or phrase that was searched for.",
+            "Date": "ISO 8601 timestamp of when the search was performed."
+          }
+        }
+
+    Table config::
+
+        {
+          "id": "instagram_word_or_phrase_searches",
+          "title": {
+            "en": "Your keyword searches on Instagram",
+            "nl": "Je zoekwoorden op Instagram"
+          },
+          "description": {
+            "en": "List of words or phrases you have searched for on Instagram.",
+            "nl": "Lijst van woorden of zinnen die je op Instagram hebt gezocht."
+          },
+          "headers": {
+            "Search term": {"en": "Search term", "nl": "Zoekterm"},
+            "Date": {"en": "Date", "nl": "Datum en tijd"}
+          }
+        }
+    """
+    result = reader.json(filename)
+    if not result.found:
+        return pd.DataFrame()
+    data = result.data
+
+    out = pd.DataFrame()
+    datapoints = []
+
+    try:
+        if isinstance(data, dict):
+            items = data.get("searches_keyword", [])
+        else:
+            items = data  # pyright: ignore
+
+        for item in items:
+            string_map_data = item.get("string_map_data", {})
+            search = _first_present(string_map_data, ["Search", "Zoekopdracht", "Zoeken"])
+            time = _first_present(string_map_data, ["Time", "Tijd"])
+            datapoints.append((
+                eh.fix_latin1_string(str(search.get("value", ""))),
+                eh.epoch_to_iso(time.get("timestamp", ""), errors=errors),
+            ))
+
+        out = pd.DataFrame(datapoints, columns=["Search term", "Date"])  # pyright: ignore
+        out = _sort_by_date(out, "Date")
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return out
+
+
+def stories_published_to_df(
+    reader: ZipArchiveReader,
+    errors: Counter,
+    *,
+    filename: str = "stories.json",
+) -> pd.DataFrame:
+    """Extract published stories into a DataFrame.
+
+    Reads the ``"ig_stories"`` key from the JSON.  Each entry contains a
+    title and a ``creation_timestamp``.
+
+    Parameters
+    ----------
+    reader:
+        Archive reader used to load JSON files from the DDP zip.
+    errors:
+        Mutable counter that accumulates error type counts encountered during
+        extraction.  Updated in-place.
+    filename:
+        Path inside the zip archive to read.  Defaults to
+        ``"stories.json"``.
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: ``Title``, ``URI``, ``Date``.
+        Empty DataFrame when the file is absent or parsing fails.
+
+    Table documentation::
+
+        {
+          "summary": "Each row represents one Instagram Story published by the participant.",
+          "source_file": "stories.json",
+          "columns": {
+            "Title": "Caption or title text of the story, if any.",
+            "URI": "Internal media URI of the story asset in the export archive.",
+            "Date": "ISO 8601 timestamp of when the story was created."
+          }
+        }
+
+    Table config::
+
+        {
+          "id": "instagram_stories_published",
+          "title": {
+            "en": "Stories you published on Instagram",
+            "nl": "Stories die je op Instagram hebt geplaatst"
+          },
+          "description": {
+            "en": "List of stories you have published on Instagram.",
+            "nl": "Lijst van stories die je op Instagram hebt geplaatst."
+          },
+          "headers": {
+            "Title": {"en": "Title", "nl": "Titel"},
+            "URI": {"en": "URI", "nl": "URI"},
+            "Date": {"en": "Date", "nl": "Datum en tijd"}
+          }
+        }
+    """
+    result = reader.json(filename)
+    if not result.found:
+        return pd.DataFrame()
+    data = result.data
+
+    out = pd.DataFrame()
+    datapoints = []
+
+    try:
+        if isinstance(data, dict):
+            items = data.get("ig_stories", [])
+        else:
+            items = data  # pyright: ignore
+
+        for item in items:
+            datapoints.append((
+                eh.fix_latin1_string(item.get("title", "")),
+                item.get("uri", ""),
+                eh.epoch_to_iso(item.get("creation_timestamp", ""), errors=errors),
+            ))
+
+        out = pd.DataFrame(datapoints, columns=["Title", "URI", "Date"])  # pyright: ignore
+        out = _sort_by_date(out, "Date")
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return out
+
+
+# ---------------------------------------------------------------------------
+# RECREATED FROM algosoc-dd-old — NEEDS MANUAL VERIFICATION
+# Source: algosoc-dd-old/src/framework/processing/py/port/instagram.py parse_advertisers_using_activity()
+# ---------------------------------------------------------------------------
+def advertisers_using_activity_to_df(
+    reader: ZipArchiveReader,
+    errors: Counter,
+    *,
+    filename: str = "advertisers_using_your_activity_or_information.json",
+) -> pd.DataFrame:
+    """Extract advertisers using participant activity into a DataFrame.
+
+    Handles the newer ``label_values`` format where advertisers are grouped
+    under category labels, and the older format keyed by
+    ``"ig_custom_audiences_all_types"``.
+
+    Parameters
+    ----------
+    reader:
+        Archive reader used to load JSON files from the DDP zip.
+    errors:
+        Mutable counter that accumulates error type counts encountered during
+        extraction.  Updated in-place.
+    filename:
+        Path inside the zip archive to read.  Defaults to
+        ``"advertisers_using_your_activity_or_information.json"``.
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: ``Advertiser``, ``Category``.
+        Empty DataFrame when the file is absent or parsing fails.
+
+    Table documentation::
+
+        {
+          "summary": "Each row represents one advertiser that used the participant's activity or information to target them on Instagram.",
+          "source_file": "advertisers_using_your_activity_or_information.json",
+          "columns": {
+            "Advertiser": "Name of the advertiser.",
+            "Category": "Category describing how the advertiser used the participant's data."
+          }
+        }
+
+    Table config::
+
+        {
+          "id": "instagram_advertisers_using_activity",
+          "title": {
+            "en": "Advertisers using your activity or information",
+            "nl": "Adverteerders die je activiteit of informatie gebruiken"
+          },
+          "description": {
+            "en": "List of advertisers that used your activity or information to reach you on Instagram.",
+            "nl": "Lijst van adverteerders die je activiteit of informatie hebben gebruikt om je te bereiken op Instagram."
+          },
+          "headers": {
+            "Advertiser": {"en": "Advertiser", "nl": "Adverteerder"},
+            "Category": {"en": "Category", "nl": "Categorie"}
+          }
+        }
+    """
+    result = reader.json(filename)
+    if not result.found:
+        return pd.DataFrame()
+    data = result.data
+
+    out = pd.DataFrame()
+    datapoints = []
+
+    try:
+        if isinstance(data, dict):
+            # Newer format: label_values at root level
+            label_values = data.get("label_values", [])
+            if label_values:
+                for group in label_values:
+                    category = group.get("label", "")
+                    for entry in group.get("vec", []):
+                        datapoints.append((
+                            eh.fix_latin1_string(entry.get("value", "")),
+                            category,
+                        ))
+            else:
+                # Older format: ig_custom_audiences_all_types
+                items = data.get("ig_custom_audiences_all_types", [])
+                for item in items:
+                    datapoints.append((
+                        eh.fix_latin1_string(item.get("advertiser_name", "")),
+                        "",
+                    ))
+
+        out = pd.DataFrame(datapoints, columns=["Advertiser", "Category"])  # pyright: ignore
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return out
+
+
+def ads_viewed_to_df(
+    reader: ZipArchiveReader,
+    errors: Counter,
+    *,
+    filename: str = "ads_viewed.json",
+) -> pd.DataFrame:
+    """Extract the list of viewed ads into a DataFrame.
+
+    Supports both the list-at-root format and the dict format keyed by
+    ``"impressions_history_ads_seen"``.
+
+    Parameters
+    ----------
+    reader:
+        Archive reader used to load JSON files from the DDP zip.
+    errors:
+        Mutable counter that accumulates error type counts encountered during
+        extraction.  Updated in-place.
+    filename:
+        Path inside the zip archive to read.  Defaults to
+        ``"ads_viewed.json"``.
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: ``Account name``, ``Name``, ``URL``, ``Date``.
+        Empty DataFrame when the file is absent or parsing fails.
+
+    Table documentation::
+
+        {
+          "summary": "Each row represents one advertisement impression shown to the participant on Instagram. Includes the advertiser identity and when the ad was displayed.",
+          "source_file": "ads_viewed.json",
+          "columns": {
+            "Account name": "Username of the advertiser's Instagram account.",
+            "Name": "Display name of the advertiser.",
+            "URL": "URL associated with the advertisement.",
+            "Date": "ISO 8601 timestamp of when the ad was shown to the participant."
+          }
+        }
+
+    Table config::
+
+        {
+          "id": "instagram_ads_viewed",
+          "title": {
+            "en": "Ads viewed on Instagram",
+            "nl": "Advertenties bekeken op Instagram"
+          },
+          "description": {
+            "en": "List of ads that you viewed on Instagram.",
+            "nl": "Lijst van advertenties die je op Instagram hebt bekeken."
+          },
+          "headers": {
+            "Account name": {"en": "Account name", "nl": "Accountnaam"},
+            "Name": {"en": "Name", "nl": "Naam"},
+            "URL": {"en": "URL", "nl": "URL"},
+            "Date": {"en": "Date", "nl": "Datum en tijd"}
+          }
+        }
+    """
+    result = reader.json(filename)
+    if not result.found:
+        return pd.DataFrame()
+    data = result.data
+
+    out = pd.DataFrame()
+    datapoints = []
+
+    try:
+        if isinstance(data, list):
+            items = data
+        elif isinstance(data, dict):
+            items = data.get("impressions_history_ads_seen", [])  # pyright: ignore
+        else:
+            items = []
+
+        for item in items:  # pyright: ignore
+            owner_name, owner_username, url = _extract_owner_details(item.get("label_values", []))
+            datapoints.append((
+                owner_username or owner_name,
+                owner_name,
+                url,
+                eh.epoch_to_iso(item.get("timestamp", ""), errors=errors),
+            ))
+
+        out = pd.DataFrame(datapoints, columns=["Account name", "Name", "URL", "Date"])  # pyright: ignore
+        out = _sort_by_date(out, "Date")
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return out
+
+
+def profile_searches_to_df(
+    reader: ZipArchiveReader,
+    errors: Counter,
+    *,
+    filename: str = "profile_searches.json",
+) -> pd.DataFrame:
+    """Extract the list of profile searches into a DataFrame.
+
+    Parameters
+    ----------
+    reader:
+        Archive reader used to load JSON files from the DDP zip.
+    errors:
+        Mutable counter that accumulates error type counts encountered during
+        extraction.  Updated in-place.
+    filename:
+        Path inside the zip archive to read.  Defaults to
+        ``"profile_searches.json"``.
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: ``Timestamp``, ``Name``.
+        Empty DataFrame when the file is absent or parsing fails.
+
+    Table documentation::
+
+        {
+          "summary": "Each row represents one profile search performed by the participant on Instagram, recording what was searched and when.",
+          "source_file": "profile_searches.json",
+          "columns": {
+            "Name": "Username or display name that was searched for.",
+            "Timestamp": "ISO 8601 timestamp of when the search was performed."
+          }
+        }
+
+    Table config::
+
+        {
+          "id": "instagram_profile_searches",
+          "title": {
+            "en": "Your Instagram profile searches",
+            "nl": "Je Instagram-profielzoekopdrachten"
+          },
+          "description": {
+            "en": "List of profiles you have searched for on Instagram.",
+            "nl": "Lijst van profielen die je op Instagram hebt gezocht."
+          },
+          "headers": {
+            "Name": {"en": "Name", "nl": "Naam"},
+            "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
+          }
+        }
+    """
+    result = reader.json(filename)
+    if not result.found:
+        return pd.DataFrame()
+    data = result.data
+
+    out = pd.DataFrame()
+    datapoints = []
+
+    try:
+        items = data["searches_user"]  # pyright: ignore
+        for item in items:
+            d = eh.dict_denester(item)
+            datapoints.append((
+                eh.epoch_to_iso(eh.find_item(d, "timestamp"), errors=errors),
+                eh.fix_latin1_string(eh.find_item(d, "title") or eh.find_item(d, "value")),
+            ))
+        out = pd.DataFrame(datapoints, columns=["Timestamp", "Name"])  # pyright: ignore
+        out = _sort_by_date(out, "Timestamp")
 
     except Exception as e:
         logger.error("Exception caught: %s", e)
@@ -1245,13 +1541,16 @@ def threads_viewed_to_df(
     return out
 
 
-def saved_posts_to_df(
+def ads_clicked_to_df(
     reader: ZipArchiveReader,
     errors: Counter,
     *,
-    filename: str = "saved_posts.json",
+    filename: str = "ads_clicked.json",
 ) -> pd.DataFrame:
-    """Extract the list of saved posts into a DataFrame.
+    """Extract the list of clicked ads into a DataFrame.
+
+    Reads the older format keyed by ``"impressions_history_ads_clicked"``
+    where each entry has a title and a timestamp in ``string_list_data``.
 
     Parameters
     ----------
@@ -1262,42 +1561,42 @@ def saved_posts_to_df(
         extraction.  Updated in-place.
     filename:
         Path inside the zip archive to read.  Defaults to
-        ``"saved_posts.json"``.
+        ``"ads_clicked.json"``.
 
     Returns
     -------
     pd.DataFrame
-        Columns: ``Title``, ``URL``, ``Timestamp``.
+        Columns: ``Value``, ``URL``, ``Date``.
         Empty DataFrame when the file is absent or parsing fails.
 
     Table documentation::
 
         {
-          "summary": "Each row represents one post the participant bookmarked (saved) on Instagram for later viewing.",
-          "source_file": "saved_posts.json",
+          "summary": "Each row represents one advertisement the participant clicked on Instagram.",
+          "source_file": "ads_clicked.json",
           "columns": {
-            "Title": "Title or label of the saved post as stored in the export.",
-            "URL": "Direct URL to the saved post.",
-            "Timestamp": "ISO 8601 timestamp of when the post was saved."
+            "Value": "Concatenated values from the ad metadata.",
+            "URL": "URL of the clicked advertisement.",
+            "Date": "ISO 8601 timestamp of when the ad was clicked."
           }
         }
 
     Table config::
 
         {
-          "id": "instagram_saved_posts",
+          "id": "instagram_ads_clicked",
           "title": {
-            "en": "Your saved posts on Instagram",
-            "nl": "Je opgeslagen berichten op Instagram"
+            "en": "Ads clicked on Instagram",
+            "nl": "Advertenties aangeklikt op Instagram"
           },
           "description": {
-            "en": "List of posts you have saved on Instagram.",
-            "nl": "Lijst van berichten die je hebt opgeslagen op Instagram."
+            "en": "List of ads you clicked on Instagram.",
+            "nl": "Lijst van advertenties die je op Instagram hebt aangeklikt."
           },
           "headers": {
-            "Title": {"en": "Title", "nl": "Titel"},
-            "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"},
-            "URL": {"en": "URL", "nl": "URL"}
+            "Value": {"en": "Value", "nl": "Waarde"},
+            "URL": {"en": "URL", "nl": "URL"},
+            "Date": {"en": "Date", "nl": "Datum en tijd"}
           }
         }
     """
@@ -1310,20 +1609,112 @@ def saved_posts_to_df(
     datapoints = []
 
     try:
-        items = data["saved_saved_media"]  # pyright: ignore
+        items = data if isinstance(data, list) else data.get("impressions_history_ads_clicked", [])  # pyright: ignore
         for item in items:
-            title = eh.fix_latin1_string(item.get("title", ""))
-            if "string_list_data" in item:
-                string_list = item.get("string_list_data", [{}])
-                entry = string_list[0] if string_list else {}
-            else:
-                entry = _first_present(item.get("string_map_data", {}), ["Saved on", "Opgeslagen op"])
+            d = eh.dict_denester(item)
+            value = " ".join(
+                eh.fix_latin1_string(str(v)) for v in eh.find_items(d, "value") if v
+            )
+            href = eh.find_item(d, "href")
             datapoints.append((
-                title,
-                entry.get("href", ""),
-                eh.epoch_to_iso(entry.get("timestamp", ""), errors=errors),
+                value,
+                href,
+                eh.epoch_to_iso(item.get("timestamp", ""), errors=errors),
             ))
-        out = pd.DataFrame(datapoints, columns=["Title", "URL", "Timestamp"])  # pyright: ignore
+
+        out = pd.DataFrame(datapoints, columns=["Value", "URL", "Date"])  # pyright: ignore
+        out = _sort_by_date(out, "Date")
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return out
+
+
+def posts_published_to_df(
+    reader: ZipArchiveReader,
+    errors: Counter,
+    *,
+    filename_pattern: str = r"(^|/)posts(?:_\d+)?\.json$",
+) -> pd.DataFrame:
+    """Extract published posts across multiple matching files into a DataFrame.
+
+    Reads files matching ``posts_1.json``, ``posts_2.json``, etc.  Each entry
+    contains a title and a ``creation_timestamp``.
+
+    Parameters
+    ----------
+    reader:
+        Archive reader used to load JSON files from the DDP zip.
+    errors:
+        Mutable counter that accumulates error type counts encountered during
+        extraction.  Updated in-place.
+    filename_pattern:
+        Regular expression matched against archive member paths.  Defaults to
+        a pattern that matches ``posts.json``, ``posts_1.json``, etc.
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: ``Title``, ``Timestamp``.
+        Empty DataFrame when no matching files are found or parsing fails.
+
+    Table documentation::
+
+        {
+          "summary": "Each row represents one post published by the participant on Instagram.",
+          "source_file": "posts_*.json",
+          "columns": {
+            "Title": "Caption or title text of the post.",
+            "Timestamp": "ISO 8601 timestamp of when the post was created."
+          }
+        }
+
+    Table config::
+
+        {
+          "id": "instagram_posts_published",
+          "title": {
+            "en": "Posts you published on Instagram",
+            "nl": "Berichten die je op Instagram hebt geplaatst"
+          },
+          "description": {
+            "en": "List of posts you have published on Instagram.",
+            "nl": "Lijst van berichten die je op Instagram hebt geplaatst."
+          },
+          "headers": {
+            "Title": {"en": "Title", "nl": "Titel"},
+            "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
+          }
+        }
+    """
+    out = pd.DataFrame()
+    datapoints = []
+
+    try:
+        results = reader.json_all(filename_pattern)
+        if not results:
+            return pd.DataFrame()
+
+        for result in results:
+            data = result.data
+            # Posts can be a list at root or nested under a key
+            if isinstance(data, list):
+                items = data
+            elif isinstance(data, dict):
+                items = [data]
+            else:
+                items = []
+
+            for item in items:  # pyright: ignore
+                dd = eh.dict_denester(item)
+                datapoints.append((
+                    eh.fix_latin1_string(eh.find_item(dd, "title")),
+                    eh.epoch_to_iso(eh.find_item(dd, "creation_timestamp"), errors=errors),
+                ))
+
+        out = pd.DataFrame(datapoints, columns=["Title", "Timestamp"])  # pyright: ignore
         out = _sort_by_date(out, "Timestamp")
 
     except Exception as e:
@@ -1334,23 +1725,211 @@ def saved_posts_to_df(
 
 
 # ---------------------------------------------------------------------------
+# RECREATED FROM algosoc-dd-old — NEEDS MANUAL VERIFICATION
+# Source: algosoc-dd-old/src/framework/processing/py/port/instagram.py parse_subscription_for_no_ads()
+# ---------------------------------------------------------------------------
+def subscription_for_no_ads_to_df(
+    reader: ZipArchiveReader,
+    errors: Counter,
+    *,
+    filename: str = "subscription_for_no_ads.json",
+) -> pd.DataFrame:
+    """Extract ad-free subscription status into a DataFrame.
+
+    Reads the ``label_values`` structure from the subscription file.
+
+    Parameters
+    ----------
+    reader:
+        Archive reader used to load JSON files from the DDP zip.
+    errors:
+        Mutable counter that accumulates error type counts encountered during
+        extraction.  Updated in-place.
+    filename:
+        Path inside the zip archive to read.  Defaults to
+        ``"subscription_for_no_ads.json"``.
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: ``Label``, ``Value``.
+        Empty DataFrame when the file is absent or parsing fails.
+
+    Table documentation::
+
+        {
+          "summary": "Each row represents a field from the participant's ad-free subscription status on Instagram.",
+          "source_file": "subscription_for_no_ads.json",
+          "columns": {
+            "Label": "Description label for the subscription field.",
+            "Value": "Value of the subscription field."
+          }
+        }
+
+    Table config::
+
+        {
+          "id": "instagram_subscription_for_no_ads",
+          "title": {
+            "en": "Ad-free subscription status",
+            "nl": "Status advertentievrij abonnement"
+          },
+          "description": {
+            "en": "Your ad-free subscription status on Instagram.",
+            "nl": "Je status van het advertentievrije abonnement op Instagram."
+          },
+          "headers": {
+            "Label": {"en": "Label", "nl": "Label"},
+            "Value": {"en": "Value", "nl": "Waarde"}
+          }
+        }
+    """
+    result = reader.json(filename)
+    if not result.found:
+        return pd.DataFrame()
+    data = result.data
+
+    out = pd.DataFrame()
+    datapoints = []
+
+    try:
+        if isinstance(data, dict):
+            label_values = data.get("label_values", [])
+        elif isinstance(data, list):
+            label_values = data
+        else:
+            label_values = []
+
+        for item in label_values:
+            datapoints.append((
+                item.get("label", ""),
+                item.get("value", ""),
+            ))
+
+        out = pd.DataFrame(datapoints, columns=["Label", "Value"])  # pyright: ignore
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Commented out: not in algosoc-2026 extraction list
+# ---------------------------------------------------------------------------
+
+# def followers_to_df(
+#     reader: ZipArchiveReader,
+#     errors: Counter,
+#     *,
+#     filename: str = "followers_1.json",
+# ) -> pd.DataFrame:
+#     """Extract the list of followers into a DataFrame.
+#
+#     Handles both the newer bare top-level list format and the older format
+#     where entries are wrapped under a ``"relationships_followers"`` key.
+#
+#     Parameters
+#     ----------
+#     reader:
+#         Archive reader used to load JSON files from the DDP zip.
+#     errors:
+#         Mutable counter that accumulates error type counts encountered during
+#         extraction.  Updated in-place.
+#     filename:
+#         Path inside the zip archive to read.  Defaults to
+#         ``"followers_1.json"``.
+#
+#     Returns
+#     -------
+#     pd.DataFrame
+#         Columns: ``Account``, ``URL``, ``Date``.
+#         Empty DataFrame when the file is absent or parsing fails.
+#
+#     Table documentation::
+#
+#         {
+#           "summary": "Each row represents one account that follows the participant on Instagram, including when they started following.",
+#           "source_file": "followers_1.json",
+#           "columns": {
+#             "Account": "Username or display name of the follower account.",
+#             "URL": "Direct URL to the follower's Instagram profile.",
+#             "Date": "ISO 8601 timestamp of when the account started following the participant."
+#           }
+#         }
+#
+#     Table config::
+#
+#         {
+#           "id": "instagram_followers",
+#           "title": {"en": "Your Instagram followers", "nl": "Je Instagram-volgers"},
+#           "description": {
+#             "en": "List of accounts that follow you on Instagram.",
+#             "nl": "Lijst van accounts die jou op Instagram volgen."
+#           },
+#           "headers": {
+#             "Account": {"en": "Account", "nl": "Account"},
+#             "URL": {"en": "URL", "nl": "URL"},
+#             "Date": {"en": "Date", "nl": "Datum en tijd"}
+#           }
+#         }
+#     """
+#     result = reader.json(filename)
+#     if not result.found:
+#         return pd.DataFrame()
+#     data = result.data
+#
+#     out = pd.DataFrame()
+#     datapoints = []
+#
+#     try:
+#         if isinstance(data, dict):
+#             items = data.get("relationships_followers", [])
+#         else:
+#             items = data  # pyright: ignore
+#
+#         for item in items:
+#             d = eh.dict_denester(item)
+#             datapoints.append((
+#                 eh.fix_latin1_string(eh.find_item(d, "value") or eh.find_item(d, "title")),
+#                 eh.find_item(d, "href"),
+#                 eh.epoch_to_iso(eh.find_item(d, "timestamp"), errors=errors),
+#             ))
+#         out = pd.DataFrame(datapoints, columns=["Account", "URL", "Date"])  # pyright: ignore
+#         out = _sort_by_date(out, "Date")
+#
+#     except Exception as e:
+#         logger.error("Exception caught: %s", e)
+#         errors[type(e).__name__] += 1
+#
+#     return out
+
+
+# ---------------------------------------------------------------------------
 # Extractor registry & platform info
 # ---------------------------------------------------------------------------
 
 #: Mapping from the string names used in port_config.json to actual extractor functions.
 EXTRACTOR_REGISTRY: dict[str, Callable[..., pd.DataFrame]] = {
-    "followers_to_df": followers_to_df,
     "following_to_df": following_to_df,
-    "ads_viewed_to_df": ads_viewed_to_df,
     "posts_viewed_to_df": posts_viewed_to_df,
     "videos_watched_to_df": videos_watched_to_df,
     "post_comments_to_df": post_comments_to_df,
     "liked_comments_to_df": liked_comments_to_df,
     "liked_posts_to_df": liked_posts_to_df,
-    "profile_searches_to_df": profile_searches_to_df,
     "story_likes_to_df": story_likes_to_df,
-    "threads_viewed_to_df": threads_viewed_to_df,
     "saved_posts_to_df": saved_posts_to_df,
+    "word_or_phrase_searches_to_df": word_or_phrase_searches_to_df,
+    "stories_published_to_df": stories_published_to_df,
+    "advertisers_using_activity_to_df": advertisers_using_activity_to_df,
+    "ads_viewed_to_df": ads_viewed_to_df,
+    "profile_searches_to_df": profile_searches_to_df,
+    "threads_viewed_to_df": threads_viewed_to_df,
+    "ads_clicked_to_df": ads_clicked_to_df,
+    "posts_published_to_df": posts_published_to_df,
+    "subscription_for_no_ads_to_df": subscription_for_no_ads_to_df,
+    # "followers_to_df": followers_to_df,  # not in algosoc-2026 list
 }
 
 

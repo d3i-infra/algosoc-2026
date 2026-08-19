@@ -13,41 +13,6 @@
   },
   "tables": [
     {
-      "id": "instagram_followers",
-      "title": {
-        "en": "Your Instagram followers",
-        "nl": "Je Instagram-volgers"
-      },
-      "description": {
-        "en": "List of accounts that follow you on Instagram.",
-        "nl": "Lijst van accounts die jou op Instagram volgen."
-      },
-      "headers": {
-        "Account": {
-          "en": "Account",
-          "nl": "Account"
-        },
-        "URL": {
-          "en": "URL",
-          "nl": "URL"
-        },
-        "Date": {
-          "en": "Date",
-          "nl": "Datum en tijd"
-        }
-      },
-      "extractor": "followers_to_df",
-      "documentation": {
-        "summary": "Each row represents one account that follows the participant on Instagram, including when they started following.",
-        "source_file": "followers_1.json",
-        "columns": {
-          "Account": "Username or display name of the follower account.",
-          "URL": "Direct URL to the follower's Instagram profile.",
-          "Date": "ISO 8601 timestamp of when the account started following the participant."
-        }
-      }
-    },
-    {
       "id": "instagram_following",
       "title": {
         "en": "Accounts that you follow on Instagram",
@@ -79,46 +44,6 @@
           "Account": "Username or display name of the followed account.",
           "URL": "Direct URL to the followed account's Instagram profile.",
           "Date": "ISO 8601 timestamp of when the participant started following this account."
-        }
-      }
-    },
-    {
-      "id": "instagram_ads_viewed",
-      "title": {
-        "en": "Ads viewed on Instagram",
-        "nl": "Advertenties bekeken op Instagram"
-      },
-      "description": {
-        "en": "List of ads that you viewed on Instagram.",
-        "nl": "Lijst van advertenties die je op Instagram hebt bekeken."
-      },
-      "headers": {
-        "Account name": {
-          "en": "Account name",
-          "nl": "Accountnaam"
-        },
-        "Name": {
-          "en": "Name",
-          "nl": "Naam"
-        },
-        "URL": {
-          "en": "URL",
-          "nl": "URL"
-        },
-        "Date": {
-          "en": "Date",
-          "nl": "Datum en tijd"
-        }
-      },
-      "extractor": "ads_viewed_to_df",
-      "documentation": {
-        "summary": "Each row represents one advertisement impression shown to the participant on Instagram. Includes the advertiser identity and when the ad was displayed.",
-        "source_file": "ads_viewed.json",
-        "columns": {
-          "Account name": "Username of the advertiser's Instagram account.",
-          "Name": "Display name of the advertiser.",
-          "URL": "URL associated with the advertisement.",
-          "Date": "ISO 8601 timestamp of when the ad was shown to the participant."
         }
       }
     },
@@ -364,36 +289,6 @@
       }
     },
     {
-      "id": "instagram_profile_searches",
-      "title": {
-        "en": "Your Instagram profile searches",
-        "nl": "Je Instagram-profielzoekopdrachten"
-      },
-      "description": {
-        "en": "List of profiles you have searched for on Instagram.",
-        "nl": "Lijst van profielen die je op Instagram hebt gezocht."
-      },
-      "headers": {
-        "Name": {
-          "en": "Name",
-          "nl": "Naam"
-        },
-        "Timestamp": {
-          "en": "Timestamp",
-          "nl": "Datum en tijd"
-        }
-      },
-      "extractor": "profile_searches_to_df",
-      "documentation": {
-        "summary": "Each row represents one profile search performed by the participant on Instagram, recording what was searched and when.",
-        "source_file": "profile_searches.json",
-        "columns": {
-          "Name": "Username or display name that was searched for.",
-          "Timestamp": "ISO 8601 timestamp of when the search was performed."
-        }
-      }
-    },
-    {
       "id": "instagram_story_likes",
       "title": {
         "en": "Story likes on Instagram",
@@ -420,6 +315,206 @@
         "columns": {
           "Account name": "Username of the account whose story was liked.",
           "Date": "ISO 8601 timestamp of when the story was liked."
+        }
+      }
+    },
+    {
+      "id": "instagram_saved_posts",
+      "title": {
+        "en": "Your saved posts on Instagram",
+        "nl": "Je opgeslagen berichten op Instagram"
+      },
+      "description": {
+        "en": "List of posts you have saved on Instagram.",
+        "nl": "Lijst van berichten die je hebt opgeslagen op Instagram."
+      },
+      "headers": {
+        "Title": {
+          "en": "Title",
+          "nl": "Titel"
+        },
+        "Value": {
+          "en": "Value",
+          "nl": "Waarde"
+        },
+        "Timestamp": {
+          "en": "Timestamp",
+          "nl": "Datum en tijd"
+        }
+      },
+      "extractor": "saved_posts_to_df",
+      "documentation": {
+        "summary": "Each row represents one post the participant bookmarked (saved) on Instagram for later viewing.",
+        "source_file": "saved_posts.json",
+        "columns": {
+          "Title": "Concatenated title labels from the saved post metadata.",
+          "Value": "Concatenated values (caption, URL, owner info) from the saved post.",
+          "Timestamp": "ISO 8601 timestamp of when the post was saved."
+        }
+      }
+    },
+    {
+      "id": "instagram_word_or_phrase_searches",
+      "title": {
+        "en": "Your keyword searches on Instagram",
+        "nl": "Je zoekwoorden op Instagram"
+      },
+      "description": {
+        "en": "List of words or phrases you have searched for on Instagram.",
+        "nl": "Lijst van woorden of zinnen die je op Instagram hebt gezocht."
+      },
+      "headers": {
+        "Search term": {
+          "en": "Search term",
+          "nl": "Zoekterm"
+        },
+        "Date": {
+          "en": "Date",
+          "nl": "Datum en tijd"
+        }
+      },
+      "extractor": "word_or_phrase_searches_to_df",
+      "documentation": {
+        "summary": "Each row represents one keyword or phrase search the participant performed on Instagram.",
+        "source_file": "word_or_phrase_searches.json",
+        "columns": {
+          "Search term": "The word or phrase that was searched for.",
+          "Date": "ISO 8601 timestamp of when the search was performed."
+        }
+      }
+    },
+    {
+      "id": "instagram_stories_published",
+      "title": {
+        "en": "Stories you published on Instagram",
+        "nl": "Stories die je op Instagram hebt geplaatst"
+      },
+      "description": {
+        "en": "List of stories you have published on Instagram.",
+        "nl": "Lijst van stories die je op Instagram hebt geplaatst."
+      },
+      "headers": {
+        "Title": {
+          "en": "Title",
+          "nl": "Titel"
+        },
+        "URI": {
+          "en": "URI",
+          "nl": "URI"
+        },
+        "Date": {
+          "en": "Date",
+          "nl": "Datum en tijd"
+        }
+      },
+      "extractor": "stories_published_to_df",
+      "documentation": {
+        "summary": "Each row represents one Instagram Story published by the participant.",
+        "source_file": "stories.json",
+        "columns": {
+          "Title": "Caption or title text of the story, if any.",
+          "URI": "Internal media URI of the story asset in the export archive.",
+          "Date": "ISO 8601 timestamp of when the story was created."
+        }
+      }
+    },
+    {
+      "id": "instagram_advertisers_using_activity",
+      "title": {
+        "en": "Advertisers using your activity or information",
+        "nl": "Adverteerders die je activiteit of informatie gebruiken"
+      },
+      "description": {
+        "en": "List of advertisers that used your activity or information to reach you on Instagram.",
+        "nl": "Lijst van adverteerders die je activiteit of informatie hebben gebruikt om je te bereiken op Instagram."
+      },
+      "headers": {
+        "Advertiser": {
+          "en": "Advertiser",
+          "nl": "Adverteerder"
+        },
+        "Category": {
+          "en": "Category",
+          "nl": "Categorie"
+        }
+      },
+      "extractor": "advertisers_using_activity_to_df",
+      "documentation": {
+        "summary": "Each row represents one advertiser that used the participant's activity or information to target them on Instagram.",
+        "source_file": "advertisers_using_your_activity_or_information.json",
+        "columns": {
+          "Advertiser": "Name of the advertiser.",
+          "Category": "Category describing how the advertiser used the participant's data."
+        }
+      }
+    },
+    {
+      "id": "instagram_ads_viewed",
+      "title": {
+        "en": "Ads viewed on Instagram",
+        "nl": "Advertenties bekeken op Instagram"
+      },
+      "description": {
+        "en": "List of ads that you viewed on Instagram.",
+        "nl": "Lijst van advertenties die je op Instagram hebt bekeken."
+      },
+      "headers": {
+        "Account name": {
+          "en": "Account name",
+          "nl": "Accountnaam"
+        },
+        "Name": {
+          "en": "Name",
+          "nl": "Naam"
+        },
+        "URL": {
+          "en": "URL",
+          "nl": "URL"
+        },
+        "Date": {
+          "en": "Date",
+          "nl": "Datum en tijd"
+        }
+      },
+      "extractor": "ads_viewed_to_df",
+      "documentation": {
+        "summary": "Each row represents one advertisement impression shown to the participant on Instagram. Includes the advertiser identity and when the ad was displayed.",
+        "source_file": "ads_viewed.json",
+        "columns": {
+          "Account name": "Username of the advertiser's Instagram account.",
+          "Name": "Display name of the advertiser.",
+          "URL": "URL associated with the advertisement.",
+          "Date": "ISO 8601 timestamp of when the ad was shown to the participant."
+        }
+      }
+    },
+    {
+      "id": "instagram_profile_searches",
+      "title": {
+        "en": "Your Instagram profile searches",
+        "nl": "Je Instagram-profielzoekopdrachten"
+      },
+      "description": {
+        "en": "List of profiles you have searched for on Instagram.",
+        "nl": "Lijst van profielen die je op Instagram hebt gezocht."
+      },
+      "headers": {
+        "Name": {
+          "en": "Name",
+          "nl": "Naam"
+        },
+        "Timestamp": {
+          "en": "Timestamp",
+          "nl": "Datum en tijd"
+        }
+      },
+      "extractor": "profile_searches_to_df",
+      "documentation": {
+        "summary": "Each row represents one profile search performed by the participant on Instagram, recording what was searched and when.",
+        "source_file": "profile_searches.json",
+        "columns": {
+          "Name": "Username or display name that was searched for.",
+          "Timestamp": "ISO 8601 timestamp of when the search was performed."
         }
       }
     },
@@ -459,14 +554,49 @@
       }
     },
     {
-      "id": "instagram_saved_posts",
+      "id": "instagram_ads_clicked",
       "title": {
-        "en": "Your saved posts on Instagram",
-        "nl": "Je opgeslagen berichten op Instagram"
+        "en": "Ads clicked on Instagram",
+        "nl": "Advertenties aangeklikt op Instagram"
       },
       "description": {
-        "en": "List of posts you have saved on Instagram.",
-        "nl": "Lijst van berichten die je hebt opgeslagen op Instagram."
+        "en": "List of ads you clicked on Instagram.",
+        "nl": "Lijst van advertenties die je op Instagram hebt aangeklikt."
+      },
+      "headers": {
+        "Value": {
+          "en": "Value",
+          "nl": "Waarde"
+        },
+        "URL": {
+          "en": "URL",
+          "nl": "URL"
+        },
+        "Date": {
+          "en": "Date",
+          "nl": "Datum en tijd"
+        }
+      },
+      "extractor": "ads_clicked_to_df",
+      "documentation": {
+        "summary": "Each row represents one advertisement the participant clicked on Instagram.",
+        "source_file": "ads_clicked.json",
+        "columns": {
+          "Value": "Concatenated values from the ad metadata.",
+          "URL": "URL of the clicked advertisement.",
+          "Date": "ISO 8601 timestamp of when the ad was clicked."
+        }
+      }
+    },
+    {
+      "id": "instagram_posts_published",
+      "title": {
+        "en": "Posts you published on Instagram",
+        "nl": "Berichten die je op Instagram hebt geplaatst"
+      },
+      "description": {
+        "en": "List of posts you have published on Instagram.",
+        "nl": "Lijst van berichten die je op Instagram hebt geplaatst."
       },
       "headers": {
         "Title": {
@@ -476,20 +606,45 @@
         "Timestamp": {
           "en": "Timestamp",
           "nl": "Datum en tijd"
-        },
-        "URL": {
-          "en": "URL",
-          "nl": "URL"
         }
       },
-      "extractor": "saved_posts_to_df",
+      "extractor": "posts_published_to_df",
       "documentation": {
-        "summary": "Each row represents one post the participant bookmarked (saved) on Instagram for later viewing.",
-        "source_file": "saved_posts.json",
+        "summary": "Each row represents one post published by the participant on Instagram.",
+        "source_file": "posts_*.json",
         "columns": {
-          "Title": "Title or label of the saved post as stored in the export.",
-          "URL": "Direct URL to the saved post.",
-          "Timestamp": "ISO 8601 timestamp of when the post was saved."
+          "Title": "Caption or title text of the post.",
+          "Timestamp": "ISO 8601 timestamp of when the post was created."
+        }
+      }
+    },
+    {
+      "id": "instagram_subscription_for_no_ads",
+      "title": {
+        "en": "Ad-free subscription status",
+        "nl": "Status advertentievrij abonnement"
+      },
+      "description": {
+        "en": "Your ad-free subscription status on Instagram.",
+        "nl": "Je status van het advertentievrije abonnement op Instagram."
+      },
+      "headers": {
+        "Label": {
+          "en": "Label",
+          "nl": "Label"
+        },
+        "Value": {
+          "en": "Value",
+          "nl": "Waarde"
+        }
+      },
+      "extractor": "subscription_for_no_ads_to_df",
+      "documentation": {
+        "summary": "Each row represents a field from the participant's ad-free subscription status on Instagram.",
+        "source_file": "subscription_for_no_ads.json",
+        "columns": {
+          "Label": "Description label for the subscription field.",
+          "Value": "Value of the subscription field."
         }
       }
     }
