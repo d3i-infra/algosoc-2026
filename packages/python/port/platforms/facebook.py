@@ -57,7 +57,7 @@ DDP_CATEGORIES = [
         ddp_filetype=DDPFiletype.JSON,
         language=Language.EN,
         known_files=[
-"subscription_for_no_ads.json", "other_categories_used_to_reach_you.json", "ads_feedback_activity.json", "ads_personalization_consent.json", "advertisers_you've_interacted_with.json", "advertisers_using_your_activity_or_information.json", "story_views_in_past_7_days.json", "ad_preferences.json", "groups_you've_searched_for.json", "your_search_history.json", "primary_public_location.json", "timezone.json", "primary_location.json", "your_privacy_jurisdiction.json", "people_and_friends.json", "ads_interests.json", "notifications.json", "notification_of_meta_privacy_policy_update.json", "recently_viewed.json", "recently_visited.json", "your_avatar.json", "meta_avatars_post_backgrounds.json", "contacts_sync_settings.json", "timezone.json", "autofill_information.json", "profile_information.json", "profile_update_history.json", "your_transaction_survey_information.json", "your_recently_followed_history.json", "your_recently_used_emojis.json", "navigation_bar_activity.json", "pages_and_profiles_you_follow.json", "pages_you've_liked.json", "your_saved_items.json", "fundraiser_posts_you_likely_viewed.json", "your_fundraiser_donations_information.json", "your_event_responses.json", "event_invitations.json", "your_event_invitation_links.json", "likes_and_reactions_1.json", "your_uncategorized_photos.json", "payment_history.json", "your_answers_to_membership_questions.json", "your_group_membership_activity.json", "your_contributions.json", "group_posts_and_comments.json", "your_comments_in_groups.json", "instant_games.json", "your_page_or_groups_badges.json", "instant_games_usage_data.json", "who_you've_followed.json", "people_you_may_know.json", "received_friend_requests.json", "your_friends.json", "likes_and_reactions.json", "controls.json",
+"subscription_for_no_ads.json", "other_categories_used_to_reach_you.json", "ads_feedback_activity.json", "ads_personalization_consent.json", "advertisers_you've_interacted_with.json", "advertisers_using_your_activity_or_information.json", "story_views_in_past_7_days.json", "ad_preferences.json", "groups_you've_searched_for.json", "your_search_history.json", "primary_public_location.json", "timezone.json", "primary_location.json", "your_privacy_jurisdiction.json", "people_and_friends.json", "ads_interests.json", "notifications.json", "notification_of_meta_privacy_policy_update.json", "recently_viewed.json", "recently_visited.json", "your_avatar.json", "meta_avatars_post_backgrounds.json", "contacts_sync_settings.json", "timezone.json", "autofill_information.json", "profile_information.json", "profile_update_history.json", "your_transaction_survey_information.json", "your_recently_followed_history.json", "your_recently_used_emojis.json", "navigation_bar_activity.json", "pages_and_profiles_you_follow.json", "pages_you've_liked.json", "your_saved_items.json", "fundraiser_posts_you_likely_viewed.json", "your_fundraiser_donations_information.json", "your_events.json", "event_invitations.json", "your_event_invitation_links.json", "likes_and_reactions_1.json", "your_uncategorized_photos.json", "payment_history.json", "your_answers_to_membership_questions.json", "your_group_membership_activity.json", "your_contributions.json", "group_posts_and_comments.json", "your_comments_in_groups.json", "instant_games.json", "your_page_or_groups_badges.json", "instant_games_usage_data.json", "who_you've_followed.json", "people_you_may_know.json", "received_friend_requests.json", "your_friends.json", "likes_and_reactions.json", "controls.json",
         ],
     ),
 ]
@@ -948,8 +948,8 @@ def profile_update_history_to_df(reader: ZipArchiveReader, errors: Counter) -> p
     return out
 
 
-def your_event_responses_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
-    """Extract Facebook event responses.
+def your_events_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    """Extract Facebook events the participant created or was invited to.
 
     Parameters
     ----------
@@ -962,39 +962,39 @@ def your_event_responses_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.
     Returns
     -------
     pd.DataFrame
-        Columns: ``Name``, ``Timestamp``.
+        Columns: ``Name``, ``Created``.
         Empty DataFrame when the file is absent or parsing fails.
 
     Table documentation::
 
         {
-          "summary": "Each row represents a Facebook event the participant responded to (going, interested, or declined), including the event name and start time.",
-          "source_file": "your_event_responses.json",
+          "summary": "Each row represents a Facebook event the participant created or was invited to, including the event name and creation timestamp.",
+          "source_file": "your_facebook_activity/events/your_events.json",
           "columns": {
             "Name": "Name of the Facebook event.",
-            "Timestamp": "ISO 8601 timestamp of the event start time."
+            "Created": "ISO 8601 timestamp of when the event was created."
           }
         }
 
     Table config::
 
         {
-          "id": "facebook_your_event_responses",
+          "id": "facebook_your_events",
           "title": {
-            "en": "Your event responses",
-            "nl": "Je reacties op evenementen"
+            "en": "Your events",
+            "nl": "Je evenementen"
           },
           "description": {
-            "en": "This table contains your responses (going, interested, declined) to Facebook events.",
-            "nl": "Deze tabel bevat je reacties (gaat, geïnteresseerd, afgewezen) op Facebook-evenementen."
+            "en": "This table contains Facebook events you created or were invited to.",
+            "nl": "Deze tabel bevat Facebook-evenementen die je hebt aangemaakt of waarvoor je bent uitgenodigd."
           },
           "headers": {
             "Name": {"en": "Name", "nl": "Naam"},
-            "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
+            "Created": {"en": "Created", "nl": "Aangemaakt"}
           }
         }
     """
-    result = reader.json("your_event_responses.json")
+    result = reader.json("your_facebook_activity/events/your_events.json")
     if not result.found:
         return pd.DataFrame()
     d = result.data
@@ -1003,14 +1003,14 @@ def your_event_responses_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.
     datapoints = []
 
     try:
-        items = d["event_responses_v2"]["events_joined"]  # pyright: ignore
+        items = d["your_events_v2"]  # pyright: ignore
         for item in items:
             datapoints.append((
                 eh.fix_latin1_string(item.get("name", "")),
-                eh.epoch_to_iso(item.get("start_timestamp", ""), errors=errors)
+                eh.epoch_to_iso(item.get("create_timestamp", ""), errors=errors),
             ))
 
-        out = pd.DataFrame(datapoints, columns=["Name", "Timestamp"]) #pyright: ignore
+        out = pd.DataFrame(datapoints, columns=["Name", "Created"]) #pyright: ignore
 
     except Exception as e:
         logger.error("Exception caught: %s", e)
@@ -1055,11 +1055,11 @@ def group_posts_and_comments_to_df(reader: ZipArchiveReader, errors: Counter) ->
           "id": "facebook_group_posts_and_comments",
           "title": {
             "en": "Your posts and comments in groups",
-            "nl": "Je berichten en commentaren in groepen"
+            "nl": "Je berichten en comments in groepen"
           },
           "description": {
             "en": "This table shows your posts and comments within Facebook groups.",
-            "nl": "Deze tabel toont je berichten en commentaren in Facebook-groepen."
+            "nl": "Deze tabel toont je berichten en comments in Facebook-groepen."
           },
           "headers": {
             "Title": {"en": "Title", "nl": "Titel"},
@@ -1202,11 +1202,11 @@ def your_comments_in_groups_to_df(reader: ZipArchiveReader, errors: Counter) -> 
           "id": "facebook_your_comments_in_groups",
           "title": {
             "en": "Your comments in groups",
-            "nl": "Je commentaren in groepen"
+            "nl": "Je comments in groepen"
           },
           "description": {
             "en": "This table specifically lists the comments you have made in Facebook groups.",
-            "nl": "Deze tabel toont specifiek de commentaren die je in Facebook-groepen hebt geplaatst."
+            "nl": "Deze tabel toont specifiek de comments die je in Facebook-groepen hebt geplaatst."
           },
           "headers": {
             "Title": {"en": "Title", "nl": "Titel"},
@@ -1572,11 +1572,11 @@ def comments_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
           "id": "facebook_comments",
           "title": {
             "en": "Your comments",
-            "nl": "Je commentaren"
+            "nl": "Je comments"
           },
           "description": {
             "en": "This table shows all the comments you have made on Facebook posts and other content.",
-            "nl": "Deze tabel toont alle commentaren die je op Facebook-berichten en andere content hebt geplaatst."
+            "nl": "Deze tabel toont alle comments die je op Facebook-berichten en andere content hebt geplaatst."
           },
           "headers": {
             "Title": {"en": "Title", "nl": "Titel"},
@@ -1650,7 +1650,7 @@ def likes_and_reactions_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.D
           "id": "facebook_likes_and_reactions",
           "title": {
             "en": "Posts you liked (with title)",
-            "nl": "Posts die je leuk vond (met titel)"
+            "nl": "Posts die je leuk vond"
           },
           "description": {
             "en": "This table shows the titles of posts you liked on Facebook.",
@@ -1725,11 +1725,11 @@ def your_comment_active_days_to_df(reader: ZipArchiveReader, errors: Counter) ->
           "id": "facebook_your_comment_active_days",
           "title": {
             "en": "Days you actively commented",
-            "nl": "Dagen waarop je actief commentaren hebt geplaatst"
+            "nl": "Dagen waarop je actief comments hebt geplaatst"
           },
           "description": {
             "en": "This table indicates the days on which you made comments on Facebook.",
-            "nl": "Deze tabel toont de dagen waarop je commentaren op Facebook hebt geplaatst."
+            "nl": "Deze tabel toont de dagen waarop je comments op Facebook hebt geplaatst."
           },
           "headers": {
             "Label": {"en": "Label", "nl": "Label"},
@@ -1925,7 +1925,7 @@ def your_posts_check_ins_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.
 
         {
           "summary": "Each row represents a post or check-in the participant made on Facebook, including the title, post content, URL, and timestamp.",
-          "source_file": "your_posts__check_ins__photos_and_videos_1.json",
+          "source_file": "your_posts__check_ins__photos_and_videos_1.json (and numbered variants)",
           "columns": {
             "Title": "Title of the post or check-in.",
             "Post": "Text content of the post.",
@@ -1954,15 +1954,9 @@ def your_posts_check_ins_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.
           }
         }
     """
-    result = reader.json("your_posts__check_ins__photos_and_videos_1.json")
-    if not result.found:
-        return pd.DataFrame()
-    d = result.data
-
-    out = pd.DataFrame()
     datapoints = []
 
-    try:
+    def _parse_items(d: list) -> None:
         for item in d:
             denested_dict = eh.dict_denester(item)
             datapoints.append((
@@ -1971,6 +1965,11 @@ def your_posts_check_ins_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.
                 eh.find_item(denested_dict, "url"),
                 eh.epoch_to_iso(item.get("timestamp", ""), errors=errors),
             ))
+
+    try:
+        results = reader.json_all(r"(^|/)your_posts__check_ins__photos_and_videos_\d+\.json$")
+        for r in results:
+            _parse_items(r.data)  # pyright: ignore
 
         out = pd.DataFrame(datapoints, columns=["Title", "Post", "URL", "Timestamp"]) #pyright: ignore
 
@@ -2278,7 +2277,7 @@ def video_consumption_summary_to_df(reader: ZipArchiveReader, errors: Counter) -
     datapoints = []
 
     try:
-        for item in d:
+        for item in d["label_values"]: #pyright: ignore
             denested_dict = eh.dict_denester(item)
             datapoints.append((
                 eh.find_item(denested_dict, "label"),
@@ -2308,7 +2307,7 @@ def link_history_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFram
     Returns
     -------
     pd.DataFrame
-        Columns: ``URL``, ``Timestamp``.
+        Columns: ``URL``, ``Title``, ``Timestamp``.
         Empty DataFrame when the file is absent or parsing fails.
 
     Table documentation::
@@ -2318,6 +2317,7 @@ def link_history_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFram
           "source_file": "your_facebook_activity/other_activity/link_history.json",
           "columns": {
             "URL": "URL of the link visited.",
+            "Title": "Title of the website page visited.",
             "Timestamp": "ISO 8601 timestamp of when the link was visited."
           }
         }
@@ -2336,27 +2336,35 @@ def link_history_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFram
           },
           "headers": {
             "URL": {"en": "URL", "nl": "URL"},
+            "Title": {"en": "Title", "nl": "Titel"},
             "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
           }
         }
     """
-    result = reader.json("your_facebook_activity/other_activity/link_history.json") 
-    if not result.found: 
-        return pd.DataFrame() 
+    result = reader.json("your_facebook_activity/other_activity/link_history.json")
+    if not result.found:
+        return pd.DataFrame()
     d = result.data
 
-    out = pd.DataFrame() 
-    datapoints = [] 
+    out = pd.DataFrame()
+    datapoints = []
 
-    try: 
-        for item in d:  
-            denested_dict = eh.dict_denester(item)  
-            datapoints.append((  
-                eh.find_item(denested_dict, "href"),  
-                eh.epoch_to_iso(eh.find_item(denested_dict, "timestamp"), errors=errors),  
-            ))  
+    try:
+        for item in d:
+            denested_dict = eh.dict_denester(item)
+            title = ""
+            label_values = item.get("label_values", [])
+            for lv in label_values:
+                if lv.get("label") == "Title of website page you visited":
+                    title = lv.get("value", "Page has no title")
+                    break
+            datapoints.append((
+                eh.find_item(denested_dict, "href"),
+                title,
+                eh.epoch_to_iso(eh.find_item(denested_dict, "timestamp"), errors=errors),
+            ))
 
-        out = pd.DataFrame(datapoints, columns=["URL", "Timestamp"]) 
+        out = pd.DataFrame(datapoints, columns=["URL", "Title", "Timestamp"]) 
 
     except Exception as e:  
         logger.error("Exception caught: %s", e)  
@@ -2419,13 +2427,30 @@ def ad_preferences_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFr
     out = pd.DataFrame()
     datapoints = [] 
 
-    try: 
+    try:
         for item in d["label_values"]:  # pyright: ignore
-            denested_dict = eh.dict_denester(item)  
-            datapoints.append(( 
-                eh.find_item(denested_dict, "label"), 
-                eh.find_item(denested_dict, "value"),
-            )) 
+            if "value" in item:
+                # Flavour 1: {"label": "...", "value": "..."}
+                datapoints.append((eh.fix_latin1_string(item.get("label", "")), eh.fix_latin1_string(item.get("value", ""))))
+            elif "vec" in item:
+                # Flavour 2: {"label": "...", "vec": [...]}
+                label = eh.fix_latin1_string(item.get("label", ""))
+                vec = item.get("vec", [])
+                if not vec:
+                    datapoints.append((label, "No data"))
+                else:
+                    for vec_item in vec:
+                        datapoints.append((label, eh.fix_latin1_string(vec_item.get("value", ""))))
+            elif "title" in item:
+                # Flavour 3: {"title": "...", "dict": [{...}, ...]}
+                title = eh.fix_latin1_string(item.get("title", ""))
+                dict_list = item.get("dict", [])
+                if not dict_list:
+                    datapoints.append((title, "No data"))
+                else:
+                    for dict_item in dict_list:
+                        denested = eh.dict_denester(dict_item)
+                        datapoints.append((title, eh.find_item(denested, "value")))
 
         out = pd.DataFrame(datapoints, columns=["Label", "Value"]) 
 
@@ -2450,7 +2475,7 @@ def other_categories_used_to_reach_you_to_df(reader: ZipArchiveReader, errors: C
     Returns
     -------
     pd.DataFrame
-        Columns: ``Category``.
+        Columns: ``Label``, ``Value``.
         Empty DataFrame when the file is absent or parsing fails.
 
     Table documentation::
@@ -2459,7 +2484,8 @@ def other_categories_used_to_reach_you_to_df(reader: ZipArchiveReader, errors: C
           "summary": "Each row represents a targeting category advertisers used to reach the participant on Facebook.",
           "source_file": "ads_information/other_categories_used_to_reach_you.json",
           "columns": {
-            "Category": "Targeting category used by advertisers."
+            "Label": "Name of the targeting category or setting.",
+            "Value": "Value or specific category used by advertisers."
           }
         }
 
@@ -2476,27 +2502,42 @@ def other_categories_used_to_reach_you_to_df(reader: ZipArchiveReader, errors: C
             "nl": "Deze tabel toont overige categorieën die adverteerders hebben gebruikt om je te bereiken op Facebook."
           },
           "headers": {
-            "Category": {"en": "Category", "nl": "Categorie"}
+            "Label": {"en": "Label", "nl": "Label"},
+            "Value": {"en": "Value", "nl": "Waarde"}
           }
         }
     """
     result = reader.json("ads_information/other_categories_used_to_reach_you.json")
-    if not result.found:  
-        return pd.DataFrame()  
-    d = result.data  
+    if not result.found:
+        return pd.DataFrame()
+    d = result.data
 
-    out = pd.DataFrame()  
-    datapoints = []  
+    out = pd.DataFrame()
+    datapoints = []
 
-    try:  
-        denested_dict = eh.dict_denester(d)  
-        items = eh.find_items(denested_dict, "-value")
-        for item in items:
-            datapoints.append((  
-                eh.fix_latin1_string(item),  
-            ))  
+    try:
+        for item in d["label_values"]:  # pyright: ignore
+            if "value" in item:
+                datapoints.append((eh.fix_latin1_string(item.get("label", "")), eh.fix_latin1_string(item.get("value", ""))))
+            elif "vec" in item:
+                label = eh.fix_latin1_string(item.get("label", ""))
+                vec = item.get("vec", [])
+                if not vec:
+                    datapoints.append((label, "No data"))
+                else:
+                    for vec_item in vec:
+                        datapoints.append((label, eh.fix_latin1_string(vec_item.get("value", ""))))
+            elif "title" in item:
+                title = eh.fix_latin1_string(item.get("title", ""))
+                dict_list = item.get("dict", [])
+                if not dict_list:
+                    datapoints.append((title, "No data"))
+                else:
+                    for dict_item in dict_list:
+                        denested = eh.dict_denester(dict_item)
+                        datapoints.append((title, eh.find_item(denested, "value")))
 
-        out = pd.DataFrame(datapoints, columns=["Category"]) #pyright: ignore 
+        out = pd.DataFrame(datapoints, columns=["Label", "Value"]) 
 
     except Exception as e:  
         logger.error("Exception caught: %s", e)  
@@ -2523,7 +2564,7 @@ def advertisers_using_your_activity_to_df(reader: ZipArchiveReader, errors: Coun
     Returns
     -------
     pd.DataFrame
-        Columns: ``Label``, ``Advertiser name``.
+        Columns: ``Label``, ``Value``.
         Empty DataFrame when the file is absent or parsing fails.
 
     Table documentation::
@@ -2533,7 +2574,7 @@ def advertisers_using_your_activity_to_df(reader: ZipArchiveReader, errors: Coun
           "source_file": "ads_information/advertisers_using_your_activity_or_information.json",
           "columns": {
             "Label": "The method used by the advertiser to target the participant (e.g. a list uploaded by the advertiser).",
-            "Advertiser name": "Name of the advertiser."
+            "Value": "Name of the advertiser or value of the setting."
           }
         }
 
@@ -2551,7 +2592,7 @@ def advertisers_using_your_activity_to_df(reader: ZipArchiveReader, errors: Coun
           },
           "headers": {
             "Label": {"en": "Label", "nl": "Label"},
-            "Advertiser name": {"en": "Advertiser name", "nl": "Naam adverteerder"}
+            "Value": {"en": "Value", "nl": "Waarde"}
           }
         }
     """
@@ -2564,14 +2605,28 @@ def advertisers_using_your_activity_to_df(reader: ZipArchiveReader, errors: Coun
     datapoints = []
 
     try:
-        label_values = d.get("label_values", []) #pyright: ignore
-        for entry in label_values:
-            label = eh.fix_latin1_string(entry.get("label", ""))
-            for vec_item in entry.get("vec", []):
-                advertiser = eh.fix_latin1_string(vec_item.get("value", ""))
-                datapoints.append((label, advertiser))
+        for item in d["label_values"]:  # pyright: ignore
+            if "value" in item:
+                datapoints.append((eh.fix_latin1_string(item.get("label", "")), eh.fix_latin1_string(item.get("value", ""))))
+            elif "vec" in item:
+                label = eh.fix_latin1_string(item.get("label", ""))
+                vec = item.get("vec", [])
+                if not vec:
+                    datapoints.append((label, "No data"))
+                else:
+                    for vec_item in vec:
+                        datapoints.append((label, eh.fix_latin1_string(vec_item.get("value", ""))))
+            elif "title" in item:
+                title = eh.fix_latin1_string(item.get("title", ""))
+                dict_list = item.get("dict", [])
+                if not dict_list:
+                    datapoints.append((title, "No data"))
+                else:
+                    for dict_item in dict_list:
+                        denested = eh.dict_denester(dict_item)
+                        datapoints.append((title, eh.find_item(denested, "value")))
 
-        out = pd.DataFrame(datapoints, columns=["Label", "Advertiser name"]) #pyright: ignore
+        out = pd.DataFrame(datapoints, columns=["Label", "Value"])
 
     except Exception as e:
         logger.error("Exception caught: %s", e)
@@ -2594,16 +2649,18 @@ def advertisers_youve_interacted_with_to_df(reader: ZipArchiveReader, errors: Co
     Returns
     -------
     pd.DataFrame
-        Columns: ``Title``, ``Timestamp``.
+        Columns: ``Action``, ``Title``, ``URL``, ``Timestamp``.
         Empty DataFrame when the file is absent or parsing fails.
 
     Table documentation::
 
         {
-          "summary": "Each row represents an ad the participant clicked or engaged with on Facebook, including the ad title or URL and timestamp.",
+          "summary": "Each row represents an ad the participant clicked or engaged with on Facebook, including the action taken, ad title, URL, and timestamp.",
           "source_file": "ads_information/advertisers_you've_interacted_with.json",
           "columns": {
-            "Title": "Title or URL of the ad interacted with.",
+            "Action": "Type of interaction with the ad (e.g. Click).",
+            "Title": "Title of the ad interacted with.",
+            "URL": "URL of the ad or post interacted with.",
             "Timestamp": "ISO 8601 timestamp of when the interaction occurred."
           }
         }
@@ -2621,7 +2678,9 @@ def advertisers_youve_interacted_with_to_df(reader: ZipArchiveReader, errors: Co
             "nl": "Deze tabel toont de advertenties waarop je hebt geklikt of waarmee je hebt gecommuniceerd op Facebook."
           },
           "headers": {
+            "Action": {"en": "Action", "nl": "Actie"},
             "Title": {"en": "Title", "nl": "Titel"},
+            "URL": {"en": "URL", "nl": "URL"},
             "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
           }
         }
@@ -2636,13 +2695,18 @@ def advertisers_youve_interacted_with_to_df(reader: ZipArchiveReader, errors: Co
 
     try:
         for item in d:
-            denested_dict = eh.dict_denester(item)
+            label_values = item.get("label_values", [])
+            lv_map = {}
+            for lv in label_values:
+                lv_map[lv.get("label", "")] = lv.get("value", "")
             datapoints.append((
-                eh.fix_latin1_string(eh.find_item(denested_dict, "title")),
-                eh.epoch_to_iso(eh.find_item(denested_dict, "timestamp"), errors=errors),
+                eh.fix_latin1_string(lv_map.get("Action", "")),
+                eh.fix_latin1_string(lv_map.get("Title", "")),
+                lv_map.get("URL", ""),
+                eh.epoch_to_iso(item.get("timestamp", ""), errors=errors),
             ))
 
-        out = pd.DataFrame(datapoints, columns=["Title", "Timestamp"]) #pyright: ignore
+        out = pd.DataFrame(datapoints, columns=["Action", "Title", "URL", "Timestamp"]) #pyright: ignore
 
     except Exception as e:
         logger.error("Exception caught: %s", e)
@@ -2665,17 +2729,16 @@ def your_contributions_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.Da
     Returns
     -------
     pd.DataFrame
-        Columns: ``Title``, ``Post``, ``Date``, ``URL``.
+        Columns: ``Value``, ``Date``, ``URL``.
         Empty DataFrame when the file is absent or parsing fails.
 
     Table documentation::
 
         {
-          "summary": "Each row represents a post or comment the participant contributed to a Facebook group, including the title, post content, date, and URL.",
+          "summary": "Each row represents a post or comment the participant contributed to a Facebook group, including the content, date, and URL.",
           "source_file": "your_facebook_activity/groups/your_contributions.json",
           "columns": {
-            "Title": "Title of the contribution.",
-            "Post": "Text content of the contribution.",
+            "Value": "Concatenated text content of the contribution.",
             "Date": "ISO 8601 timestamp of when the contribution was made.",
             "URL": "URL of the contribution."
           }
@@ -2691,11 +2754,10 @@ def your_contributions_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.Da
           },
           "description": {
             "en": "This table shows your posts and comments contributed to Facebook groups.",
-            "nl": "Deze tabel toont je berichten en commentaren die je hebt bijgedragen in Facebook-groepen."
+            "nl": "Deze tabel toont je berichten en comments die je hebt bijgedragen in Facebook-groepen."
           },
           "headers": {
-            "Title": {"en": "Title", "nl": "Titel"},
-            "Post": {"en": "Post", "nl": "Bericht"},
+            "Value": {"en": "Value", "nl": "Waarde"},
             "Date": {"en": "Date", "nl": "Datum"},
             "URL": {"en": "URL", "nl": "URL"}
           }
@@ -2710,16 +2772,18 @@ def your_contributions_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.Da
     datapoints = []
 
     try:
-        for item in d:
+        items = d if isinstance(d, list) else [d]
+        for item in items:
             denested_dict = eh.dict_denester(item)
+            values = eh.find_items(denested_dict, "value")
+            value = eh.fix_latin1_string(", ".join(str(v) for v in values if v))
             datapoints.append((
-                eh.fix_latin1_string(eh.find_item(denested_dict, "title")),
-                eh.fix_latin1_string(eh.find_item(denested_dict, "post")),
+                value,
                 eh.epoch_to_iso(eh.find_item(denested_dict, "timestamp"), errors=errors),
                 eh.find_item(denested_dict, "url"),
             ))
 
-        out = pd.DataFrame(datapoints, columns=["Title", "Post", "Date", "URL"]) #pyright: ignore
+        out = pd.DataFrame(datapoints, columns=["Value", "Date", "URL"]) #pyright: ignore
 
     except Exception as e:
         logger.error("Exception caught: %s", e)
@@ -2819,7 +2883,7 @@ EXTRACTOR_REGISTRY: dict[str, Callable[..., pd.DataFrame]] = {
     "facebook_reels_usage_to_df": facebook_reels_usage_to_df,                                    # logged_information/other_logged_information/facebook_reels_usage_information.json
     "video_consumption_summary_to_df": video_consumption_summary_to_df,                          # your_facebook_activity/other_activity/your_video_consumption_summary.json
     "link_history_to_df": link_history_to_df,                                                    # your_facebook_activity/other_activity/link_history.json
-    "your_event_responses_to_df": your_event_responses_to_df,                                    # your_facebook_activity/events/your_events.json
+    "your_events_to_df": your_events_to_df,                                                      # your_facebook_activity/events/your_events.json
     "your_group_membership_activity_to_df": your_group_membership_activity_to_df,                 # your_facebook_activity/groups/your_group_membership_activity.json
     "ad_preferences_to_df": ad_preferences_to_df,                                                # ads_information/ad_preferences.json
     "other_categories_used_to_reach_you_to_df": other_categories_used_to_reach_you_to_df,        # ads_information/other_categories_used_to_reach_you.json
