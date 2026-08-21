@@ -588,6 +588,34 @@ class CsvExtractionResult:
     member_path: str | None = None
 
 
+EMAIL_PATTERN = re.compile(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}')
+
+
+def replace_email(text: str) -> str:
+    """Replace email addresses in *text* with ``[email]``."""
+    return EMAIL_PATTERN.sub("[email]", text)
+
+
+def replace_username(text: str, username: str) -> str:
+    """Case-insensitive replacement of *username* in *text* with ``[user]``."""
+    return re.sub(re.escape(username), "[user]", text, flags=re.IGNORECASE)
+
+
+def anonymize_dataframe(df: pd.DataFrame, columns: list[str], username: str | None = None) -> pd.DataFrame:
+    """Anonymize text columns in a DataFrame.
+
+    Replaces email addresses and, when *username* is given, the user's name
+    with placeholder tokens.  Only columns that exist in *df* are touched.
+    """
+    for col in columns:
+        if col not in df.columns:
+            continue
+        df[col] = df[col].astype(str).apply(replace_email)
+        if username:
+            df[col] = df[col].apply(lambda v, u=username: replace_username(v, u))
+    return df
+
+
 @dataclass
 class RawExtractionResult:
     """Result of extracting raw bytes from a zip."""

@@ -3802,6 +3802,24 @@ EXTRACTOR_REGISTRY: dict[str, Callable[..., pd.DataFrame]] = {
 # Main extraction & flow
 # ---------------------------------------------------------------------------
 
+def _extract_username(reader: ZipArchiveReader) -> str | None:
+    """Try to extract the participant's name from profile_information.json."""
+    result = reader.json("profile_information/profile_information.json")
+    if not result.found:
+        return None
+    try:
+        d = result.data
+        denested = eh.dict_denester(d)
+        name = eh.find_item(denested, "name-full_name")
+        if not name:
+            name = eh.find_item(denested, "name")
+        if name and isinstance(name, str) and len(name) >= 2:
+            return eh.fix_latin1_string(name)
+    except Exception as e:
+        logger.warning("Could not extract Facebook username: %s", e)
+    return None
+
+
 def extraction(facebook_zip: str, validation) -> ExtractionResult:
     """Extract data from a Facebook DDP zip and return consent-form tables.
 
@@ -3818,7 +3836,18 @@ def extraction(facebook_zip: str, validation) -> ExtractionResult:
         table.extractor_kwargs = {'validation': validation}
     errors: Counter = Counter()
     reader = ZipArchiveReader(facebook_zip, validation.archive_members, errors)
-    return run_extraction(reader, errors, config)
+
+    result = run_extraction(reader, errors, config)
+
+    username = _extract_username(reader)
+    if username:
+        logger.info("Extracted Facebook username for anonymization.")
+
+    TEXT_COLUMNS = ["Title", "Comment", "Post", "Reaction"]
+    for table in result.tables:
+        eh.anonymize_dataframe(table.data_frame, TEXT_COLUMNS, username)
+
+    return result
 
 
 class FacebookFlow(FlowBuilder):

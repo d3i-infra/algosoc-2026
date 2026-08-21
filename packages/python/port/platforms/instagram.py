@@ -2463,6 +2463,26 @@ EXTRACTOR_REGISTRY: dict[str, Callable[..., pd.DataFrame]] = {
 # Main extraction & flow
 # ---------------------------------------------------------------------------
 
+def _extract_username(reader: ZipArchiveReader) -> str | None:
+    """Try to extract the participant's name from personal_information.json."""
+    result = reader.json("personal_information/personal_information.json")
+    if not result.found:
+        return None
+    try:
+        d = result.data
+        denested = eh.dict_denester(d)
+        name = eh.find_item(denested, "name-username")
+        if not name:
+            name = eh.find_item(denested, "username")
+        if not name:
+            name = eh.find_item(denested, "name")
+        if name and isinstance(name, str) and len(name) >= 2:
+            return eh.fix_latin1_string(name)
+    except Exception as e:
+        logger.warning("Could not extract Instagram username: %s", e)
+    return None
+
+
 def extraction(
     instagram_zip: str,
     validation,
@@ -2482,7 +2502,18 @@ def extraction(
         table.extractor_kwargs = {'validation': validation}
     errors: Counter = Counter()
     reader = ZipArchiveReader(instagram_zip, validation.archive_members, errors)
-    return run_extraction(reader, errors, config)
+
+    result = run_extraction(reader, errors, config)
+
+    username = _extract_username(reader)
+    if username:
+        logger.info("Extracted Instagram username for anonymization.")
+
+    TEXT_COLUMNS = ["Comment", "Caption", "Text", "Title"]
+    for table in result.tables:
+        eh.anonymize_dataframe(table.data_frame, TEXT_COLUMNS, username)
+
+    return result
 
 
 class InstagramFlow(FlowBuilder):
