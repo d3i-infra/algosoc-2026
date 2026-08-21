@@ -20,7 +20,7 @@ Platform info::
 
     {
         "name": "Instagram",
-        "filetypes": ["json"],
+        "filetypes": ["json", "html"],
         "languages": ["en", "nl"],
         "description": "Note that supported DDP language also includes Dutch and probably other languages as well. You get an english DDP regardless of the Dutch language setting. These data donation flows have not been tested yet, if you find anything wrong with them report to datadonation@uu.nl and they will be fixed!",
         "time_last_tested": "not yet implemented"
@@ -31,6 +31,8 @@ import logging
 import os
 from collections import Counter
 from typing import Any, Callable
+
+from lxml import etree
 
 import pandas as pd
 
@@ -99,7 +101,15 @@ DDP_CATEGORIES = [
             "profile_changes.json",
             "reels.json",
         ],
-    )
+    ),
+    DDPCategory(
+        id="html_en",
+        ddp_filetype=DDPFiletype.HTML,
+        language=Language.EN,
+        known_files=[
+"followers_1.html", "following.html", "follow_requests_you've_received.html", "recent_follow_requests.html", "recently_unfollowed_profiles.html", "removed_suggestions.html", "posts_viewed.html", "posts_you're_not_interested_in.html", "videos_watched.html", "advertisers_using_your_activity_or_information.html", "other_categories_used_to_reach_you.html", "word_or_phrase_searches.html", "camera_information.html", "locations_of_interest.html", "profile_based_in.html", "account_supervision.html", "instagram_profile_information.html", "note_and_repost_interactions.html", "personal_information.html", "last_known_location.html", "login_activity.html", "profile_activity.html", "signup_details.html", "post_comments_1.html", "liked_comments.html", "liked_posts.html", "profile_photos.html", "stories.html", "chats.html", "secret_conversations.html", "eligibility.html", "surveys.html", "your_information_download_requests.html", "saved_music.html", "saved_posts.html", "checkout_payment_information.html", "recently_viewed_items.html", "polls.html", "stories_viewed.html", "story_likes.html", "start_here.html",
+        ],
+    ),
 ]
 
 
@@ -190,6 +200,35 @@ def _extract_owner_details(label_values: list[dict[str, Any]]) -> tuple[str, str
     return owner_name, owner_username, url
 
 
+def _extract_owner_from_html(section) -> tuple[str, str]:
+    """Extract ``(owner_name, owner_username)`` from an HTML Owner subsection.
+
+    Looks for an ``<h2>Owner</h2>`` inside *section*, then reads the
+    innermost ``<table>`` (one without nested tables) to find the
+    ``Name`` and ``Username`` rows.
+
+    Returns ``("", "")`` when no Owner block is found.
+    """
+    owner_h2 = section.xpath('.//h2[text()="Owner"]')
+    if not owner_h2:
+        return "", ""
+    owner_div = owner_h2[0].getparent()
+    tables = owner_div.xpath('.//table[not(.//table)]')
+    name = ""
+    username = ""
+    for table in tables:
+        for tr in table.xpath('tr'):
+            tds = tr.xpath('td')
+            if len(tds) == 2:
+                label = tds[0].text.strip() if tds[0].text else ""
+                value = tds[1].text.strip() if tds[1].text else ""
+                if label == "Name" and not name:
+                    name = value
+                elif label == "Username" and not username:
+                    username = value
+    return name, username
+
+
 # ---------------------------------------------------------------------------
 # Per-table extraction functions
 # ---------------------------------------------------------------------------
@@ -198,12 +237,7 @@ def _extract_owner_details(label_values: list[dict[str, Any]]) -> tuple[str, str
 # Missing extractors are marked with TODO comments.
 # ---------------------------------------------------------------------------
 
-def following_to_df(
-    reader: ZipArchiveReader,
-    errors: Counter,
-    *,
-    filename: str = "following.json",
-) -> pd.DataFrame:
+def following_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
     """Extract the list of followed accounts into a DataFrame.
 
     Parameters
@@ -213,9 +247,6 @@ def following_to_df(
     errors:
         Mutable counter that accumulates error type counts encountered during
         extraction.  Updated in-place.
-    filename:
-        Path inside the zip archive to read.  Defaults to
-        ``"following.json"``.
 
     Returns
     -------
@@ -227,7 +258,7 @@ def following_to_df(
 
         {
           "summary": "Each row represents one account that the participant follows on Instagram, including when they started following.",
-          "source_file": "following.json",
+          "source_file": "following.json / following.html",
           "columns": {
             "Account": "Username or display name of the followed account.",
             "URL": "Direct URL to the followed account's Instagram profile.",
@@ -254,7 +285,14 @@ def following_to_df(
           }
         }
     """
-    result = reader.json(filename)
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _following_html(reader, errors)
+
+    return _following_json(reader, errors)
+
+
+def _following_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.json("following.json")
     if not result.found:
         return pd.DataFrame()
     data = result.data
@@ -281,12 +319,45 @@ def following_to_df(
     return out
 
 
-def posts_viewed_to_df(
-    reader: ZipArchiveReader,
-    errors: Counter,
-    *,
-    filename: str = "posts_viewed.json",
-) -> pd.DataFrame:
+def _following_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.raw("following.html")
+    if not result.found:
+        return pd.DataFrame()
+
+    datapoints = []
+
+    try:
+        tree = etree.HTML(result.data.read())
+
+        sections = tree.xpath("//main/div[contains(@class, '_a6-g')]")
+        for section in sections:
+            h2 = section.xpath(".//h2")
+            account = h2[0].text.strip() if h2 and h2[0].text else ""
+
+            a = section.xpath(".//a[@href]")
+            url = a[0].get("href", "") if a else ""
+
+            # Timestamp is the div sibling after the <a> link
+            date_divs = section.xpath(".//div[contains(@class, '_a6-p')]//div[not(@class) and not(div) and not(a)]")
+            timestamp = ""
+            for d in date_divs:
+                if d.text and d.text.strip():
+                    timestamp = d.text.strip()
+                    break
+
+            datapoints.append((account, url, timestamp))
+
+        if datapoints:
+            return pd.DataFrame(datapoints, columns=["Account", "URL", "Date"])  # pyright: ignore
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return pd.DataFrame()
+
+
+def posts_viewed_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
     """Extract the list of viewed posts into a DataFrame.
 
     Handles both the older ``string_map_data`` format (dict root keyed by
@@ -300,9 +371,6 @@ def posts_viewed_to_df(
     errors:
         Mutable counter that accumulates error type counts encountered during
         extraction.  Updated in-place.
-    filename:
-        Path inside the zip archive to read.  Defaults to
-        ``"posts_viewed.json"``.
 
     Returns
     -------
@@ -314,7 +382,7 @@ def posts_viewed_to_df(
 
         {
           "summary": "Each row represents one post that appeared in the participant's Instagram feed and was registered as viewed. Captures the author and timing of each impression.",
-          "source_file": "posts_viewed.json",
+          "source_file": "posts_viewed.json / posts_viewed.html",
           "columns": {
             "Author": "Username or display name of the account that published the viewed post.",
             "URL": "Direct URL to the viewed post.",
@@ -361,7 +429,14 @@ def posts_viewed_to_df(
           ]
         }
     """
-    result = reader.json(filename)
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _posts_viewed_html(reader, errors)
+
+    return _posts_viewed_json(reader, errors)
+
+
+def _posts_viewed_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.json("posts_viewed.json")
     if not result.found:
         return pd.DataFrame()
     data = result.data
@@ -401,11 +476,44 @@ def posts_viewed_to_df(
     return out
 
 
+def _posts_viewed_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.raw("posts_viewed.html")
+    if not result.found:
+        return pd.DataFrame()
+
+    datapoints = []
+
+    try:
+        tree = etree.HTML(result.data.read())
+
+        sections = tree.xpath("//main/div[contains(@class, '_a6-g')]")
+        for section in sections:
+            name, username = _extract_owner_from_html(section)
+            author = username or name
+
+            url_a = section.xpath(".//td[contains(@class, '_a6_q') and starts-with(text(), 'URL')]//a")
+            url = url_a[0].get("href", "") if url_a else ""
+
+            ts = section.xpath(".//div[contains(@class, '_a6-o')]")
+            timestamp = ts[0].text.strip() if ts and ts[0].text else ""
+
+            datapoints.append((author, url, timestamp))
+
+        if datapoints:
+            return pd.DataFrame(datapoints, columns=["Author", "URL", "Date"])  # pyright: ignore
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return pd.DataFrame()
+
+
 def videos_watched_to_df(
     reader: ZipArchiveReader,
     errors: Counter,
     *,
-    filename: str = "videos_watched.json",
+    validation=None,
 ) -> pd.DataFrame:
     """Extract the list of watched videos into a DataFrame.
 
@@ -420,9 +528,6 @@ def videos_watched_to_df(
     errors:
         Mutable counter that accumulates error type counts encountered during
         extraction.  Updated in-place.
-    filename:
-        Path inside the zip archive to read.  Defaults to
-        ``"videos_watched.json"``.
 
     Returns
     -------
@@ -434,7 +539,7 @@ def videos_watched_to_df(
 
         {
           "summary": "Each row represents one video (including Reels) that the participant watched on Instagram. Captures the creator and timing of each view event.",
-          "source_file": "videos_watched.json",
+          "source_file": "videos_watched.json / videos_watched.html",
           "columns": {
             "Author": "Username or display name of the account that published the watched video.",
             "URL": "Direct URL to the watched video.",
@@ -472,7 +577,13 @@ def videos_watched_to_df(
           ]
         }
     """
-    result = reader.json(filename)
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _videos_watched_html(reader, errors)
+    return _videos_watched_json(reader, errors)
+
+
+def _videos_watched_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.json("videos_watched.json")
     if not result.found:
         return pd.DataFrame()
     data = result.data
@@ -512,11 +623,44 @@ def videos_watched_to_df(
     return out
 
 
+def _videos_watched_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.raw("videos_watched.html")
+    if not result.found:
+        return pd.DataFrame()
+
+    datapoints = []
+
+    try:
+        tree = etree.HTML(result.data.read())
+
+        sections = tree.xpath("//main/div[contains(@class, '_a6-g')]")
+        for section in sections:
+            name, username = _extract_owner_from_html(section)
+            author = username or name
+
+            url_a = section.xpath(".//td[contains(@class, '_a6_q') and starts-with(text(), 'URL')]//a")
+            url = url_a[0].get("href", "") if url_a else ""
+
+            ts = section.xpath(".//div[contains(@class, '_a6-o')]")
+            timestamp = ts[0].text.strip() if ts and ts[0].text else ""
+
+            datapoints.append((author, url, timestamp))
+
+        if datapoints:
+            return pd.DataFrame(datapoints, columns=["Author", "URL", "Date"])  # pyright: ignore
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return pd.DataFrame()
+
+
 def post_comments_to_df(
     reader: ZipArchiveReader,
     errors: Counter,
     *,
-    filename_pattern: str = r"(^|/)post_comments(?:_\d+)?\.json$",
+    validation=None,
 ) -> pd.DataFrame:
     """Extract all post comments across multiple matching files into a DataFrame.
 
@@ -527,10 +671,6 @@ def post_comments_to_df(
     errors:
         Mutable counter that accumulates error type counts encountered during
         extraction.  Updated in-place.
-    filename_pattern:
-        Regular expression matched against archive member paths.  All matching
-        files are read and combined.  Defaults to a pattern that matches
-        ``post_comments.json``, ``post_comments_1.json``, etc.
 
     Returns
     -------
@@ -542,7 +682,7 @@ def post_comments_to_df(
 
         {
           "summary": "Each row represents one comment the participant posted on an Instagram post. Covers all matching comment files in the archive (e.g. post_comments.json, post_comments_1.json).",
-          "source_file": "post_comments*.json",
+          "source_file": "post_comments*.json / post_comments*.html",
           "columns": {
             "Comment": "The full text of the comment posted by the participant.",
             "Media owner": "Username of the account that owns the post the comment was placed on.",
@@ -569,12 +709,18 @@ def post_comments_to_df(
           }
         }
     """
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _post_comments_html(reader, errors)
+    return _post_comments_json(reader, errors)
+
+
+def _post_comments_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
     out = pd.DataFrame()
     datapoints = []
 
     try:
-        results = reader.json_all(filename_pattern)
-        
+        results = reader.json_all(r"(^|/)post_comments(?:_\d+)?\.json$")
+
         if not results:
             return pd.DataFrame()
 
@@ -607,11 +753,54 @@ def post_comments_to_df(
     return out
 
 
+def _post_comments_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    results = reader.raw_all(r"(^|/)post_comments(?:_\d+)?\.html$")
+    if not results:
+        return pd.DataFrame()
+
+    datapoints = []
+
+    try:
+        for result in results:
+            tree = etree.HTML(result.data.read())
+
+            sections = tree.xpath("//main/div[contains(@class, '_a6-g')]")
+            for section in sections:
+                comment = ""
+                media_owner = ""
+                timestamp = ""
+
+                tds = section.xpath(".//td[contains(@class, '_a6_q')]")
+                for td in tds:
+                    label = td.text.strip() if td.text else ""
+                    if label == "Comment":
+                        val_div = td.xpath(".//div/div")
+                        comment = val_div[0].text.strip() if val_div and val_div[0].text else ""
+                    elif label == "Media Owner":
+                        val_div = td.xpath(".//div/div")
+                        media_owner = val_div[0].text.strip() if val_div and val_div[0].text else ""
+                    elif label == "Time":
+                        sibling = td.getnext()
+                        if sibling is not None and sibling.text:
+                            timestamp = sibling.text.strip()
+
+                datapoints.append((comment, media_owner, timestamp))
+
+        if datapoints:
+            return pd.DataFrame(datapoints, columns=["Comment", "Media owner", "Date"])  # pyright: ignore
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return pd.DataFrame()
+
+
 def liked_comments_to_df(
     reader: ZipArchiveReader,
     errors: Counter,
     *,
-    filename: str = "liked_comments.json",
+    validation=None,
 ) -> pd.DataFrame:
     """Extract the list of liked comments into a DataFrame.
 
@@ -626,9 +815,6 @@ def liked_comments_to_df(
     errors:
         Mutable counter that accumulates error type counts encountered during
         extraction.  Updated in-place.
-    filename:
-        Path inside the zip archive to read.  Defaults to
-        ``"liked_comments.json"``.
 
     Returns
     -------
@@ -640,7 +826,7 @@ def liked_comments_to_df(
 
         {
           "summary": "Each row represents one comment the participant liked on Instagram. Comment text may be absent in newer export formats.",
-          "source_file": "liked_comments.json",
+          "source_file": "liked_comments.json / liked_comments.html",
           "columns": {
             "Account name": "Username of the account whose comment was liked.",
             "Value": "Text of the liked comment, if available in the export (empty in newer export formats).",
@@ -667,7 +853,13 @@ def liked_comments_to_df(
           }
         }
     """
-    result = reader.json(filename)
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _liked_comments_html(reader, errors)
+    return _liked_comments_json(reader, errors)
+
+
+def _liked_comments_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.json("liked_comments.json")
     if not result.found:
         return pd.DataFrame()
     data = result.data
@@ -704,11 +896,50 @@ def liked_comments_to_df(
     return out
 
 
+def _liked_comments_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.raw("liked_comments.html")
+    if not result.found:
+        return pd.DataFrame()
+
+    datapoints = []
+
+    try:
+        tree = etree.HTML(result.data.read())
+
+        sections = tree.xpath("//main/div[contains(@class, '_a6-g')]")
+        for section in sections:
+            h2 = section.xpath(".//h2")
+            account_name = h2[0].text.strip() if h2 and h2[0].text else ""
+
+            # Value is the link text (e.g. thumbs up emoji)
+            a = section.xpath(".//a")
+            value = a[0].text.strip() if a and a[0].text else ""
+
+            # Timestamp is the plain div after the <a> link
+            date_divs = section.xpath(".//div[contains(@class, '_a6-p')]//div[not(@class) and not(div) and not(a)]")
+            timestamp = ""
+            for d in date_divs:
+                if d.text and d.text.strip():
+                    timestamp = d.text.strip()
+                    break
+
+            datapoints.append((account_name, value, timestamp))
+
+        if datapoints:
+            return pd.DataFrame(datapoints, columns=["Account name", "Value", "Date"])  # pyright: ignore
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return pd.DataFrame()
+
+
 def liked_posts_to_df(
     reader: ZipArchiveReader,
     errors: Counter,
     *,
-    filename: str = "liked_posts.json",
+    validation=None,
 ) -> pd.DataFrame:
     """Extract the list of liked posts into a DataFrame.
 
@@ -723,9 +954,6 @@ def liked_posts_to_df(
     errors:
         Mutable counter that accumulates error type counts encountered during
         extraction.  Updated in-place.
-    filename:
-        Path inside the zip archive to read.  Defaults to
-        ``"liked_posts.json"``.
 
     Returns
     -------
@@ -737,7 +965,7 @@ def liked_posts_to_df(
 
         {
           "summary": "Each row represents one post the participant liked on Instagram, including the account whose post was liked and when the like was given.",
-          "source_file": "liked_posts.json",
+          "source_file": "liked_posts.json / liked_posts.html",
           "columns": {
             "Account name": "Username of the account whose post was liked.",
             "Value": "Display name or additional label for the liked post, depending on export format.",
@@ -769,7 +997,13 @@ def liked_posts_to_df(
           ]
         }
     """
-    result = reader.json(filename)
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _liked_posts_html(reader, errors)
+    return _liked_posts_json(reader, errors)
+
+
+def _liked_posts_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.json("liked_posts.json")
     if not result.found:
         return pd.DataFrame()
     data = result.data
@@ -806,11 +1040,41 @@ def liked_posts_to_df(
     return out
 
 
+def _liked_posts_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.raw("liked_posts.html")
+    if not result.found:
+        return pd.DataFrame()
+
+    datapoints = []
+
+    try:
+        tree = etree.HTML(result.data.read())
+
+        sections = tree.xpath("//main/div[contains(@class, '_a6-g')]")
+        for section in sections:
+            name, username = _extract_owner_from_html(section)
+            account_name = username or name
+
+            ts = section.xpath(".//div[contains(@class, '_a6-o')]")
+            timestamp = ts[0].text.strip() if ts and ts[0].text else ""
+
+            datapoints.append((account_name, name, timestamp))
+
+        if datapoints:
+            return pd.DataFrame(datapoints, columns=["Account name", "Value", "Date"])  # pyright: ignore
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return pd.DataFrame()
+
+
 def story_likes_to_df(
     reader: ZipArchiveReader,
     errors: Counter,
     *,
-    filename: str = "story_likes.json",
+    validation=None,
 ) -> pd.DataFrame:
     """Extract the list of liked stories into a DataFrame.
 
@@ -825,9 +1089,6 @@ def story_likes_to_df(
     errors:
         Mutable counter that accumulates error type counts encountered during
         extraction.  Updated in-place.
-    filename:
-        Path inside the zip archive to read.  Defaults to
-        ``"story_likes.json"``.
 
     Returns
     -------
@@ -839,7 +1100,7 @@ def story_likes_to_df(
 
         {
           "summary": "Each row represents one Instagram Story the participant liked, recording the account whose story was liked and when.",
-          "source_file": "story_likes.json",
+          "source_file": "story_likes.json / story_likes.html",
           "columns": {
             "Account name": "Username of the account whose story was liked.",
             "Date": "ISO 8601 timestamp of when the story was liked."
@@ -861,7 +1122,13 @@ def story_likes_to_df(
           }
         }
     """
-    result = reader.json(filename)
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _story_likes_html(reader, errors)
+    return _story_likes_json(reader, errors)
+
+
+def _story_likes_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.json("story_likes.json")
     if not result.found:
         return pd.DataFrame()
     data = result.data
@@ -896,11 +1163,41 @@ def story_likes_to_df(
     return out
 
 
+def _story_likes_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.raw("story_likes.html")
+    if not result.found:
+        return pd.DataFrame()
+
+    datapoints = []
+
+    try:
+        tree = etree.HTML(result.data.read())
+
+        sections = tree.xpath("//main/div[contains(@class, '_a6-g')]")
+        for section in sections:
+            name, username = _extract_owner_from_html(section)
+            account_name = username or name
+
+            ts = section.xpath(".//div[contains(@class, '_a6-o')]")
+            timestamp = ts[0].text.strip() if ts and ts[0].text else ""
+
+            datapoints.append((account_name, timestamp))
+
+        if datapoints:
+            return pd.DataFrame(datapoints, columns=["Account name", "Date"])  # pyright: ignore
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return pd.DataFrame()
+
+
 def saved_posts_to_df(
     reader: ZipArchiveReader,
     errors: Counter,
     *,
-    filename: str = "saved_posts.json",
+    validation=None,
 ) -> pd.DataFrame:
     """Extract the list of saved posts into a DataFrame.
 
@@ -911,24 +1208,23 @@ def saved_posts_to_df(
     errors:
         Mutable counter that accumulates error type counts encountered during
         extraction.  Updated in-place.
-    filename:
-        Path inside the zip archive to read.  Defaults to
-        ``"saved_posts.json"``.
 
     Returns
     -------
     pd.DataFrame
-        Columns: ``Title``, ``Value``, ``Timestamp``.
+        Columns: ``Caption``, ``URL``, ``Username``, ``Hashtags``, ``Timestamp``.
         Empty DataFrame when the file is absent or parsing fails.
 
     Table documentation::
 
         {
           "summary": "Each row represents one post the participant bookmarked (saved) on Instagram for later viewing.",
-          "source_file": "saved_posts.json",
+          "source_file": "saved_posts.json / saved_posts.html",
           "columns": {
-            "Title": "Concatenated title labels from the saved post metadata.",
-            "Value": "Concatenated values (caption, URL, owner info) from the saved post.",
+            "Caption": "Caption text of the saved post.",
+            "URL": "URL linking to the saved post.",
+            "Username": "Username of the account that created the saved post.",
+            "Hashtags": "Space-separated hashtags associated with the saved post, or 'No hashtags' if none.",
             "Timestamp": "ISO 8601 timestamp of when the post was saved."
           }
         }
@@ -946,13 +1242,21 @@ def saved_posts_to_df(
             "nl": "Lijst van berichten die je hebt opgeslagen op Instagram."
           },
           "headers": {
-            "Title": {"en": "Title", "nl": "Titel"},
-            "Value": {"en": "Value", "nl": "Waarde"},
+            "Caption": {"en": "Caption", "nl": "Bijschrift"},
+            "URL": {"en": "URL", "nl": "URL"},
+            "Username": {"en": "Username", "nl": "Gebruikersnaam"},
+            "Hashtags": {"en": "Hashtags", "nl": "Hashtags"},
             "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
           }
         }
     """
-    result = reader.json(filename)
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _saved_posts_html(reader, errors)
+    return _saved_posts_json(reader, errors)
+
+
+def _saved_posts_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.json("saved_posts.json")
     if not result.found:
         return pd.DataFrame()
     data = result.data
@@ -963,19 +1267,52 @@ def saved_posts_to_df(
     try:
         items = data if isinstance(data, list) else data.get("saved_saved_media", [])  # pyright: ignore
         for item in items:
-            d = eh.dict_denester(item)
-            value = " ".join(
-                eh.fix_latin1_string(str(v)) for v in eh.find_items(d, "value") if v
-            )
-            title = " ".join(
-                eh.fix_latin1_string(str(v)) for v in eh.find_items(d, "title") if v
-            )
+            caption = ""
+            url = ""
+            username = ""
+            hashtags = ""
+
+            for lv in item.get("label_values", []):
+                if "value" in lv:
+                    # Flavour 1: {"label": "...", "value": "..."}
+                    label = lv.get("label", "")
+                    value = eh.fix_latin1_string(lv.get("value", ""))
+                    if label == "Caption":
+                        caption = value
+                    elif label == "URL":
+                        url = value
+                    elif label == "Username":
+                        username = value
+                elif "dict" in lv:
+                    # Flavour 2: {"dict": [...], "title": "..."}
+                    title = lv.get("title", "")
+                    if title == "Hashtags":
+                        dict_list = lv.get("dict", [])
+                        tags = []
+                        for dict_item in dict_list:
+                            denested = eh.dict_denester(dict_item)
+                            tag = eh.find_item(denested, "value")
+                            if tag:
+                                tags.append(eh.fix_latin1_string(tag))
+                        hashtags = " ".join(tags) if tags else "No hashtags"
+                    elif title == "Owner":
+                        dict_list = lv.get("dict", [])
+                        for dict_item in dict_list:
+                            for inner in dict_item.get("dict", []):
+                                if inner.get("label") == "Username":
+                                    username = eh.fix_latin1_string(inner.get("value", ""))
+
+            if not hashtags:
+                hashtags = "No hashtags"
+
             datapoints.append((
-                title,
-                value,
+                caption,
+                url,
+                username,
+                hashtags,
                 eh.epoch_to_iso(item.get("timestamp", ""), errors=errors),
             ))
-        out = pd.DataFrame(datapoints, columns=["Title", "Value", "Timestamp"])  # pyright: ignore
+        out = pd.DataFrame(datapoints, columns=["Caption", "URL", "Username", "Hashtags", "Timestamp"])  # pyright: ignore
         out = _sort_by_date(out, "Timestamp")
 
     except Exception as e:
@@ -983,6 +1320,59 @@ def saved_posts_to_df(
         errors[type(e).__name__] += 1
 
     return out
+
+
+def _saved_posts_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.raw("saved_posts.html")
+    if not result.found:
+        return pd.DataFrame()
+
+    datapoints = []
+
+    try:
+        tree = etree.HTML(result.data.read())
+
+        sections = tree.xpath("//main/div[contains(@class, '_a6-g')]")
+        for section in sections:
+            # URL
+            url_a = section.xpath(".//td[contains(@class, '_a6_q') and starts-with(text(), 'URL')]//a")
+            url = url_a[0].get("href", "") if url_a else ""
+
+            # Caption
+            caption_tds = section.xpath(".//td[contains(@class, '_a6_q') and text()='Caption']")
+            caption = ""
+            if caption_tds:
+                sibling = caption_tds[0].getnext()
+                if sibling is not None and sibling.text:
+                    caption = sibling.text.strip()
+
+            # Owner username
+            _, username = _extract_owner_from_html(section)
+
+            # Hashtags
+            hashtags = "No hashtags"
+            hashtag_h2 = section.xpath('.//h2[text()="Hashtags"]')
+            if hashtag_h2:
+                hashtag_div = hashtag_h2[0].getparent()
+                tag_divs = hashtag_div.xpath('.//div[contains(@class, "_a6-p")]')
+                tags = [t.text.strip() for t in tag_divs if t.text and t.text.strip()]
+                if tags:
+                    hashtags = " ".join(tags)
+
+            # Timestamp
+            ts = section.xpath(".//div[contains(@class, '_a6-o')]")
+            timestamp = ts[0].text.strip() if ts and ts[0].text else ""
+
+            datapoints.append((caption, url, username, hashtags, timestamp))
+
+        if datapoints:
+            return pd.DataFrame(datapoints, columns=["Caption", "URL", "Username", "Hashtags", "Timestamp"])  # pyright: ignore
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return pd.DataFrame()
 
 
 # ---------------------------------------------------------------------------
@@ -993,7 +1383,7 @@ def word_or_phrase_searches_to_df(
     reader: ZipArchiveReader,
     errors: Counter,
     *,
-    filename: str = "word_or_phrase_searches.json",
+    validation=None,
 ) -> pd.DataFrame:
     """Extract keyword searches into a DataFrame.
 
@@ -1007,9 +1397,6 @@ def word_or_phrase_searches_to_df(
     errors:
         Mutable counter that accumulates error type counts encountered during
         extraction.  Updated in-place.
-    filename:
-        Path inside the zip archive to read.  Defaults to
-        ``"word_or_phrase_searches.json"``.
 
     Returns
     -------
@@ -1021,7 +1408,7 @@ def word_or_phrase_searches_to_df(
 
         {
           "summary": "Each row represents one keyword or phrase search the participant performed on Instagram.",
-          "source_file": "word_or_phrase_searches.json",
+          "source_file": "word_or_phrase_searches.json / word_or_phrase_searches.html",
           "columns": {
             "Search term": "The word or phrase that was searched for.",
             "Date": "ISO 8601 timestamp of when the search was performed."
@@ -1046,7 +1433,13 @@ def word_or_phrase_searches_to_df(
           }
         }
     """
-    result = reader.json(filename)
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _word_or_phrase_searches_html(reader, errors)
+    return _word_or_phrase_searches_json(reader, errors)
+
+
+def _word_or_phrase_searches_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.json("word_or_phrase_searches.json")
     if not result.found:
         return pd.DataFrame()
     data = result.data
@@ -1079,11 +1472,49 @@ def word_or_phrase_searches_to_df(
     return out
 
 
+def _word_or_phrase_searches_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.raw("word_or_phrase_searches.html")
+    if not result.found:
+        return pd.DataFrame()
+
+    datapoints = []
+
+    try:
+        tree = etree.HTML(result.data.read())
+
+        sections = tree.xpath("//main/div[contains(@class, '_a6-g')]")
+        for section in sections:
+            search_term = ""
+            timestamp = ""
+
+            tds = section.xpath(".//td[contains(@class, '_a6_q')]")
+            for td in tds:
+                label = td.text.strip() if td.text else ""
+                if label == "Search":
+                    val_div = td.xpath(".//div/div")
+                    search_term = val_div[0].text.strip() if val_div and val_div[0].text else ""
+                elif label == "Time":
+                    sibling = td.getnext()
+                    if sibling is not None and sibling.text:
+                        timestamp = sibling.text.strip()
+
+            datapoints.append((search_term, timestamp))
+
+        if datapoints:
+            return pd.DataFrame(datapoints, columns=["Search term", "Date"])  # pyright: ignore
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return pd.DataFrame()
+
+
 def stories_published_to_df(
     reader: ZipArchiveReader,
     errors: Counter,
     *,
-    filename: str = "stories.json",
+    validation=None,
 ) -> pd.DataFrame:
     """Extract published stories into a DataFrame.
 
@@ -1097,21 +1528,18 @@ def stories_published_to_df(
     errors:
         Mutable counter that accumulates error type counts encountered during
         extraction.  Updated in-place.
-    filename:
-        Path inside the zip archive to read.  Defaults to
-        ``"stories.json"``.
 
     Returns
     -------
     pd.DataFrame
-        Columns: ``Title``, ``URI``, ``Date``.
+        Columns: ``Title``, ``Media type``, ``Date``.
         Empty DataFrame when the file is absent or parsing fails.
 
     Table documentation::
 
         {
           "summary": "Each row represents one Instagram Story published by the participant.",
-          "source_file": "stories.json",
+          "source_file": "stories.json / stories.html",
           "columns": {
             "Title": "Caption or title text of the story, or 'Story has no title' when empty.",
             "Media type": "File extension of the story media asset (e.g. .jpg, .mp4).",
@@ -1138,7 +1566,13 @@ def stories_published_to_df(
           }
         }
     """
-    result = reader.json(filename)
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _stories_published_html(reader, errors)
+    return _stories_published_json(reader, errors)
+
+
+def _stories_published_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.json("stories.json")
     if not result.found:
         return pd.DataFrame()
     data = result.data
@@ -1174,6 +1608,42 @@ def stories_published_to_df(
     return out
 
 
+def _stories_published_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.raw("stories.html")
+    if not result.found:
+        return pd.DataFrame()
+
+    datapoints = []
+
+    try:
+        tree = etree.HTML(result.data.read())
+
+        sections = tree.xpath("//main/div[contains(@class, '_a6-g')]")
+        for section in sections:
+            # URI from media link
+            a = section.xpath(".//a[@href]")
+            uri = a[0].get("href", "") if a else ""
+            ext = os.path.splitext(uri)[1] if uri else ""
+
+            # No title in HTML format
+            title = "Story has no title"
+
+            # Timestamp
+            ts = section.xpath(".//div[contains(@class, '_a6-o')]")
+            timestamp = ts[0].text.strip() if ts and ts[0].text else ""
+
+            datapoints.append((title, ext, timestamp))
+
+        if datapoints:
+            return pd.DataFrame(datapoints, columns=["Title", "Media type", "Date"])  # pyright: ignore
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return pd.DataFrame()
+
+
 # ---------------------------------------------------------------------------
 # RECREATED FROM algosoc-dd-old — NEEDS MANUAL VERIFICATION
 # Source: algosoc-dd-old/src/framework/processing/py/port/instagram.py parse_advertisers_using_activity()
@@ -1182,7 +1652,7 @@ def advertisers_using_activity_to_df(
     reader: ZipArchiveReader,
     errors: Counter,
     *,
-    filename: str = "advertisers_using_your_activity_or_information.json",
+    validation=None,
 ) -> pd.DataFrame:
     """Extract advertisers using participant activity into a DataFrame.
 
@@ -1197,9 +1667,6 @@ def advertisers_using_activity_to_df(
     errors:
         Mutable counter that accumulates error type counts encountered during
         extraction.  Updated in-place.
-    filename:
-        Path inside the zip archive to read.  Defaults to
-        ``"advertisers_using_your_activity_or_information.json"``.
 
     Returns
     -------
@@ -1211,7 +1678,7 @@ def advertisers_using_activity_to_df(
 
         {
           "summary": "Each row represents one advertiser that used the participant's activity or information to target them on Instagram.",
-          "source_file": "advertisers_using_your_activity_or_information.json",
+          "source_file": "advertisers_using_your_activity_or_information.json / advertisers_using_your_activity_or_information.html",
           "columns": {
             "Advertiser": "Name of the advertiser.",
             "Category": "Category describing how the advertiser used the participant's data."
@@ -1236,7 +1703,13 @@ def advertisers_using_activity_to_df(
           }
         }
     """
-    result = reader.json(filename)
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _advertisers_using_activity_html(reader, errors)
+    return _advertisers_using_activity_json(reader, errors)
+
+
+def _advertisers_using_activity_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.json("advertisers_using_your_activity_or_information.json")
     if not result.found:
         return pd.DataFrame()
     data = result.data
@@ -1274,11 +1747,44 @@ def advertisers_using_activity_to_df(
     return out
 
 
+def _advertisers_using_activity_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.raw("advertisers_using_your_activity_or_information.html")
+    if not result.found:
+        return pd.DataFrame()
+
+    datapoints = []
+
+    try:
+        tree = etree.HTML(result.data.read())
+
+        headed_tds = tree.xpath("//td[contains(@class, '_a6_q') and @colspan]")
+        for td in headed_tds:
+            category = td.text.strip() if td.text else ""
+            if not category:
+                continue
+
+            value_divs = td.xpath(".//div[contains(@class, '_a6-g')]/div[contains(@class, '_a6-p')]")
+            for div in value_divs:
+                advertiser = div.text.strip() if div.text else ""
+                if advertiser:
+                    datapoints.append((advertiser, category))
+
+        if datapoints:
+            return pd.DataFrame(datapoints, columns=["Advertiser", "Category"])  # pyright: ignore
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return pd.DataFrame()
+
+
 def ads_viewed_to_df(
     reader: ZipArchiveReader,
     errors: Counter,
     *,
     filename: str = "ads_viewed.json",
+    validation=None,
 ) -> pd.DataFrame:
     """Extract the list of viewed ads into a DataFrame.
 
@@ -1375,6 +1881,7 @@ def profile_searches_to_df(
     errors: Counter,
     *,
     filename: str = "profile_searches.json",
+    validation=None,
 ) -> pd.DataFrame:
     """Extract the list of profile searches into a DataFrame.
 
@@ -1455,6 +1962,7 @@ def threads_viewed_to_df(
     errors: Counter,
     *,
     filename: str = "threads_viewed.json",
+    validation=None,
 ) -> pd.DataFrame:
     """Extract the list of viewed Threads posts into a DataFrame.
 
@@ -1552,11 +2060,9 @@ def ads_clicked_to_df(
     errors: Counter,
     *,
     filename: str = "ads_clicked.json",
+    validation=None,
 ) -> pd.DataFrame:
     """Extract the list of clicked ads into a DataFrame.
-
-    Reads the older format keyed by ``"impressions_history_ads_clicked"``
-    where each entry has a title and a timestamp in ``string_list_data``.
 
     Parameters
     ----------
@@ -1572,7 +2078,7 @@ def ads_clicked_to_df(
     Returns
     -------
     pd.DataFrame
-        Columns: ``Value``, ``URL``, ``Date``.
+        Columns: ``Action``, ``Title``, ``URL``, ``Timestamp``.
         Empty DataFrame when the file is absent or parsing fails.
 
     Table documentation::
@@ -1581,9 +2087,10 @@ def ads_clicked_to_df(
           "summary": "Each row represents one advertisement the participant clicked on Instagram.",
           "source_file": "ads_clicked.json",
           "columns": {
-            "Value": "Concatenated values from the ad metadata.",
+            "Action": "The action performed on the ad (e.g. Click).",
+            "Title": "Title or name of the clicked advertisement.",
             "URL": "URL of the clicked advertisement.",
-            "Date": "ISO 8601 timestamp of when the ad was clicked."
+            "Timestamp": "ISO 8601 timestamp of when the ad was clicked."
           }
         }
 
@@ -1600,9 +2107,10 @@ def ads_clicked_to_df(
             "nl": "Lijst van advertenties die je op Instagram hebt aangeklikt."
           },
           "headers": {
-            "Value": {"en": "Value", "nl": "Waarde"},
+            "Action": {"en": "Action", "nl": "Actie"},
+            "Title": {"en": "Title", "nl": "Titel"},
             "URL": {"en": "URL", "nl": "URL"},
-            "Date": {"en": "Date", "nl": "Datum en tijd"}
+            "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
           }
         }
     """
@@ -1615,21 +2123,31 @@ def ads_clicked_to_df(
     datapoints = []
 
     try:
-        items = data if isinstance(data, list) else data.get("impressions_history_ads_clicked", [])  # pyright: ignore
+        items = data if isinstance(data, list) else [data]  # pyright: ignore
         for item in items:
-            d = eh.dict_denester(item)
-            value = " ".join(
-                eh.fix_latin1_string(str(v)) for v in eh.find_items(d, "value") if v
-            )
-            href = eh.find_item(d, "href")
+            action = ""
+            title = ""
+            url = ""
+
+            for lv in item.get("label_values", []):
+                if "value" in lv:
+                    label = lv.get("label", "")
+                    value = eh.fix_latin1_string(lv.get("value", ""))
+                    if label == "Action":
+                        action = value
+                    elif label == "Title":
+                        title = value
+                    elif label == "URL":
+                        url = value
+
             datapoints.append((
-                value,
-                href,
+                action,
+                title,
+                url,
                 eh.epoch_to_iso(item.get("timestamp", ""), errors=errors),
             ))
 
-        out = pd.DataFrame(datapoints, columns=["Value", "URL", "Date"])  # pyright: ignore
-        out = _sort_by_date(out, "Date")
+        out = pd.DataFrame(datapoints, columns=["Action", "Title", "URL", "Timestamp"])  # pyright: ignore
 
     except Exception as e:
         logger.error("Exception caught: %s", e)
@@ -1643,6 +2161,7 @@ def posts_published_to_df(
     errors: Counter,
     *,
     filename_pattern: str = r"(^|/)posts(?:_\d+)?\.json$",
+    validation=None,
 ) -> pd.DataFrame:
     """Extract published posts across multiple matching files into a DataFrame.
 
@@ -1739,6 +2258,7 @@ def subscription_for_no_ads_to_df(
     errors: Counter,
     *,
     filename: str = "subscription_for_no_ads.json",
+    validation=None,
 ) -> pd.DataFrame:
     """Extract ad-free subscription status into a DataFrame.
 
@@ -1958,6 +2478,8 @@ def extraction(
         to ``ZipArchiveReader``.
     """
     config = load_port_config(EXTRACTOR_REGISTRY, "instagram")
+    for table in config:
+        table.extractor_kwargs = {'validation': validation}
     errors: Counter = Counter()
     reader = ZipArchiveReader(instagram_zip, validation.archive_members, errors)
     return run_extraction(reader, errors, config)

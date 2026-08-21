@@ -734,3 +734,16 @@ class ZipArchiveReader:
 
         b = self._read_member_bytes(member)
         return RawExtractionResult(found=True, data=b, member_path=member)
+
+    def raw_all(self, pattern: str) -> list[RawExtractionResult]:
+        """Extract raw bytes from all zip members matching a regex pattern.
+
+        Returns results sorted lexicographically by member path.
+        Used for paginated HTML exports (post_comments_1.html, _2.html, etc.).
+        """
+        matches = sorted(m for m in self.archive_members if re.search(pattern, m))
+        results = []
+        for member in matches:
+            b = self._read_member_bytes(member)
+            results.append(RawExtractionResult(found=True, data=b, member_path=member))
+        return results

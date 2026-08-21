@@ -31,6 +31,8 @@ import logging
 from collections import Counter
 from typing import Callable
 
+from lxml import etree
+
 import pandas as pd
 
 import port.helpers.extraction_helpers as eh
@@ -60,10 +62,18 @@ DDP_CATEGORIES = [
 "subscription_for_no_ads.json", "other_categories_used_to_reach_you.json", "ads_feedback_activity.json", "ads_personalization_consent.json", "advertisers_you've_interacted_with.json", "advertisers_using_your_activity_or_information.json", "story_views_in_past_7_days.json", "ad_preferences.json", "groups_you've_searched_for.json", "your_search_history.json", "primary_public_location.json", "timezone.json", "primary_location.json", "your_privacy_jurisdiction.json", "people_and_friends.json", "ads_interests.json", "notifications.json", "notification_of_meta_privacy_policy_update.json", "recently_viewed.json", "recently_visited.json", "your_avatar.json", "meta_avatars_post_backgrounds.json", "contacts_sync_settings.json", "timezone.json", "autofill_information.json", "profile_information.json", "profile_update_history.json", "your_transaction_survey_information.json", "your_recently_followed_history.json", "your_recently_used_emojis.json", "navigation_bar_activity.json", "pages_and_profiles_you_follow.json", "pages_you've_liked.json", "your_saved_items.json", "fundraiser_posts_you_likely_viewed.json", "your_fundraiser_donations_information.json", "your_events.json", "event_invitations.json", "your_event_invitation_links.json", "likes_and_reactions_1.json", "your_uncategorized_photos.json", "payment_history.json", "your_answers_to_membership_questions.json", "your_group_membership_activity.json", "your_contributions.json", "group_posts_and_comments.json", "your_comments_in_groups.json", "instant_games.json", "your_page_or_groups_badges.json", "instant_games_usage_data.json", "who_you've_followed.json", "people_you_may_know.json", "received_friend_requests.json", "your_friends.json", "likes_and_reactions.json", "controls.json",
         ],
     ),
+    DDPCategory(
+        id="html_en",
+        ddp_filetype=DDPFiletype.HTML,
+        language=Language.EN,
+        known_files=[
+"subscription_for_no_ads.html", "other_categories_used_to_reach_you.html", "ads_feedback_activity.html", "advertisers_you've_interacted_with.html", "advertisers_using_your_activity_or_information.html", "story_views_in_past_7_days.html", "ad_preferences.html", "your_search_history.html", "primary_public_location.html", "primary_location.html", "your_privacy_jurisdiction.html", "people_and_friends.html", "ads_interests.html", "notifications.html", "contacts_sync_settings.html", "autofill_information.html", "profile_information.html", "profile_update_history.html", "your_transaction_survey_information.html", "your_recently_used_emojis.html", "pages_and_profiles_you_follow.html", "pages_you've_liked.html", "your_saved_items.html", "fundraiser_posts_you_likely_viewed.html", "your_fundraiser_donations_information.html", "your_events.html", "event_invitations.html", "your_event_invitation_links.html", "likes_and_reactions_1.html", "payment_history.html", "your_group_membership_activity.html", "your_contributions.html", "your_page_or_groups_badges.html", "who_you've_followed.html", "people_you_may_know.html", "received_friend_requests.html", "your_friends.html", "likes_and_reactions.html", "comments.html", "your_posts__check_ins__photos_and_videos_1.html", "archived_stories.html", "connected_apps_and_websites.html", "your_activity_off_meta_technologies.html", "content_that_has_been_shown_to_you_in_your_feed.html", "items_viewed.html", "profile_visits.html", "start_here.html",
+        ],
+    ),
 ]
 
 
-def who_youve_followed_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+def who_youve_followed_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
     """Extract the list of profiles and pages you follow on Facebook.
 
     Parameters
@@ -84,7 +94,7 @@ def who_youve_followed_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.Da
 
         {
           "summary": "Each row represents a Facebook profile or page that the participant follows, including the name and the time they started following.",
-          "source_file": "who_you_ve_followed.json",
+          "source_file": "who_you_ve_followed.json / who_you've_followed.html",
           "columns": {
             "Name": "Name of the followed profile or page.",
             "Timestamp": "ISO 8601 timestamp of when the participant started following."
@@ -109,9 +119,14 @@ def who_youve_followed_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.Da
           }
         }
     """
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _who_youve_followed_html(reader, errors)
+
+    return _who_youve_followed_json(reader, errors)
+
+
+def _who_youve_followed_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
     result = reader.json("who_you've_followed.json")
-    print(result)
-    print("Check")
     if not result.found:
         return pd.DataFrame()
     d = result.data
@@ -126,10 +141,6 @@ def who_youve_followed_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.Da
                 eh.fix_latin1_string(item.get("name", "")),
                 eh.epoch_to_iso(item.get("timestamp", {}), errors=errors)
             ))
-
-        print("================")
-        print("TEST")
-        print(out)
         out = pd.DataFrame(datapoints, columns=["Name", "Timestamp"]) #pyright: ignore
 
     except Exception as e:
@@ -139,7 +150,37 @@ def who_youve_followed_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.Da
     return out
 
 
-def news_your_locations_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+def _who_youve_followed_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.raw("who_you've_followed.html")
+    if not result.found:
+        return pd.DataFrame()
+
+    datapoints = []
+
+    try:
+        tree = etree.HTML(result.data.read())
+
+        sections = tree.xpath("//section[contains(@class, '_a6-g') and .//h2]")
+        for section in sections:
+            h2 = section.xpath(".//h2")
+            name = h2[0].text.strip() if h2 and h2[0].text else ""
+
+            date_divs = section.xpath(".//div[contains(@class, '_a72d')]")
+            timestamp = date_divs[0].text.strip() if date_divs and date_divs[0].text else ""
+
+            datapoints.append((name, timestamp))
+
+        if datapoints:
+            return pd.DataFrame(datapoints, columns=["Name", "Timestamp"])  # pyright: ignore
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return pd.DataFrame()
+
+
+def news_your_locations_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
     """Extract the locations Facebook News is configured to show.
 
     Parameters
@@ -183,6 +224,13 @@ def news_your_locations_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.D
           }
         }
     """
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _news_your_locations_html(reader, errors)
+
+    return _news_your_locations_json(reader, errors)
+
+
+def _news_your_locations_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
     result = reader.json("facebook_news/your_locations.json")
     if not result.found:
         return pd.DataFrame()
@@ -204,6 +252,10 @@ def news_your_locations_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.D
         errors[type(e).__name__] += 1
 
     return out
+
+
+def _news_your_locations_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    return pd.DataFrame()
 
 
 def notifications_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
@@ -355,7 +407,7 @@ def content_sharing_you_have_created_to_df(reader: ZipArchiveReader, errors: Cou
     return out
 
 
-def facebook_reels_usage_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+def facebook_reels_usage_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
     """Extract Facebook Reels usage information.
 
     Parameters
@@ -376,7 +428,7 @@ def facebook_reels_usage_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.
 
         {
           "summary": "Each row represents a type of interaction the participant had with Facebook Reels and its associated value.",
-          "source_file": "facebook_reels_usage_information.json",
+          "source_file": "facebook_reels_usage_information.json / facebook_reels_usage_information.html",
           "columns": {
             "Reel interaction": "Type of interaction with Facebook Reels.",
             "Value": "Value associated with the interaction."
@@ -401,6 +453,13 @@ def facebook_reels_usage_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.
           }
         }
     """
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _facebook_reels_usage_html(reader, errors)
+
+    return _facebook_reels_usage_json(reader, errors)
+
+
+def _facebook_reels_usage_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
     result = reader.json("facebook_reels_usage_information.json")
     if not result.found:
         return pd.DataFrame()
@@ -426,6 +485,34 @@ def facebook_reels_usage_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.
         errors[type(e).__name__] += 1
 
     return out
+
+
+def _facebook_reels_usage_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.raw("facebook_reels_usage_information.html")
+    if not result.found:
+        return pd.DataFrame()
+
+    datapoints = []
+
+    try:
+        tree = etree.HTML(result.data.read())
+        rows = tree.xpath("//tr[td[contains(@class, '_a6_q') and not(@colspan)] and td[contains(@class, '_a6_r')]]")
+        for row in rows:
+            label_td = row.xpath("td[contains(@class, '_a6_q')]")
+            value_td = row.xpath("td[contains(@class, '_a6_r')]")
+            label = label_td[0].text.strip() if label_td and label_td[0].text else ""
+            value = value_td[0].text.strip() if value_td and value_td[0].text else ""
+            if label:
+                datapoints.append((label, value))
+
+        if datapoints:
+            return pd.DataFrame(datapoints, columns=["Reel interaction", "Value"])  # pyright: ignore
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return pd.DataFrame()
 
 
 def last_28_days_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
@@ -495,7 +582,7 @@ def last_28_days_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFram
     return out
 
 
-def your_search_history_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+def your_search_history_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
     """Extract Facebook search history.
 
     Parameters
@@ -516,7 +603,7 @@ def your_search_history_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.D
 
         {
           "summary": "Each row represents a search query the participant made on Facebook, including the search term and date.",
-          "source_file": "logged_information/search/your_search_history.json",
+          "source_file": "logged_information/search/your_search_history.json / your_search_history.html",
           "columns": {
             "Search term": "The search query entered by the participant.",
             "Date": "ISO 8601 timestamp of when the search was made."
@@ -549,6 +636,13 @@ def your_search_history_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.D
           ]
         }
     """
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _your_search_history_html(reader, errors)
+
+    return _your_search_history_json(reader, errors)
+
+
+def _your_search_history_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
     result = reader.json("logged_information/search/your_search_history.json")
     if not result.found:
         return pd.DataFrame()
@@ -574,6 +668,33 @@ def your_search_history_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.D
         errors[type(e).__name__] += 1
 
     return out
+
+
+def _your_search_history_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.raw("your_search_history.html")
+    if not result.found:
+        return pd.DataFrame()
+
+    datapoints = []
+
+    try:
+        tree = etree.HTML(result.data.read())
+        sections = tree.xpath("//section[contains(@class, '_a6-g')]")
+        for section in sections:
+            term_divs = section.xpath(".//div[contains(@class, '_2pin')]//div[not(div)]")
+            term = term_divs[0].text.strip().strip('"') if term_divs and term_divs[0].text else ""
+            date_divs = section.xpath(".//div[contains(@class, '_a72d')]")
+            date = date_divs[0].text.strip() if date_divs and date_divs[0].text else ""
+            datapoints.append((term, date))
+
+        if datapoints:
+            return pd.DataFrame(datapoints, columns=["Search term", "Date"])  # pyright: ignore
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return pd.DataFrame()
 
 
 def your_friends_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
@@ -641,7 +762,7 @@ def your_friends_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFram
     return out
 
 
-def ads_interests_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+def ads_interests_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
     """Extract Facebook ad interests.
 
     Parameters
@@ -662,7 +783,7 @@ def ads_interests_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFra
 
         {
           "summary": "Each row represents an interest topic Facebook has associated with the participant for ad targeting purposes.",
-          "source_file": "ads_interests.json",
+          "source_file": "ads_interests.json / ads_interests.html",
           "columns": {
             "Ad": "Interest topic used for ad targeting."
           }
@@ -685,6 +806,13 @@ def ads_interests_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFra
           }
         }
     """
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _ads_interests_html(reader, errors)
+
+    return _ads_interests_json(reader, errors)
+
+
+def _ads_interests_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
     result = reader.json("ads_interests.json")
     if not result.found:
         return pd.DataFrame()
@@ -706,6 +834,32 @@ def ads_interests_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFra
         errors[type(e).__name__] += 1
 
     return out
+
+
+def _ads_interests_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.raw("ads_interests.html")
+    if not result.found:
+        return pd.DataFrame()
+
+    datapoints = []
+
+    try:
+        tree = etree.HTML(result.data.read())
+        sections = tree.xpath("//section[contains(@class, '_a6-g')]")
+        for section in sections:
+            h2 = section.xpath(".//h2")
+            ad = h2[0].text.strip() if h2 and h2[0].text else ""
+            if ad:
+                datapoints.append((ad,))
+
+        if datapoints:
+            return pd.DataFrame(datapoints, columns=["Ad"])  # pyright: ignore
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return pd.DataFrame()
 
 
 def recently_viewed_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
@@ -948,7 +1102,7 @@ def profile_update_history_to_df(reader: ZipArchiveReader, errors: Counter) -> p
     return out
 
 
-def your_events_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+def your_events_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
     """Extract Facebook events the participant created or was invited to.
 
     Parameters
@@ -969,7 +1123,7 @@ def your_events_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame
 
         {
           "summary": "Each row represents a Facebook event the participant created or was invited to, including the event name and creation timestamp.",
-          "source_file": "your_facebook_activity/events/your_events.json",
+          "source_file": "your_facebook_activity/events/your_events.json / your_events.html",
           "columns": {
             "Name": "Name of the Facebook event.",
             "Created": "ISO 8601 timestamp of when the event was created."
@@ -994,6 +1148,13 @@ def your_events_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame
           }
         }
     """
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _your_events_html(reader, errors)
+
+    return _your_events_json(reader, errors)
+
+
+def _your_events_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
     result = reader.json("your_facebook_activity/events/your_events.json")
     if not result.found:
         return pd.DataFrame()
@@ -1017,6 +1178,34 @@ def your_events_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame
         errors[type(e).__name__] += 1
 
     return out
+
+
+def _your_events_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.raw("your_events.html")
+    if not result.found:
+        return pd.DataFrame()
+
+    datapoints = []
+
+    try:
+        tree = etree.HTML(result.data.read())
+        sections = tree.xpath("//section[contains(@class, '_a6-g') and not(ancestor::section)]")
+        for section in sections:
+            h2 = section.xpath(".//h2")
+            name = h2[0].text.strip() if h2 and h2[0].text else ""
+            date_divs = section.xpath(".//div[contains(@class, '_a72d')]")
+            created = date_divs[0].text.strip() if date_divs and date_divs[0].text else ""
+            if name or created:
+                datapoints.append((name, created))
+
+        if datapoints:
+            return pd.DataFrame(datapoints, columns=["Name", "Created"])  # pyright: ignore
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return pd.DataFrame()
 
 
 def group_posts_and_comments_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
@@ -1166,7 +1355,7 @@ def your_answers_to_membership_questions_to_df(reader: ZipArchiveReader, errors:
     return out
 
 
-def your_comments_in_groups_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+def your_comments_in_groups_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
     """Extract your comments in Facebook groups.
 
     Parameters
@@ -1216,6 +1405,13 @@ def your_comments_in_groups_to_df(reader: ZipArchiveReader, errors: Counter) -> 
           }
         }
     """
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _your_comments_in_groups_html(reader, errors)
+
+    return _your_comments_in_groups_json(reader, errors)
+
+
+def _your_comments_in_groups_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
     result = reader.json("your_comments_in_groups.json")
     if not result.found:
         return pd.DataFrame()
@@ -1245,7 +1441,11 @@ def your_comments_in_groups_to_df(reader: ZipArchiveReader, errors: Counter) -> 
     return out
 
 
-def your_group_membership_activity_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+def _your_comments_in_groups_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    return pd.DataFrame()
+
+
+def your_group_membership_activity_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
     """Extract Facebook group membership activity.
 
     Parameters
@@ -1266,7 +1466,7 @@ def your_group_membership_activity_to_df(reader: ZipArchiveReader, errors: Count
 
         {
           "summary": "Each row represents a Facebook group the participant joined, including the title, group name, and the time of joining.",
-          "source_file": "your_group_membership_activity.json",
+          "source_file": "your_group_membership_activity.json / your_group_membership_activity.html",
           "columns": {
             "Title": "Title or description of the membership activity.",
             "Group name": "Name of the Facebook group.",
@@ -1293,6 +1493,13 @@ def your_group_membership_activity_to_df(reader: ZipArchiveReader, errors: Count
           }
         }
     """
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _your_group_membership_activity_html(reader, errors)
+
+    return _your_group_membership_activity_json(reader, errors)
+
+
+def _your_group_membership_activity_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
     result = reader.json("your_group_membership_activity.json")
     if not result.found:
         return pd.DataFrame()
@@ -1321,7 +1528,49 @@ def your_group_membership_activity_to_df(reader: ZipArchiveReader, errors: Count
     return out
 
 
-def pages_and_profiles_you_follow_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+def _your_group_membership_activity_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    """HTML variant.
+
+    Table documentation::
+
+        {
+          "summary": "Each row represents a Facebook group the participant joined. In the HTML format the title contains the full membership sentence (e.g. 'You became a member of X.') because separating the group name from the sentence is fragile and language-dependent.",
+          "source_file": "your_group_membership_activity.html",
+          "columns": {
+            "Title": "Full membership activity sentence from the HTML export.",
+            "Group name": "Not extracted separately from HTML; see Title column.",
+            "Timestamp": "Timestamp string as shown in the HTML export."
+          }
+        }
+    """
+    result = reader.raw("your_group_membership_activity.html")
+    if not result.found:
+        return pd.DataFrame()
+
+    datapoints = []
+
+    try:
+        tree = etree.HTML(result.data.read())
+        sections = tree.xpath("//section[contains(@class, '_a6-g') and not(ancestor::section)]")
+        for section in sections:
+            h2 = section.xpath(".//h2")
+            title = h2[0].text.strip() if h2 and h2[0].text else ""
+            date_divs = section.xpath(".//div[contains(@class, '_a72d')]")
+            date = date_divs[0].text.strip() if date_divs and date_divs[0].text else ""
+            if title or date:
+                datapoints.append((title, "See first column", date))
+
+        if datapoints:
+            return pd.DataFrame(datapoints, columns=["Title", "Group name", "Timestamp"])  # pyright: ignore
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return pd.DataFrame()
+
+
+def pages_and_profiles_you_follow_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
     """Extract pages and profiles you follow on Facebook.
 
     Parameters
@@ -1342,7 +1591,7 @@ def pages_and_profiles_you_follow_to_df(reader: ZipArchiveReader, errors: Counte
 
         {
           "summary": "Each row represents a Facebook Page or profile the participant follows, including the title and time they started following.",
-          "source_file": "pages_and_profiles_you_follow.json",
+          "source_file": "pages_and_profiles_you_follow.json / pages_and_profiles_you_follow.html",
           "columns": {
             "Title": "Title of the followed Page or profile.",
             "Timestamp": "ISO 8601 timestamp of when the participant started following."
@@ -1367,6 +1616,13 @@ def pages_and_profiles_you_follow_to_df(reader: ZipArchiveReader, errors: Counte
           }
         }
     """
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _pages_and_profiles_you_follow_html(reader, errors)
+
+    return _pages_and_profiles_you_follow_json(reader, errors)
+
+
+def _pages_and_profiles_you_follow_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
     result = reader.json("pages_and_profiles_you_follow.json")
     if not result.found:
         return pd.DataFrame()
@@ -1392,7 +1648,37 @@ def pages_and_profiles_you_follow_to_df(reader: ZipArchiveReader, errors: Counte
     return out
 
 
-def pages_youve_liked_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+def _pages_and_profiles_you_follow_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.raw("pages_and_profiles_you_follow.html")
+    if not result.found:
+        return pd.DataFrame()
+
+    datapoints = []
+
+    try:
+        tree = etree.HTML(result.data.read())
+
+        sections = tree.xpath("//section[contains(@class, '_a6-g') and .//h2]")
+        for section in sections:
+            h2 = section.xpath(".//h2")
+            title = h2[0].text.strip() if h2 and h2[0].text else ""
+
+            date_divs = section.xpath(".//div[contains(@class, '_a72d')]")
+            timestamp = date_divs[0].text.strip() if date_divs and date_divs[0].text else ""
+
+            datapoints.append((title, timestamp))
+
+        if datapoints:
+            return pd.DataFrame(datapoints, columns=["Title", "Timestamp"])  # pyright: ignore
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return pd.DataFrame()
+
+
+def pages_youve_liked_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
     """Extract Facebook pages you have liked.
 
     Parameters
@@ -1413,7 +1699,7 @@ def pages_youve_liked_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.Dat
 
         {
           "summary": "Each row represents a Facebook Page the participant has liked, including the page name, URL, and timestamp.",
-          "source_file": "pages_you_ve_liked.json",
+          "source_file": "pages_you_ve_liked.json / pages_you've_liked.html",
           "columns": {
             "Name": "Name of the liked Facebook Page.",
             "URL": "URL of the liked Facebook Page.",
@@ -1440,6 +1726,13 @@ def pages_youve_liked_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.Dat
           }
         }
     """
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _pages_youve_liked_html(reader, errors)
+
+    return _pages_youve_liked_json(reader, errors)
+
+
+def _pages_youve_liked_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
     result = reader.json("pages_you've_liked.json")
     if not result.found:
         return pd.DataFrame()
@@ -1464,6 +1757,39 @@ def pages_youve_liked_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.Dat
         errors[type(e).__name__] += 1
 
     return out
+
+
+def _pages_youve_liked_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.raw("pages_you've_liked.html")
+    if not result.found:
+        return pd.DataFrame()
+
+    datapoints = []
+
+    try:
+        tree = etree.HTML(result.data.read())
+
+        sections = tree.xpath("//section[contains(@class, '_a6-g') and .//h2]")
+        for section in sections:
+            h2 = section.xpath(".//h2")
+            name = h2[0].text.strip() if h2 and h2[0].text else ""
+
+            url_anchors = section.xpath(".//footer//a/@href")
+            url = url_anchors[0] if url_anchors else ""
+
+            date_divs = section.xpath(".//div[contains(@class, '_a72d')]")
+            timestamp = date_divs[0].text.strip() if date_divs and date_divs[0].text else ""
+
+            datapoints.append((name, url, timestamp))
+
+        if datapoints:
+            return pd.DataFrame(datapoints, columns=["Name", "URL", "Timestamp"])  # pyright: ignore
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return pd.DataFrame()
 
 
 def your_saved_items_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
@@ -1537,7 +1863,7 @@ def your_saved_items_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.Data
     return out
 
 
-def comments_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+def comments_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
     """Extract all comments you made on Facebook.
 
     Parameters
@@ -1558,7 +1884,7 @@ def comments_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
 
         {
           "summary": "Each row represents a comment the participant made on a Facebook post or other content, including the title, comment text, and timestamp.",
-          "source_file": "comments_and_reactions/comments.json",
+          "source_file": "comments_and_reactions/comments.json / comments.html",
           "columns": {
             "Title": "Title of the post the comment was made on.",
             "Comment": "Text content of the comment.",
@@ -1585,6 +1911,13 @@ def comments_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
           }
         }
     """
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _comments_html(reader, errors)
+
+    return _comments_json(reader, errors)
+
+
+def _comments_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
     result = reader.json("comments_and_reactions/comments.json")
     if not result.found:
         return pd.DataFrame()
@@ -1613,7 +1946,40 @@ def comments_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
     return out
 
 
-def likes_and_reactions_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+def _comments_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.raw("comments.html")
+    if not result.found:
+        return pd.DataFrame()
+
+    datapoints = []
+
+    try:
+        tree = etree.HTML(result.data.read())
+
+        sections = tree.xpath("//section[contains(@class, '_a6-g') and .//h2]")
+        for section in sections:
+            h2 = section.xpath(".//h2")
+            title = h2[0].text.strip() if h2 and h2[0].text else ""
+
+            comment_divs = section.xpath(".//div[contains(@class, '_2pin')]/div[not(div)]")
+            comment = comment_divs[0].text.strip() if comment_divs and comment_divs[0].text else ""
+
+            date_divs = section.xpath(".//div[contains(@class, '_a72d')]")
+            timestamp = date_divs[0].text.strip() if date_divs and date_divs[0].text else ""
+
+            datapoints.append((title, comment, timestamp))
+
+        if datapoints:
+            return pd.DataFrame(datapoints, columns=["Title", "Comment", "Timestamp"])  # pyright: ignore
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return pd.DataFrame()
+
+
+def likes_and_reactions_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
     """Extract likes and reactions with titles from Facebook.
 
     Reads ``likes_and_reactions_x`` numbered files.
@@ -1636,7 +2002,7 @@ def likes_and_reactions_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.D
 
         {
           "summary": "Each row represents a post the participant liked or reacted to on Facebook, including the post title, reaction type, and timestamp.",
-          "source_file": "likes_and_reactions_1.json (and numbered variants)",
+          "source_file": "likes_and_reactions_1.json (and numbered variants) / likes_and_reactions_*.html",
           "columns": {
             "Title": "Title of the post that was liked or reacted to.",
             "Reaction": "Type of reaction (e.g. Like, Love, Haha).",
@@ -1649,7 +2015,7 @@ def likes_and_reactions_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.D
         {
           "id": "facebook_likes_and_reactions",
           "title": {
-            "en": "Posts you liked (with title)",
+            "en": "Posts you liked",
             "nl": "Posts die je leuk vond"
           },
           "description": {
@@ -1663,6 +2029,13 @@ def likes_and_reactions_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.D
           }
         }
     """
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _likes_and_reactions_html(reader, errors)
+
+    return _likes_and_reactions_json(reader, errors)
+
+
+def _likes_and_reactions_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
     out = pd.DataFrame()
     datapoints = []
 
@@ -1691,7 +2064,46 @@ def likes_and_reactions_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.D
     return out
 
 
-def your_comment_active_days_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+def _likes_and_reactions_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    results = reader.raw_all(r"(^|/)likes_and_reactions_\d+\.html$")
+    if not results:
+        return pd.DataFrame()
+
+    datapoints = []
+
+    try:
+        for result in results:
+            tree = etree.HTML(result.data.read())
+
+            sections = tree.xpath("//section[contains(@class, '_a6-g') and .//h2]")
+            for section in sections:
+                h2 = section.xpath(".//h2")
+                title = h2[0].text.strip() if h2 and h2[0].text else ""
+
+                # Reaction type from icon img filename (e.g. icons/like.png -> Like)
+                img = section.xpath(".//img/@src")
+                reaction = ""
+                if img:
+                    fname = img[0].rsplit("/", 1)[-1] if "/" in img[0] else img[0]
+                    reaction = fname.rsplit(".", 1)[0] if "." in fname else fname
+                    reaction = reaction.capitalize()
+
+                date_divs = section.xpath(".//div[contains(@class, '_a72d')]")
+                timestamp = date_divs[0].text.strip() if date_divs and date_divs[0].text else ""
+
+                datapoints.append((title, reaction, timestamp))
+
+        if datapoints:
+            return pd.DataFrame(datapoints, columns=["Title", "Reaction", "Timestamp"])  # pyright: ignore
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return pd.DataFrame()
+
+
+def your_comment_active_days_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
     """Extract days you actively commented on Facebook.
 
     Parameters
@@ -1737,6 +2149,13 @@ def your_comment_active_days_to_df(reader: ZipArchiveReader, errors: Counter) ->
           }
         }
     """
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _your_comment_active_days_html(reader, errors)
+
+    return _your_comment_active_days_json(reader, errors)
+
+
+def _your_comment_active_days_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
     result = reader.json("your_comment_active_days.json")
     if not result.found:
         return pd.DataFrame()
@@ -1760,6 +2179,10 @@ def your_comment_active_days_to_df(reader: ZipArchiveReader, errors: Counter) ->
         errors[type(e).__name__] += 1
 
     return out
+
+
+def _your_comment_active_days_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    return pd.DataFrame()
 
 
 def your_pages_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
@@ -1904,7 +2327,7 @@ def story_reactions_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataF
     return out
 
 
-def your_posts_check_ins_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+def your_posts_check_ins_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
     """Extract your posts and check-ins on Facebook.
 
     Parameters
@@ -1925,7 +2348,7 @@ def your_posts_check_ins_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.
 
         {
           "summary": "Each row represents a post or check-in the participant made on Facebook, including the title, post content, URL, and timestamp.",
-          "source_file": "your_posts__check_ins__photos_and_videos_1.json (and numbered variants)",
+          "source_file": "your_posts__check_ins__photos_and_videos_1.json (and numbered variants) / your_posts__check_ins__photos_and_videos_*.html",
           "columns": {
             "Title": "Title of the post or check-in.",
             "Post": "Text content of the post.",
@@ -1954,6 +2377,13 @@ def your_posts_check_ins_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.
           }
         }
     """
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _your_posts_check_ins_html(reader, errors)
+
+    return _your_posts_check_ins_json(reader, errors)
+
+
+def _your_posts_check_ins_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
     datapoints = []
 
     def _parse_items(d: list) -> None:
@@ -1978,6 +2408,45 @@ def your_posts_check_ins_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.
         errors[type(e).__name__] += 1
 
     return out
+
+
+def _your_posts_check_ins_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    results = reader.raw_all(r"(^|/)your_posts__check_ins__photos_and_videos_\d+\.html$")
+    if not results:
+        return pd.DataFrame()
+
+    datapoints = []
+
+    try:
+        for result in results:
+            tree = etree.HTML(result.data.read())
+
+            sections = tree.xpath("//section[contains(@class, '_a6-g') and .//h2]")
+            for section in sections:
+                h2 = section.xpath(".//h2")
+                title = h2[0].text.strip() if h2 and h2[0].text else ""
+
+                # Post text from the first _2pin div's text content
+                post_divs = section.xpath(".//div[contains(@class, '_2pin')]/div[not(div)]")
+                post = post_divs[0].text.strip() if post_divs and post_divs[0].text else ""
+
+                # URL from a link in the content area (not footer)
+                content_links = section.xpath(".//div[contains(@class, '_2pin')]//a/@href")
+                url = content_links[0] if content_links else ""
+
+                date_divs = section.xpath(".//div[contains(@class, '_a72d')]")
+                timestamp = date_divs[0].text.strip() if date_divs and date_divs[0].text else ""
+
+                datapoints.append((title, post, url, timestamp))
+
+        if datapoints:
+            return pd.DataFrame(datapoints, columns=["Title", "Post", "URL", "Timestamp"])  # pyright: ignore
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return pd.DataFrame()
 
 
 def likes_and_reactions_base_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
@@ -2006,7 +2475,7 @@ def likes_and_reactions_base_to_df(reader: ZipArchiveReader, errors: Counter) ->
 
         {
           "summary": "Each row represents a like or reaction the participant gave on Facebook, including the reaction type, name, URL, and timestamp.",
-          "source_file": "likes_and_reactions.json or likes_and_reactions_1.json (and numbered variants)",
+          "source_file": "likes_and_reactions.json or likes_and_reactions_1.json (and numbered variants) / likes_and_reactions_*.html",
           "columns": {
             "Reaction": "Type of reaction (e.g. Like, Love, Haha).",
             "Name": "Name of the content that was reacted to.",
@@ -2151,7 +2620,7 @@ def controls_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 
 
-def profile_visits_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+def profile_visits_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
     """Extract profiles visited recently on Facebook.
 
     Parameters
@@ -2172,7 +2641,7 @@ def profile_visits_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFr
 
         {
           "summary": "Each row represents a Facebook profile the participant recently visited, including the name and timestamp.",
-          "source_file": "logged_information/interactions/profile_visits.json",
+          "source_file": "logged_information/interactions/profile_visits.json / profile_visits.html",
           "columns": {
             "Name": "Name of the visited profile.",
             "Timestamp": "ISO 8601 timestamp of when the visit occurred."
@@ -2197,32 +2666,67 @@ def profile_visits_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFr
           }
         }
     """
-    result = reader.json("logged_information/interactions/profile_visits.json") 
-    if not result.found:  
-        return pd.DataFrame() 
-    d = result.data 
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _profile_visits_html(reader, errors)
 
-    out = pd.DataFrame()  
-    datapoints = []  
-
-    try:  
-        for item in d:  
-            denested_dict = eh.dict_denester(item)  
-            datapoints.append((  
-                eh.fix_latin1_string(eh.find_item(denested_dict, "-value")),  
-                eh.epoch_to_iso(item.get("timestamp", ""), errors=errors),  
-            ))  
-
-        out = pd.DataFrame(datapoints, columns=["Name", "Timestamp"]) #pyright: ignore 
-
-    except Exception as e:  
-        logger.error("Exception caught: %s", e)  
-        errors[type(e).__name__] += 1  
-
-    return out  
+    return _profile_visits_json(reader, errors)
 
 
-def video_consumption_summary_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+def _profile_visits_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.json("logged_information/interactions/profile_visits.json")
+    if not result.found:
+        return pd.DataFrame()
+    d = result.data
+
+    out = pd.DataFrame()
+    datapoints = []
+
+    try:
+        for item in d:
+            denested_dict = eh.dict_denester(item)
+            datapoints.append((
+                eh.fix_latin1_string(eh.find_item(denested_dict, "-value")),
+                eh.epoch_to_iso(item.get("timestamp", ""), errors=errors),
+            ))
+
+        out = pd.DataFrame(datapoints, columns=["Name", "Timestamp"]) #pyright: ignore
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return out
+
+
+def _profile_visits_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.raw("profile_visits.html")
+    if not result.found:
+        return pd.DataFrame()
+
+    datapoints = []
+
+    try:
+        tree = etree.HTML(result.data.read())
+        sections = tree.xpath("//section[contains(@class, '_a6-g') and not(ancestor::section)]")
+        for section in sections:
+            name_td = section.xpath(".//td[contains(@class, '_a6_r')]")
+            name = name_td[0].text.strip() if name_td and name_td[0].text else ""
+            date_divs = section.xpath(".//div[contains(@class, '_a72d')]")
+            date = date_divs[0].text.strip() if date_divs and date_divs[0].text else ""
+            if name or date:
+                datapoints.append((name, date))
+
+        if datapoints:
+            return pd.DataFrame(datapoints, columns=["Name", "Timestamp"])  # pyright: ignore
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return pd.DataFrame()
+
+
+def video_consumption_summary_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
     """Extract video consumption summary from Facebook.
 
     Parameters
@@ -2243,7 +2747,7 @@ def video_consumption_summary_to_df(reader: ZipArchiveReader, errors: Counter) -
 
         {
           "summary": "Each row represents a video consumption metric for the participant on Facebook, bucketed by time period.",
-          "source_file": "your_facebook_activity/other_activity/your_video_consumption_summary.json",
+          "source_file": "your_facebook_activity/other_activity/your_video_consumption_summary.json / your_video_consumption_summary.html",
           "columns": {
             "Label": "Description of the video consumption metric.",
             "Value": "Value of the metric."
@@ -2268,6 +2772,13 @@ def video_consumption_summary_to_df(reader: ZipArchiveReader, errors: Counter) -
           }
         }
     """
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _video_consumption_summary_html(reader, errors)
+
+    return _video_consumption_summary_json(reader, errors)
+
+
+def _video_consumption_summary_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
     result = reader.json("your_facebook_activity/other_activity/your_video_consumption_summary.json")
     if not result.found:
         return pd.DataFrame()
@@ -2293,7 +2804,35 @@ def video_consumption_summary_to_df(reader: ZipArchiveReader, errors: Counter) -
     return out
 
 
-def link_history_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+def _video_consumption_summary_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.raw("your_video_consumption_summary.html")
+    if not result.found:
+        return pd.DataFrame()
+
+    datapoints = []
+
+    try:
+        tree = etree.HTML(result.data.read())
+        rows = tree.xpath("//tr[td[contains(@class, '_a6_q')] and td[contains(@class, '_a6_r')]]")
+        for row in rows:
+            label_td = row.xpath("td[contains(@class, '_a6_q')]")
+            value_td = row.xpath("td[contains(@class, '_a6_r')]")
+            label = label_td[0].text.strip() if label_td and label_td[0].text else ""
+            value = value_td[0].text.strip() if value_td and value_td[0].text else ""
+            if label:
+                datapoints.append((label, value))
+
+        if datapoints:
+            return pd.DataFrame(datapoints, columns=["Label", "Value"])  # pyright: ignore
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return pd.DataFrame()
+
+
+def link_history_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
     """Extract links visited from Facebook's in-app browser.
 
     Parameters
@@ -2314,7 +2853,7 @@ def link_history_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFram
 
         {
           "summary": "Each row represents an outbound link the participant opened in Facebook's in-app browser, with a timestamp.",
-          "source_file": "your_facebook_activity/other_activity/link_history.json",
+          "source_file": "your_facebook_activity/other_activity/link_history.json / link_history.html",
           "columns": {
             "URL": "URL of the link visited.",
             "Title": "Title of the website page visited.",
@@ -2341,6 +2880,13 @@ def link_history_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFram
           }
         }
     """
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _link_history_html(reader, errors)
+
+    return _link_history_json(reader, errors)
+
+
+def _link_history_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
     result = reader.json("your_facebook_activity/other_activity/link_history.json")
     if not result.found:
         return pd.DataFrame()
@@ -2364,16 +2910,46 @@ def link_history_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFram
                 eh.epoch_to_iso(eh.find_item(denested_dict, "timestamp"), errors=errors),
             ))
 
-        out = pd.DataFrame(datapoints, columns=["URL", "Title", "Timestamp"]) 
+        out = pd.DataFrame(datapoints, columns=["URL", "Title", "Timestamp"])
 
-    except Exception as e:  
-        logger.error("Exception caught: %s", e)  
-        errors[type(e).__name__] += 1  
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
 
-    return out  
+    return out
 
 
-def ad_preferences_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+def _link_history_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.raw("link_history.html")
+    if not result.found:
+        return pd.DataFrame()
+
+    datapoints = []
+
+    try:
+        tree = etree.HTML(result.data.read())
+        sections = tree.xpath("//section[contains(@class, '_a6-g') and not(ancestor::section)]")
+        for section in sections:
+            a_tags = section.xpath(".//a[@href]")
+            url = a_tags[0].get("href", "") if a_tags else ""
+            title_tds = section.xpath(".//tr[td[contains(@class, '_a6_q') and contains(text(), 'Title of website page you visited')]]/td[contains(@class, '_a6_r')]")
+            title = title_tds[0].text.strip() if title_tds and title_tds[0].text else ""
+            date_divs = section.xpath(".//div[contains(@class, '_a72d')]")
+            date = date_divs[0].text.strip() if date_divs and date_divs[0].text else ""
+            if url or title or date:
+                datapoints.append((url, title, date))
+
+        if datapoints:
+            return pd.DataFrame(datapoints, columns=["URL", "Title", "Timestamp"])  # pyright: ignore
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return pd.DataFrame()
+
+
+def ad_preferences_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
     """Extract ad-preference settings from Facebook.
 
     Parameters
@@ -2394,7 +2970,7 @@ def ad_preferences_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFr
 
         {
           "summary": "Each row represents an ad-preference setting the participant has on Facebook, such as targeting toggles and opt-outs.",
-          "source_file": "ads_information/ad_preferences.json",
+          "source_file": "ads_information/ad_preferences.json / ad_preferences.html",
           "columns": {
             "Label": "Name of the ad-preference setting.",
             "Value": "Current value of the setting."
@@ -2419,13 +2995,20 @@ def ad_preferences_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFr
           }
         }
     """
-    result = reader.json("ads_information/ad_preferences.json") 
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _ad_preferences_html(reader, errors)
+
+    return _ad_preferences_json(reader, errors)
+
+
+def _ad_preferences_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.json("ads_information/ad_preferences.json")
     if not result.found:
         return pd.DataFrame()
     d = result.data
 
     out = pd.DataFrame()
-    datapoints = [] 
+    datapoints = []
 
     try:
         for item in d["label_values"]:  # pyright: ignore
@@ -2452,16 +3035,84 @@ def ad_preferences_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFr
                         denested = eh.dict_denester(dict_item)
                         datapoints.append((title, eh.find_item(denested, "value")))
 
-        out = pd.DataFrame(datapoints, columns=["Label", "Value"]) 
+        out = pd.DataFrame(datapoints, columns=["Label", "Value"])
 
-    except Exception as e:  
-        logger.error("Exception caught: %s", e)  
-        errors[type(e).__name__] += 1  
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
 
-    return out  
+    return out
 
 
-def other_categories_used_to_reach_you_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+def _ad_preferences_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.raw("ad_preferences.html")
+    if not result.found:
+        return pd.DataFrame()
+
+    datapoints = []
+
+    try:
+        tree = etree.HTML(result.data.read())
+
+        # 1. Simple key-value rows: <tr> with _a6_q (no colspan) + _a6_r
+        kv_rows = tree.xpath("//tr[td[contains(@class, '_a6_q') and not(@colspan)] and td[contains(@class, '_a6_r')]]")
+        for row in kv_rows:
+            label_td = row.xpath("td[contains(@class, '_a6_q')]")
+            value_td = row.xpath("td[contains(@class, '_a6_r')]")
+            label = label_td[0].text.strip() if label_td and label_td[0].text else ""
+            value = value_td[0].text.strip() if value_td and value_td[0].text else ""
+            # Skip rows that are inside a headed subsection (these are details like "Creation time")
+            if label in ("Ad title", "Advertiser", "Event", "Creation time", "Name"):
+                continue
+            if label:
+                datapoints.append((label, value))
+
+        # 2. Headed subsections: <h2> is the label, values depend on content type
+        headed_sections = tree.xpath("//section[contains(@class, '_a6-g') and .//h2]")
+        for section in headed_sections:
+            h2 = section.xpath(".//h2")
+            heading = h2[0].text.strip() if h2 and h2[0].text else ""
+            if not heading:
+                continue
+
+            # Try "Ad title" rows (for "Hidden ads")
+            ad_titles = section.xpath(".//tr[td[contains(@class, '_a6_q') and text()='Ad title']]/td[contains(@class, '_a6_r')]")
+            if ad_titles:
+                for td in ad_titles:
+                    value = td.text.strip() if td.text else ""
+                    if value:
+                        datapoints.append((heading, value))
+                continue
+
+            # Try "Advertiser" rows (for "Hidden advertisers")
+            advertisers = section.xpath(".//tr[td[contains(@class, '_a6_q') and text()='Advertiser']]/td[contains(@class, '_a6_r')]")
+            if advertisers:
+                for td in advertisers:
+                    value = td.text.strip() if td.text else ""
+                    if value:
+                        datapoints.append((heading, value))
+                continue
+
+            # Div-based list items (for "Ads interests")
+            interest_divs = section.xpath(".//section[contains(@class, '_a6-g')]/div[contains(@class, '_a6-p')]")
+            if interest_divs:
+                for div in interest_divs:
+                    value = div.text.strip() if div.text else ""
+                    if value:
+                        datapoints.append((heading, value))
+                continue
+
+        if datapoints:
+            return pd.DataFrame(datapoints, columns=["Label", "Value"])  # pyright: ignore
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return pd.DataFrame()
+
+
+def other_categories_used_to_reach_you_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
     """Extract other targeting categories advertisers used to reach you.
 
     Parameters
@@ -2475,17 +3126,16 @@ def other_categories_used_to_reach_you_to_df(reader: ZipArchiveReader, errors: C
     Returns
     -------
     pd.DataFrame
-        Columns: ``Label``, ``Value``.
+        Columns: ``Category``.
         Empty DataFrame when the file is absent or parsing fails.
 
     Table documentation::
 
         {
           "summary": "Each row represents a targeting category advertisers used to reach the participant on Facebook.",
-          "source_file": "ads_information/other_categories_used_to_reach_you.json",
+          "source_file": "ads_information/other_categories_used_to_reach_you.json / other_categories_used_to_reach_you.html",
           "columns": {
-            "Label": "Name of the targeting category or setting.",
-            "Value": "Value or specific category used by advertisers."
+            "Category": "Targeting category used by advertisers."
           }
         }
 
@@ -2502,11 +3152,17 @@ def other_categories_used_to_reach_you_to_df(reader: ZipArchiveReader, errors: C
             "nl": "Deze tabel toont overige categorieën die adverteerders hebben gebruikt om je te bereiken op Facebook."
           },
           "headers": {
-            "Label": {"en": "Label", "nl": "Label"},
-            "Value": {"en": "Value", "nl": "Waarde"}
+            "Category": {"en": "Category", "nl": "Categorie"}
           }
         }
     """
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _other_categories_used_to_reach_you_html(reader, errors)
+
+    return _other_categories_used_to_reach_you_json(reader, errors)
+
+
+def _other_categories_used_to_reach_you_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
     result = reader.json("ads_information/other_categories_used_to_reach_you.json")
     if not result.found:
         return pd.DataFrame()
@@ -2517,36 +3173,53 @@ def other_categories_used_to_reach_you_to_df(reader: ZipArchiveReader, errors: C
 
     try:
         for item in d["label_values"]:  # pyright: ignore
-            if "value" in item:
-                datapoints.append((eh.fix_latin1_string(item.get("label", "")), eh.fix_latin1_string(item.get("value", ""))))
-            elif "vec" in item:
-                label = eh.fix_latin1_string(item.get("label", ""))
+            if "vec" in item:
                 vec = item.get("vec", [])
-                if not vec:
-                    datapoints.append((label, "No data"))
-                else:
-                    for vec_item in vec:
-                        datapoints.append((label, eh.fix_latin1_string(vec_item.get("value", ""))))
+                for vec_item in vec:
+                    datapoints.append((eh.fix_latin1_string(vec_item.get("value", "")),))
+            elif "value" in item:
+                datapoints.append((eh.fix_latin1_string(item.get("value", "")),))
             elif "title" in item:
-                title = eh.fix_latin1_string(item.get("title", ""))
                 dict_list = item.get("dict", [])
-                if not dict_list:
-                    datapoints.append((title, "No data"))
-                else:
-                    for dict_item in dict_list:
-                        denested = eh.dict_denester(dict_item)
-                        datapoints.append((title, eh.find_item(denested, "value")))
+                for dict_item in dict_list:
+                    denested = eh.dict_denester(dict_item)
+                    datapoints.append((eh.find_item(denested, "value"),))
 
-        out = pd.DataFrame(datapoints, columns=["Label", "Value"]) 
+        out = pd.DataFrame(datapoints, columns=["Category"])  # pyright: ignore
 
-    except Exception as e:  
-        logger.error("Exception caught: %s", e)  
-        errors[type(e).__name__] += 1  
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
 
-    return out  
+    return out
 
 
-def advertisers_using_your_activity_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+def _other_categories_used_to_reach_you_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.raw("other_categories_used_to_reach_you.html")
+    if not result.found:
+        return pd.DataFrame()
+
+    datapoints = []
+
+    try:
+        tree = etree.HTML(result.data.read())
+        value_divs = tree.xpath("//td[contains(@class, '_a6_q') and @colspan]//section[contains(@class, '_a6-g')]/div[contains(@class, '_a6-p')]")
+        for div in value_divs:
+            value = div.text.strip() if div.text else ""
+            if value:
+                datapoints.append((value,))
+
+        if datapoints:
+            return pd.DataFrame(datapoints, columns=["Category"])  # pyright: ignore
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return pd.DataFrame()
+
+
+def advertisers_using_your_activity_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
     """Extract advertisers who used your activity or information to target you.
 
     The source JSON uses a ``label_values`` structure where each entry has a
@@ -2571,7 +3244,7 @@ def advertisers_using_your_activity_to_df(reader: ZipArchiveReader, errors: Coun
 
         {
           "summary": "Each row represents an advertiser who used the participant's activity or information for ad targeting on Facebook, grouped by targeting method.",
-          "source_file": "ads_information/advertisers_using_your_activity_or_information.json",
+          "source_file": "ads_information/advertisers_using_your_activity_or_information.json / advertisers_using_your_activity_or_information.html",
           "columns": {
             "Label": "The method used by the advertiser to target the participant (e.g. a list uploaded by the advertiser).",
             "Value": "Name of the advertiser or value of the setting."
@@ -2596,6 +3269,13 @@ def advertisers_using_your_activity_to_df(reader: ZipArchiveReader, errors: Coun
           }
         }
     """
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _advertisers_using_your_activity_html(reader, errors)
+
+    return _advertisers_using_your_activity_json(reader, errors)
+
+
+def _advertisers_using_your_activity_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
     result = reader.json("ads_information/advertisers_using_your_activity_or_information.json")
     if not result.found:
         return pd.DataFrame()
@@ -2635,7 +3315,45 @@ def advertisers_using_your_activity_to_df(reader: ZipArchiveReader, errors: Coun
     return out
 
 
-def advertisers_youve_interacted_with_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+def _advertisers_using_your_activity_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.raw("advertisers_using_your_activity_or_information.html")
+    if not result.found:
+        return pd.DataFrame()
+
+    datapoints = []
+
+    try:
+        tree = etree.HTML(result.data.read())
+
+        # Each <td colspan class="_a6_q"> contains a label (first text node)
+        # followed by nested sections with advertiser names
+        headed_tds = tree.xpath("//td[contains(@class, '_a6_q') and @colspan]")
+        for td in headed_tds:
+            # The label is the direct text content of the td
+            label = td.text.strip() if td.text else ""
+            if not label:
+                continue
+
+            value_divs = td.xpath(".//section[contains(@class, '_a6-g')]/div[contains(@class, '_a6-p')]")
+            if not value_divs:
+                datapoints.append((label, "No data"))
+            else:
+                for div in value_divs:
+                    value = div.text.strip() if div.text else ""
+                    if value:
+                        datapoints.append((label, value))
+
+        if datapoints:
+            return pd.DataFrame(datapoints, columns=["Label", "Value"])  # pyright: ignore
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return pd.DataFrame()
+
+
+def advertisers_youve_interacted_with_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
     """Extract ads you clicked or engaged with on Facebook.
 
     Parameters
@@ -2656,7 +3374,7 @@ def advertisers_youve_interacted_with_to_df(reader: ZipArchiveReader, errors: Co
 
         {
           "summary": "Each row represents an ad the participant clicked or engaged with on Facebook, including the action taken, ad title, URL, and timestamp.",
-          "source_file": "ads_information/advertisers_you've_interacted_with.json",
+          "source_file": "ads_information/advertisers_you've_interacted_with.json / advertisers_you've_interacted_with.html",
           "columns": {
             "Action": "Type of interaction with the ad (e.g. Click).",
             "Title": "Title of the ad interacted with.",
@@ -2685,6 +3403,13 @@ def advertisers_youve_interacted_with_to_df(reader: ZipArchiveReader, errors: Co
           }
         }
     """
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _advertisers_youve_interacted_with_html(reader, errors)
+
+    return _advertisers_youve_interacted_with_json(reader, errors)
+
+
+def _advertisers_youve_interacted_with_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
     result = reader.json("ads_information/advertisers_you've_interacted_with.json")
     if not result.found:
         return pd.DataFrame()
@@ -2715,7 +3440,59 @@ def advertisers_youve_interacted_with_to_df(reader: ZipArchiveReader, errors: Co
     return out
 
 
-def your_contributions_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+def _advertisers_youve_interacted_with_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.raw("advertisers_you've_interacted_with.html")
+    if not result.found:
+        return pd.DataFrame()
+
+    datapoints = []
+
+    try:
+        tree = etree.HTML(result.data.read())
+
+        # Each top-level section contains a table with key-value rows and a footer with timestamp
+        sections = tree.xpath("//section[contains(@class, '_a6-g') and .//table and .//footer]")
+        for section in sections:
+            kv_rows = section.xpath(".//tr[td[contains(@class, '_a6_q') and not(@colspan)] and td[contains(@class, '_a6_r')]]")
+            lv_map = {}
+            for row in kv_rows:
+                label_td = row.xpath("td[contains(@class, '_a6_q')]")
+                value_td = row.xpath("td[contains(@class, '_a6_r')]")
+                label = label_td[0].text.strip() if label_td and label_td[0].text else ""
+                value = value_td[0].text.strip() if value_td and value_td[0].text else ""
+                if label:
+                    lv_map[label] = value
+
+            # URL is in a colspan td with an <a> tag
+            url_anchors = section.xpath(".//td[contains(@class, '_a6_q') and @colspan]//a/@href")
+            url = ""
+            for href in url_anchors:
+                if href:
+                    url = href
+                    break
+
+            # Timestamp from footer
+            footer_div = section.xpath(".//footer//div[contains(@class, '_a72d')]")
+            timestamp = footer_div[0].text.strip() if footer_div and footer_div[0].text else ""
+
+            datapoints.append((
+                lv_map.get("Action", ""),
+                lv_map.get("Title", ""),
+                url,
+                timestamp,
+            ))
+
+        if datapoints:
+            return pd.DataFrame(datapoints, columns=["Action", "Title", "URL", "Timestamp"])  # pyright: ignore
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return pd.DataFrame()
+
+
+def your_contributions_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
     """Extract posts and comments you made in Facebook groups (contributions).
 
     Parameters
@@ -2736,7 +3513,7 @@ def your_contributions_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.Da
 
         {
           "summary": "Each row represents a post or comment the participant contributed to a Facebook group, including the content, date, and URL.",
-          "source_file": "your_facebook_activity/groups/your_contributions.json",
+          "source_file": "your_facebook_activity/groups/your_contributions.json / your_contributions.html",
           "columns": {
             "Value": "Concatenated text content of the contribution.",
             "Date": "ISO 8601 timestamp of when the contribution was made.",
@@ -2763,6 +3540,13 @@ def your_contributions_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.Da
           }
         }
     """
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _your_contributions_html(reader, errors)
+
+    return _your_contributions_json(reader, errors)
+
+
+def _your_contributions_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
     result = reader.json("your_facebook_activity/groups/your_contributions.json")
     if not result.found:
         return pd.DataFrame()
@@ -2792,7 +3576,47 @@ def your_contributions_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.Da
     return out
 
 
-def items_viewed_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+def _your_contributions_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.raw("your_contributions.html")
+    if not result.found:
+        return pd.DataFrame()
+
+    datapoints = []
+
+    try:
+        tree = etree.HTML(result.data.read())
+
+        # Top-level sections with table + footer
+        sections = tree.xpath("//section[contains(@class, '_a6-g') and .//table and .//footer]")
+        for section in sections:
+            # Collect all text values from nested _a6-p divs inside the section's table
+            value_divs = section.xpath(".//table//section[contains(@class, '_a6-g')]/div[contains(@class, '_a6-p')]")
+            values = []
+            for div in value_divs:
+                text = div.text.strip() if div.text else ""
+                if text:
+                    values.append(text)
+            value = ", ".join(values) if values else ""
+
+            date_divs = section.xpath(".//footer//div[contains(@class, '_a72d')]")
+            date = date_divs[0].text.strip() if date_divs and date_divs[0].text else ""
+
+            url_anchors = section.xpath(".//footer//a/@href")
+            url = url_anchors[0] if url_anchors else ""
+
+            datapoints.append((value, date, url))
+
+        if datapoints:
+            return pd.DataFrame(datapoints, columns=["Value", "Date", "URL"])  # pyright: ignore
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return pd.DataFrame()
+
+
+def items_viewed_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
     """Extract Facebook items recently viewed (from interactions).
 
     Parameters
@@ -2806,18 +3630,18 @@ def items_viewed_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFram
     Returns
     -------
     pd.DataFrame
-        Columns: ``Category``, ``Name``, ``Link``, ``Date``.
+        Columns: ``Title``, ``Product Name``, ``Description``, ``Date``.
         Empty DataFrame when the file is absent or parsing fails.
 
     Table documentation::
 
         {
-          "summary": "Each row represents a Facebook item the participant recently viewed, including the category, name, link, and date.",
-          "source_file": "logged_information/interactions/items_viewed.json",
+          "summary": "Each row represents a Facebook item the participant recently viewed, including the title, product name, description, and date.",
+          "source_file": "logged_information/interactions/items_viewed.json / items_viewed.html",
           "columns": {
-            "Category": "Content category of the viewed item.",
-            "Name": "Name or title of the viewed item.",
-            "Link": "URL of the viewed item.",
+            "Title": "Title of the viewed item.",
+            "Product Name": "Product name of the viewed item.",
+            "Description": "Description of the viewed item.",
             "Date": "ISO 8601 timestamp of when the item was viewed."
           }
         }
@@ -2835,13 +3659,20 @@ def items_viewed_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFram
             "nl": "Deze tabel toont de Facebook-items die je recentelijk hebt bekeken."
           },
           "headers": {
-            "Category": {"en": "Category", "nl": "Categorie"},
-            "Name": {"en": "Name", "nl": "Naam"},
-            "Link": {"en": "Link", "nl": "Link"},
+            "Title": {"en": "Title", "nl": "Titel"},
+            "Product Name": {"en": "Product Name", "nl": "Productnaam"},
+            "Description": {"en": "Description", "nl": "Beschrijving"},
             "Date": {"en": "Date", "nl": "Datum"}
           }
         }
     """
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _items_viewed_html(reader, errors)
+
+    return _items_viewed_json(reader, errors)
+
+
+def _items_viewed_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
     result = reader.json("logged_information/interactions/items_viewed.json")
     if not result.found:
         return pd.DataFrame()
@@ -2852,21 +3683,70 @@ def items_viewed_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFram
 
     try:
         for item in d:
-            denested_dict = eh.dict_denester(item)
+            lv_map = {}
+            for lv in item.get("label_values", []):
+                label = lv.get("label", "")
+                value = lv.get("value", "")
+                if label and label not in lv_map:
+                    lv_map[label] = value
+
             datapoints.append((
-                eh.fix_latin1_string(eh.find_item(denested_dict, "name")),
-                eh.fix_latin1_string(eh.find_item(denested_dict, "value")),
-                eh.find_item(denested_dict, "uri"),
-                eh.epoch_to_iso(eh.find_item(denested_dict, "timestamp"), errors=errors),
+                eh.fix_latin1_string(lv_map.get("Title", "")),
+                eh.fix_latin1_string(lv_map.get("Product name", "")),
+                eh.fix_latin1_string(lv_map.get("Description", "")),
+                eh.epoch_to_iso(item.get("timestamp", ""), errors=errors),
             ))
 
-        out = pd.DataFrame(datapoints, columns=["Category", "Name", "Link", "Date"]) #pyright: ignore
+        out = pd.DataFrame(datapoints, columns=["Title", "Product Name", "Description", "Date"])  # pyright: ignore
 
     except Exception as e:
         logger.error("Exception caught: %s", e)
         errors[type(e).__name__] += 1
 
     return out
+
+
+def _items_viewed_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.raw("items_viewed.html")
+    if not result.found:
+        return pd.DataFrame()
+
+    datapoints = []
+
+    try:
+        tree = etree.HTML(result.data.read())
+
+        # Each item is a top-level section with a table and footer
+        sections = tree.xpath("//section[contains(@class, '_a6-g') and .//table and .//footer]")
+        for section in sections:
+            kv_rows = section.xpath(".//tr[td[contains(@class, '_a6_q') and not(@colspan)] and td[contains(@class, '_a6_r')]]")
+            lv_map = {}
+            for row in kv_rows:
+                label_td = row.xpath("td[contains(@class, '_a6_q')]")
+                value_td = row.xpath("td[contains(@class, '_a6_r')]")
+                label = label_td[0].text.strip() if label_td and label_td[0].text else ""
+                value = value_td[0].text.strip() if value_td and value_td[0].text else ""
+                if label and label not in lv_map:
+                    lv_map[label] = value
+
+            date_divs = section.xpath(".//footer//div[contains(@class, '_a72d')]")
+            date = date_divs[0].text.strip() if date_divs and date_divs[0].text else ""
+
+            datapoints.append((
+                lv_map.get("Title", ""),
+                lv_map.get("Product name", ""),
+                lv_map.get("Description", ""),
+                date,
+            ))
+
+        if datapoints:
+            return pd.DataFrame(datapoints, columns=["Title", "Product Name", "Description", "Date"])  # pyright: ignore
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return pd.DataFrame()
 
 
 
@@ -2934,6 +3814,8 @@ def extraction(facebook_zip: str, validation) -> ExtractionResult:
         to ``ZipArchiveReader``.
     """
     config = load_port_config(EXTRACTOR_REGISTRY, "facebook")
+    for table in config:
+        table.extractor_kwargs = {'validation': validation}
     errors: Counter = Counter()
     reader = ZipArchiveReader(facebook_zip, validation.archive_members, errors)
     return run_extraction(reader, errors, config)
