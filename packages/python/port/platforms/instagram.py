@@ -1532,7 +1532,7 @@ def stories_published_to_df(
     Returns
     -------
     pd.DataFrame
-        Columns: ``Title``, ``Media type``, ``Date``.
+        Columns: ``Text``, ``Media type``, ``Date``.
         Empty DataFrame when the file is absent or parsing fails.
 
     Table documentation::
@@ -1541,7 +1541,7 @@ def stories_published_to_df(
           "summary": "Each row represents one Instagram Story published by the participant.",
           "source_file": "stories.json / stories.html",
           "columns": {
-            "Title": "Caption or title text of the story, or 'Story has no title' when empty.",
+            "Text": "Caption or text of the story, or 'Story has no text' when empty.",
             "Media type": "File extension of the story media asset (e.g. .jpg, .mp4).",
             "Date": "ISO 8601 timestamp of when the story was created."
           }
@@ -1560,7 +1560,7 @@ def stories_published_to_df(
             "nl": "Lijst van stories die je op Instagram hebt geplaatst."
           },
           "headers": {
-            "Title": {"en": "Title", "nl": "Titel"},
+            "Text": {"en": "Text", "nl": "Tekst"},
             "Media type": {"en": "Media type", "nl": "Mediatype"},
             "Date": {"en": "Date", "nl": "Datum en tijd"}
           }
@@ -1589,7 +1589,7 @@ def _stories_published_json(reader: ZipArchiveReader, errors: Counter) -> pd.Dat
         for item in items:
             title = eh.fix_latin1_string(item.get("title", ""))
             if not title:
-                title = "Story has no title"
+                title = "Story has no text"
             uri = item.get("uri", "")
             ext = os.path.splitext(uri)[1] if uri else ""
             datapoints.append((
@@ -1598,7 +1598,7 @@ def _stories_published_json(reader: ZipArchiveReader, errors: Counter) -> pd.Dat
                 eh.epoch_to_iso(item.get("creation_timestamp", ""), errors=errors),
             ))
 
-        out = pd.DataFrame(datapoints, columns=["Title", "Media type", "Date"])  # pyright: ignore
+        out = pd.DataFrame(datapoints, columns=["Text", "Media type", "Date"])  # pyright: ignore
         out = _sort_by_date(out, "Date")
 
     except Exception as e:
@@ -1626,7 +1626,7 @@ def _stories_published_html(reader: ZipArchiveReader, errors: Counter) -> pd.Dat
             ext = os.path.splitext(uri)[1] if uri else ""
 
             # No title in HTML format
-            title = "Story has no title"
+            title = "Story has no text"
 
             # Timestamp
             ts = section.xpath(".//div[contains(@class, '_a6-o')]")
@@ -1635,7 +1635,7 @@ def _stories_published_html(reader: ZipArchiveReader, errors: Counter) -> pd.Dat
             datapoints.append((title, ext, timestamp))
 
         if datapoints:
-            return pd.DataFrame(datapoints, columns=["Title", "Media type", "Date"])  # pyright: ignore
+            return pd.DataFrame(datapoints, columns=["Text", "Media type", "Date"])  # pyright: ignore
 
     except Exception as e:
         logger.error("Exception caught: %s", e)
