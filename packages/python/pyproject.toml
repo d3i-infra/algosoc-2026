@@ -11,6 +11,7 @@ include = [
 [tool.poetry.dependencies]
 python = ">=3.11"
 pandas = "^2.3.0"
+lxml = "^6.1.2"
 
 [tool.poetry.group.test.dependencies]
 pytest = "^8.4.0"

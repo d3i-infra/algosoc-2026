@@ -27,7 +27,7 @@ companions:
 - Do not call `extract_data()` before validation or bypass `FlowBuilder.start_flow()` to reach extraction directly.
 - Keep each platform's `DDP_CATEGORIES` aligned with the files `extract_data()` actually reads.
 - Invalid validation returns the retry prompt; it is not an extraction error or traceback path.
-- The invariant is validate-before-extract, not `DDP_CATEGORIES` specifically. WhatsApp is the standing exception — a chat export is a single file, not a multi-file DDP, so it defines no `DDP_CATEGORIES` and validates through its own `validate_file()`. (`example.py` is a non-normative template; its placeholder validator points at the `DDP_CATEGORIES` pattern.)
+- The invariant is validate-before-extract, not `DDP_CATEGORIES` specifically. Two platforms define no `DDP_CATEGORIES` and validate through their own `validate_file()`: **WhatsApp**, whose chat export is a single file rather than a multi-file DDP, and **Google**, whose Takeout archive has neither a single file format (it is chosen per source) nor filenames that identify a source (they collide across folders) — see ADR-0036. (`example.py` is a non-normative template; its placeholder validator points at the `DDP_CATEGORIES` pattern.)
 
 ## Why
 
