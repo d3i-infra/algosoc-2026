@@ -419,6 +419,31 @@
           "Event": "Description of the activity event."
         }
       }
+    },
+    {
+      "id": "tiktok_ad_interests",
+      "title": {
+        "en": "Ad interests",
+        "nl": "Advertentie-interesses"
+      },
+      "description": {
+        "en": "Ad interests associated with your TikTok activity.",
+        "nl": "Advertentie-interesses gekoppeld aan je TikTok-activiteit."
+      },
+      "headers": {
+        "Interests": {
+          "en": "Interests",
+          "nl": "Interesses"
+        }
+      },
+      "extractor": "ad_interests_to_df",
+      "documentation": {
+        "summary": "Ad interest categories associated with the participant's TikTok activity.",
+        "source_file": "user_data_tiktok.json or user_data.json",
+        "columns": {
+          "Interests": "The ad interests associated with the participant's TikTok activity."
+        }
+      }
     }
   ]
 }
