@@ -384,6 +384,41 @@
           "Url": "URL of the video the comment was posted on."
         }
       }
+    },
+    {
+      "id": "tiktok_off_tiktok",
+      "title": {
+        "en": "Your off-TikTok activities",
+        "nl": "Je activiteiten buiten TikTok"
+      },
+      "description": {
+        "en": "Activities you have had outside of TikTok.",
+        "nl": "Activiteiten die je hebt gevolgd buiten TikTok."
+      },
+      "headers": {
+        "Date": {
+          "en": "Date",
+          "nl": "Datum en tijd"
+        },
+        "Source": {
+          "en": "Source",
+          "nl": "Bron"
+        },
+        "Event": {
+          "en": "Event",
+          "nl": "Gebeurtenis"
+        }
+      },
+      "extractor": "off_tiktok_to_df",
+      "documentation": {
+        "summary": "Each row represents one activity the participant had outside of TikTok.",
+        "source_file": "user_data_tiktok.json or user_data.json",
+        "columns": {
+          "Date": "Timestamp of the activity.",
+          "Source": "The source of the activity.",
+          "Event": "Description of the activity event."
+        }
+      }
     }
   ]
 }

@@ -1,0 +1,460 @@
+{
+  "platform_info": {
+    "name": "Google",
+    "filetypes": [
+      "json",
+      "html",
+      "csv"
+    ],
+    "languages": [
+      "en",
+      "nl",
+      "de",
+      "es",
+      "ar",
+      "tr",
+      "zh"
+    ],
+    "description": "Handles the Google Takeout archive in English, Dutch, German, Arabic, Turkish and Chinese. Currently extracts the YouTube sources of the archive: watch history, search history, subscriptions and comments. Both JSON and HTML formats are supported for watch and search histories, and may differ per source within one archive. Comments and subscriptions are always extracted in CSV format. Tested for Dutch DDPs with both JSON and HTML formats. DDPs in the other languages have not yet been tested, and the Arabic, Turkish and Chinese paths are unverified translations. If you find anything wrong with this script, report to datadonation@uu.nl and it will be fixed!",
+    "time_last_tested": "22-06-2026"
+  },
+  "tables": [
+    {
+      "id": "youtube_watch_history",
+      "title": {
+        "en": "Your YouTube watch history",
+        "nl": "Je YouTube kijkgeschiedenis"
+      },
+      "description": {
+        "en": "Videos you have watched on YouTube, including timestamps.",
+        "nl": "Video's die je op YouTube hebt bekeken, inclusief tijdstippen."
+      },
+      "headers": {
+        "Title": {
+          "en": "Title",
+          "nl": "Titel"
+        },
+        "URL": {
+          "en": "URL",
+          "nl": "URL"
+        },
+        "Timestamp": {
+          "en": "Timestamp",
+          "nl": "Datum en tijd"
+        }
+      },
+      "visualizations": [
+        {
+          "title": {
+            "en": "Videos watched over time",
+            "nl": "Bekeken video's in de loop van de tijd"
+          },
+          "type": "area",
+          "group": {
+            "column": "Timestamp",
+            "dateFormat": "auto"
+          },
+          "values": [
+            {
+              "aggregate": "count",
+              "label": "Count"
+            }
+          ]
+        },
+        {
+          "title": {
+            "en": "Videos watched by hour of the day",
+            "nl": "Bekeken video's per uur van de dag"
+          },
+          "type": "bar",
+          "group": {
+            "column": "Timestamp",
+            "dateFormat": "hour_cycle",
+            "label": "Hour of the day"
+          },
+          "values": [
+            {
+              "label": "Count"
+            }
+          ]
+        },
+        {
+          "title": {
+            "en": "Words in video titles you watched",
+            "nl": "Woorden in titels van bekeken video's"
+          },
+          "type": "wordcloud",
+          "textColumn": "Title",
+          "tokenize": true
+        }
+      ],
+      "extractor": "youtube_watch_history_to_df",
+      "documentation": {
+        "summary": "Each row represents one video the participant watched on YouTube, including the video title, URL, and timestamp.",
+        "source_file": "the YouTube watch history, e.g. history/watch-history.json or Verlauf/Wiedergabeverlauf.html",
+        "columns": {
+          "Title": "Title of the watched video.",
+          "URL": "URL of the watched video.",
+          "Timestamp": "ISO 8601 timestamp of when the video was watched."
+        }
+      }
+    },
+    {
+      "id": "youtube_search_history",
+      "title": {
+        "en": "Your YouTube search history",
+        "nl": "Je YouTube zoekgeschiedenis"
+      },
+      "description": {
+        "en": "Your search queries on YouTube with timestamps.",
+        "nl": "Je zoekopdrachten op YouTube met tijdstippen."
+      },
+      "headers": {
+        "Query": {
+          "en": "Search query",
+          "nl": "Zoekopdracht"
+        },
+        "URL": {
+          "en": "URL",
+          "nl": "URL"
+        },
+        "Timestamp": {
+          "en": "Timestamp",
+          "nl": "Datum en tijd"
+        }
+      },
+      "visualizations": [
+        {
+          "title": {
+            "en": "Words in your YouTube search history",
+            "nl": "Woorden in je YouTube zoekgeschiedenis"
+          },
+          "type": "wordcloud",
+          "textColumn": "Query",
+          "tokenize": true
+        }
+      ],
+      "extractor": "youtube_search_history_to_df",
+      "documentation": {
+        "summary": "Each row represents one search query in YouTube search history.",
+        "source_file": "the YouTube search history, e.g. history/search-history.json or Verlauf/Suchverlauf.html",
+        "columns": {
+          "Query": "The searched query.",
+          "URL": "URL of the search query.",
+          "Timestamp": "ISO 8601 timestamp of when the search was performed."
+        }
+      }
+    },
+    {
+      "id": "youtube_subscriptions",
+      "title": {
+        "en": "Your YouTube subscriptions",
+        "nl": "Je YouTube abonnementen"
+      },
+      "description": {
+        "en": "YouTube channels you are subscribed to.",
+        "nl": "YouTube-kanalen waarop je bent geabonneerd."
+      },
+      "headers": {
+        "Channel Id": {
+          "en": "Channel Id",
+          "nl": "Kanaal-id"
+        },
+        "Channel URL": {
+          "en": "Channel URL",
+          "nl": "Kanaal-URL"
+        },
+        "Channel Name": {
+          "en": "Channel Name",
+          "nl": "Kanaalnaam"
+        }
+      },
+      "extractor": "youtube_subscriptions_to_df",
+      "documentation": {
+        "summary": "Each row represents one YouTube channel the participant is subscribed to.",
+        "source_file": "the YouTube subscriptions, e.g. subscriptions/subscriptions.csv or Abos/Abos.csv",
+        "columns": {
+          "Channel Id": "Unique identifier of the subscribed channel.",
+          "Channel URL": "URL of the subscribed channel.",
+          "Channel Name": "Display name of the subscribed channel."
+        }
+      }
+    },
+    {
+      "id": "youtube_comments",
+      "title": {
+        "en": "Your YouTube comments",
+        "nl": "Je YouTube reacties"
+      },
+      "description": {
+        "en": "Comments you posted on YouTube videos and posts.",
+        "nl": "Reacties die je op YouTube-video's en -posts hebt geplaatst."
+      },
+      "headers": {
+        "Comment ID": {
+          "en": "Comment ID",
+          "nl": "Reactie-ID"
+        },
+        "Channel ID": {
+          "en": "Channel ID",
+          "nl": "Kanaal-ID"
+        },
+        "Timestamp": {
+          "en": "Timestamp",
+          "nl": "Datum en tijd"
+        },
+        "Price": {
+          "en": "Price",
+          "nl": "Prijs"
+        },
+        "Video ID": {
+          "en": "Video ID",
+          "nl": "Video-ID"
+        },
+        "Comment text": {
+          "en": "Comment text",
+          "nl": "Reactietekst"
+        }
+      },
+      "visualizations": [
+        {
+          "title": {
+            "en": "Most common words in your YouTube comments",
+            "nl": "Meest voorkomende woorden in je YouTube reacties"
+          },
+          "type": "wordcloud",
+          "textColumn": "Comment text",
+          "tokenize": true
+        }
+      ],
+      "extractor": "youtube_comments_to_df",
+      "documentation": {
+        "summary": "Each row represents one comment the participant posted on a YouTube video or post.",
+        "source_file": "the YouTube comments, e.g. comments/comments.csv or reacties/reacties.csv",
+        "columns": {
+          "Timestamp": "ISO 8601 timestamp of when the comment was created.",
+          "Channel ID": "ID of the channel where the comment was posted.",
+          "Comment text": "Full text of the comment.",
+          "Comment ID": "Unique identifier for the comment.",
+          "Video ID": "ID of the video the comment was posted on.",
+          "Price": "Super Chat amount, if applicable."
+        }
+      }
+    },
+    {
+      "id": "search_history",
+      "title": {
+        "en": "Your Google search history",
+        "nl": "Je Google zoekgeschiedenis"
+      },
+      "description": {
+        "en": "Your search queries on Google with timestamps.",
+        "nl": "Je zoekopdrachten op Google met tijdstippen."
+      },
+      "headers": {
+        "Query": {
+          "en": "Search query",
+          "nl": "Zoekopdracht"
+        },
+        "URL": {
+          "en": "URL",
+          "nl": "URL"
+        },
+        "Timestamp": {
+          "en": "Timestamp",
+          "nl": "Datum en tijd"
+        }
+      },
+      "extractor": "search_history_to_df",
+      "documentation": {
+        "summary": "Each row represents one search query in Google search history.",
+        "source_file": "the Google search history, e.g. Search/MyActivity.json or Suche/MyActivity.html",
+        "columns": {
+          "Query": "The searched query.",
+          "URL": "URL of the search query.",
+          "Timestamp": "ISO 8601 timestamp of when the search was performed."
+        }
+      }
+    },
+    {
+      "id": "chrome_history",
+      "title": {
+        "en": "Your Chrome browsing history",
+        "nl": "Je Chrome-surfgeschiedenis"
+      },
+      "description": {
+        "en": "Websites you visited in Chrome, including timestamps.",
+        "nl": "Websites die je in Chrome hebt bezocht, inclusief tijdstippen."
+      },
+      "headers": {
+        "Title": {
+          "en": "Title",
+          "nl": "Titel"
+        },
+        "URL": {
+          "en": "URL",
+          "nl": "URL"
+        },
+        "Timestamp": {
+          "en": "Timestamp",
+          "nl": "Datum en tijd"
+        }
+      },
+      "extractor": "chrome_history_to_df",
+      "documentation": {
+        "summary": "Each row represents one website the participant visited in Chrome, including the page title, URL, and timestamp.",
+        "source_file": "the Chrome history, e.g. Chrome/MyActivity.json or Chrome/Verlauf.html",
+        "columns": {
+          "Title": "Title of the visited page.",
+          "URL": "URL of the visited page.",
+          "Timestamp": "ISO 8601 timestamp of when the page was visited."
+        }
+      }
+    },
+    {
+      "id": "video_search_history",
+      "title": {
+        "en": "Your Google video search history",
+        "nl": "Je Google-videozoekgeschiedenis"
+      },
+      "description": {
+        "en": "Your search queries on Google video with timestamps.",
+        "nl": "Je zoekopdrachten op Google video met tijdstippen."
+      },
+      "headers": {
+        "Query": {
+          "en": "Search query",
+          "nl": "Zoekopdracht"
+        },
+        "URL": {
+          "en": "URL",
+          "nl": "URL"
+        },
+        "Timestamp": {
+          "en": "Timestamp",
+          "nl": "Datum en tijd"
+        }
+      },
+      "extractor": "video_search_history_to_df",
+      "documentation": {
+        "summary": "Each row represents one search event in Google video search history.",
+        "source_file": "the Google video search history, e.g. Video Search/MyActivity.json",
+        "columns": {
+          "Query": "The searched query.",
+          "URL": "URL of the search query.",
+          "Timestamp": "ISO 8601 timestamp of when the search was performed."
+        }
+      }
+    },
+    {
+      "id": "ads_history",
+      "title": {
+        "en": "Your Google ads history",
+        "nl": "Je Google-advertentiegeschiedenis"
+      },
+      "description": {
+        "en": "Your ad events on Google with timestamps.",
+        "nl": "Je advertentiegebeurtenissen op Google met tijdstippen."
+      },
+      "headers": {
+        "Event": {
+          "en": "Event",
+          "nl": "Gebeurtenis"
+        },
+        "URL": {
+          "en": "URL",
+          "nl": "URL"
+        },
+        "Timestamp": {
+          "en": "Timestamp",
+          "nl": "Datum en tijd"
+        }
+      },
+      "extractor": "ads_history_to_df",
+      "documentation": {
+        "summary": "Each row represents one event in Google ads history.",
+        "source_file": "the Google ads history, e.g. Ads/MyActivity.json",
+        "columns": {
+          "Event": "The ad event.",
+          "URL": "URL of the ad event.",
+          "Timestamp": "ISO 8601 timestamp of when the ad event occurred."
+        }
+      }
+    },
+    {
+      "id": "discover_history",
+      "title": {
+        "en": "Your Google Discover history",
+        "nl": "Je Google Discover-geschiedenis"
+      },
+      "description": {
+        "en": "Your Discover events on Google with timestamps.",
+        "nl": "Je Discover-gebeurtenissen op Google met tijdstippen."
+      },
+      "headers": {
+        "Title": {
+          "en": "Title",
+          "nl": "Titel"
+        },
+        "Locations": {
+          "en": "Locations",
+          "nl": "Locaties"
+        },
+        "Details": {
+          "en": "Details",
+          "nl": "Details"
+        },
+        "Timestamp": {
+          "en": "Timestamp",
+          "nl": "Datum en tijd"
+        }
+      },
+      "extractor": "discover_history_to_df",
+      "documentation": {
+        "summary": "Each row represents one event in Google Discover history.",
+        "source_file": "the Google Discover history, e.g. Discover/MyActivity.json",
+        "columns": {
+          "Title": "The title of the Discover event.",
+          "Locations": "The locations associated with the Discover event.",
+          "Details": "Additional details about the Discover event.",
+          "Timestamp": "ISO 8601 timestamp of when the Discover event occurred."
+        }
+      }
+    },
+    {
+      "id": "google_news_history",
+      "title": {
+        "en": "Your Google News history",
+        "nl": "Je Google Nieuws-geschiedenis"
+      },
+      "description": {
+        "en": "Your Google News events with timestamps.",
+        "nl": "Je Google Nieuws-gebeurtenissen met tijdstippen."
+      },
+      "headers": {
+        "Title": {
+          "en": "Title",
+          "nl": "Titel"
+        },
+        "URL": {
+          "en": "URL",
+          "nl": "URL"
+        },
+        "Timestamp": {
+          "en": "Timestamp",
+          "nl": "Datum en tijd"
+        }
+      },
+      "extractor": "google_news_history_to_df",
+      "documentation": {
+        "summary": "Each row represents one event in Google News history.",
+        "source_file": "the Google News history, e.g. News/MyActivity.json",
+        "columns": {
+          "Title": "The title of the Google News event.",
+          "URL": "URL of the Google News event.",
+          "Timestamp": "ISO 8601 timestamp of when the Google News event occured."
+        }
+      }
+    }
+  ]
+}
