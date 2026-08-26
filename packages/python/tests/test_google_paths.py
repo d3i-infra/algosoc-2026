@@ -7,6 +7,7 @@ that survive same-named files elsewhere in the archive, variants per locale, a l
 detected from folder names alone, and formats that differ within one archive.
 """
 import io
+import json
 import re
 import zipfile
 from collections import Counter
@@ -34,7 +35,11 @@ WATCH_HTML = activity_html(
     '<a href="https://www.youtube.com/channel/UC1">A channel</a><br>'
     '15 jun 2026, 20:30:41 CEST'
 )
-WATCH_JSON = '[{"title": "Watched A video", "titleUrl": "https://www.youtube.com/watch?v=abc", "time": "2026-06-15T20:30:41Z"}]'
+WATCH_JSON = (
+    '[{"title": "Watched A video", "titleUrl": "https://www.youtube.com/watch?v=abc", '
+    '"subtitles": [{"name": "A channel", "url": "https://www.youtube.com/channel/UC1"}], '
+    '"time": "2026-06-15T20:30:41Z"}]'
+)
 SEARCH_HTML = activity_html(
     'Searched for <a href="https://www.youtube.com/results?search_query=cats">cats</a><br>'
     '15 jun 2026, 20:30:41 CEST'
@@ -127,6 +132,159 @@ class TestActivityFile:
         })
 
         assert rows == {"youtube_watch_history": 1, "youtube_search_history": 1}
+
+
+class TestWatchHistoryRow:
+    """The table carries the channel a video was published by, which both formats write
+    under the title, and the details a view sometimes records, such as an ad it came
+    from — a row that has neither leaves those columns empty rather than dropping out."""
+
+    #: A view from an ad names no channel, and the line it does carry under the title is
+    #: the time it was watched at — a description, which is not the channel of anything.
+    ADVERT_JSON = (
+        '[{"title": "Watched An advert", "titleUrl": "https://www.youtube.com/watch?v=abc", '
+        '"description": "Watched at 11:39 AM", "details": [{"name": "From Google Ads"}], '
+        '"time": "2026-06-15T20:30:41Z"}]'
+    )
+    ADVERT_HTML = activity_html(
+        'Watched <a href="https://www.youtube.com/watch?v=abc">An advert</a><br>'
+        'Watched at 11:39 AM<br>'
+        '15 jun 2026, 20:30:41 CEST'
+    )
+
+    def row(self, content: str, extension: str) -> dict:
+        archive = make_zip({
+            f"Takeout/YouTube and YouTube Music/history/watch-history.{extension}": content,
+        })
+        result = google.extraction(archive, google.validate_ddp(archive))
+        return result.tables[0].data_frame.iloc[0].to_dict()
+
+    @pytest.mark.parametrize(
+        "content,extension", [(WATCH_JSON, "json"), (WATCH_HTML, "html")], ids=["json", "html"]
+    )
+    def test_the_channel_comes_out_the_same_from_either_format(self, content, extension):
+        row = self.row(content, extension)
+
+        assert row["Channel name"] == "A channel"
+        assert row["Channel URL"] == "https://www.youtube.com/channel/UC1"
+
+    def test_a_view_that_came_from_an_ad_says_so(self):
+        assert self.row(self.ADVERT_JSON, "json")["Details"] == "From Google Ads"
+
+    @pytest.mark.parametrize("extension", ["json", "html"])
+    def test_a_view_without_a_channel_keeps_its_row_and_names_none(self, extension):
+        """The description an ad carries under its title is not a channel, so it stays out
+        of the columns naming one — the row is still the video that was watched."""
+        row = self.row(getattr(self, f"ADVERT_{extension.upper()}"), extension)
+
+        assert row["Title"] == "Watched An advert"
+        assert row["Channel name"] == ""
+        assert row["Channel URL"] == ""
+
+
+class TestSearchLocations:
+    """A Google search is recorded with the general area it was made from, which the table
+    carries as the area, its link to Maps and, behind a dash, how it was arrived at."""
+
+    AREA = "https://www.google.com/maps/@?api=1&map_action=map&center=10.000000,20.000000"
+
+    def row(self, item: dict) -> dict:
+        archive = make_zip({"Takeout/My Activity/Search/MyActivity.json": json.dumps([item])})
+        result = google.extraction(archive, google.validate_ddp(archive))
+        tables = {table.id: table.data_frame for table in result.tables}
+        return tables["search_history"].iloc[0].to_dict()
+
+    def search(self, **extra) -> dict:
+        return {
+            "title": "Searched for cats",
+            "titleUrl": "https://www.google.com/search?q=cats",
+            "time": "2026-06-15T20:30:41Z",
+            **extra,
+        }
+
+    def test_a_location_reads_as_its_area_link_and_source(self):
+        row = self.row(self.search(locationInfos=[
+            {"name": "At this general area", "url": self.AREA, "source": "From your device"}
+        ]))
+
+        assert row["Locations"] == f"At this general area {self.AREA} - From your device"
+
+    def test_several_locations_stand_beside_each_other(self):
+        row = self.row(self.search(locationInfos=[
+            {"name": "At this general area", "url": self.AREA, "source": "From your device"},
+            {"name": "Somewhere else", "url": self.AREA, "source": "Based on your past activity"},
+        ]))
+
+        assert row["Locations"].count(" - ") == 2
+        assert "Somewhere else" in row["Locations"]
+
+    def test_a_location_without_a_source_carries_no_dash(self):
+        row = self.row(self.search(locationInfos=[{"name": "Somewhere", "url": self.AREA}]))
+
+        assert row["Locations"] == f"Somewhere {self.AREA}"
+
+    def test_a_search_placed_nowhere_leaves_the_column_empty(self):
+        assert self.row(self.search())["Locations"] == ""
+
+
+class TestDetailsColumn:
+    """The activity files record how some activity came about — a search or an ad shown
+    from Google Ads — beside the activity itself. Every table that reads such a file has
+    to carry it, so the row says where the activity came from and not only what it was."""
+
+    #: The path of the source in an English archive, the table its extractor produces and
+    #: an url the table takes, since two of them select their records by url.
+    SOURCES = [
+        ("YouTube and YouTube Music/history/search-history", "youtube_search_history",
+         "https://www.youtube.com/results?search_query=cats"),
+        ("My Activity/Search/MyActivity", "search_history",
+         "https://www.google.com/search?q=cats"),
+        ("My Activity/Ads/MyActivity", "ads_history", "https://example.org/an-advert"),
+    ]
+
+    def table(self, path: str, content: str, table_id: str):
+        archive = make_zip({f"Takeout/{path}.json": content})
+        result = google.extraction(archive, google.validate_ddp(archive))
+        return {table.id: table.data_frame for table in result.tables}[table_id]
+
+    @pytest.mark.parametrize("path,table_id,title_url", SOURCES, ids=[s[1] for s in SOURCES])
+    def test_details_reach_the_table(self, path, table_id, title_url):
+        content = json.dumps([{
+            "title": "An activity",
+            "titleUrl": title_url,
+            "details": [{"name": "From Google Ads"}],
+            "time": "2026-06-15T20:30:41Z",
+        }])
+
+        assert self.table(path, content, table_id)["Details"].tolist() == ["From Google Ads"]
+
+    def test_a_detail_that_links_somewhere_keeps_its_url(self):
+        """The json keeps the name of such a detail and the url it points to apart, where
+        the html writes them as one line — and the column has to read the same either way,
+        so the json is joined back into the line the html already produces."""
+        content = json.dumps([{
+            "title": "Visited a page",
+            "titleUrl": "https://www.google.com/search?q=cats",
+            "details": [{
+                "name": "Tried to open in app",
+                "url": "https://example.org/groups/abc",
+            }],
+            "time": "2026-06-15T20:30:41Z",
+        }])
+
+        table = self.table("My Activity/Search/MyActivity", content, "search_history")
+
+        assert table["Details"].tolist() == [
+            "Tried to open in app: https://example.org/groups/abc"
+        ]
+
+    @pytest.mark.parametrize("path,table_id,title_url", SOURCES, ids=[s[1] for s in SOURCES])
+    def test_an_activity_without_details_leaves_the_column_empty(self, path, table_id, title_url):
+        content = json.dumps([
+            {"title": "An activity", "titleUrl": title_url, "time": "2026-06-15T20:30:41Z"}
+        ])
+
+        assert self.table(path, content, table_id)["Details"].tolist() == [""]
 
 
 class TestFormats:

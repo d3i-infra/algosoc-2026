@@ -124,6 +124,16 @@ class TestCaption:
             {"name": "Birdwatching"}, {"name": "Cycling - viewed"}, {"name": "Nordic cuisine"}
         ]
 
+    def test_a_detail_that_links_somewhere_keeps_the_link_in_its_text(self):
+        """The html writes such a detail as one line, the name and the url it points to
+        behind a colon, and the whole line is what the record carries."""
+        caption = ('<b>Details:</b><br> Tried to open in app: '
+                   '<a href="https://example.org/groups/abc">https://example.org/groups/abc</a><br>')
+
+        assert self.record(caption)["details"] == [
+            {"name": "Tried to open in app: https://example.org/groups/abc"}
+        ]
+
     def test_a_dash_inside_a_detail_is_left_alone(self):
         """Only a location separates its source off the end of the line."""
         assert {"name": "Cycling - viewed"} in self.record(self.DETAILS)["details"]
@@ -189,6 +199,33 @@ class TestRecord:
         record = parse(watch_cell("15 jun 2026, 20:30:41 CEST"))[0]
 
         assert "A channel" not in record["title"]
+
+    def test_the_line_under_the_activity_reads_as_a_subtitle(self):
+        """The json format writes the channel of a video as a subtitle of a name and a
+        url, and the html format has to produce the same record for the same activity."""
+        record = parse(watch_cell("15 jun 2026, 20:30:41 CEST"))[0]
+
+        assert record["subtitles"] == [
+            {"name": "A channel", "url": "https://www.youtube.com/channel/UC1"}
+        ]
+        assert "description" not in record
+
+    def test_a_line_that_links_nowhere_is_a_description(self):
+        """A view from an ad carries the time it was watched at, which the json writes as
+        the description of the activity rather than as a subtitle of it."""
+        record = parse(
+            'Watched <a href="https://www.youtube.com/watch?v=abc">An advert</a><br>'
+            'Watched at 11:39 AM<br>15 aug 2026, 11:39:42 CEST'
+        )[0]
+
+        assert record["description"] == "Watched at 11:39 AM"
+        assert "subtitles" not in record
+
+    def test_an_activity_with_nothing_under_it_carries_neither(self):
+        record = parse(search_cell("15 jun 2026, 20:30:41 CEST"))[0]
+
+        assert "subtitles" not in record
+        assert "description" not in record
 
     def test_a_search_keeps_its_query(self):
         record = parse(search_cell("15 jun 2026, 20:30:41 CEST"))[0]

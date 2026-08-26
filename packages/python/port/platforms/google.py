@@ -300,10 +300,10 @@ def _read(reader: ZipArchiveReader, key: str, locale: str):
     return None, None
 
 
-def _parse_activity_html(data: io.BytesIO) -> list[dict[str, str]]:
+def _parse_activity_html(data: io.BytesIO) -> list[dict]:
     """Reads an activity file in html format and parses it into a list of dictionaries with
-    the same shape as the json format: the title of the activity, the url it points to and
-    its timestamp.
+    the same shape as the json format: the title of the activity, the url it points to, what
+    stands under it and its timestamp.
 
     Every activity file of the DDP — the YouTube histories as well as the My Activity file
     of any product — is one page of ``outer-cell`` blocks, in which the activity itself
@@ -314,6 +314,12 @@ def _parse_activity_html(data: io.BytesIO) -> list[dict[str, str]]:
             <a href="https://www.youtube.com/channel/UC1">A channel</a><br>
             15 jun 2026, 20:30:41 CEST
         </div>
+
+    A line between the activity and the timestamp is read by whether it links out. One that
+    does is a subtitle — the channel of the video above, which the json writes as
+    ``{"name": ..., "url": ...}`` — and one that does not is the ``description`` of the
+    activity, such as the "Watched at 11:39 AM" an ad is recorded with. A record carries
+    either, both, or neither.
 
     Selecting those cells by class is what makes one parser enough for every source: the
     activity is read the same way regardless of which product wrote the file, and callers
@@ -338,23 +344,25 @@ def _parse_activity_html(data: io.BytesIO) -> list[dict[str, str]]:
         # An activity always carries text, ending in its timestamp. A body cell without
         # any is the empty one the layout puts beside it, right-aligned, and not a record.
         if texts:
-            # The activity is the text up to the first line break; what follows it are
-            # further details, such as the channel of a video, and last the timestamp.
-            title_parts = [cell.text or ""]
-            url = None
-            for child in cell:
-                if child.tag == "br":
-                    break
-                if child.tag == "a" and url is None:
-                    url = child.get("href")
-                title_parts.append(child.text or "")
-                title_parts.append(child.tail or "")
+            # The activity is the text up to the first line break and the timestamp is the
+            # line the cell closes with. What stands in between is told apart by its link:
+            # a line that links out is a subtitle, the channel of a video say, and one that
+            # does not is the description of the activity.
+            lines = _parse_activity_lines(cell)
+            middle = lines[1:-1]
 
-            records.append({
-                "title": " ".join(part.strip() for part in title_parts if part.strip()),
-                "titleUrl": _strip_redirect(url) if url else "",
+            record = {
+                "title": lines[0]["text"],
+                "titleUrl": _strip_redirect(lines[0]["url"]) if lines[0]["url"] else "",
                 "time": _convert_to_iso8601(texts[-1]),
-            })
+            }
+            subtitles = [_subtitle(line) for line in middle if line["url"]]
+            if subtitles:
+                record["subtitles"] = subtitles
+            description = " ".join(line["text"] for line in middle if not line["url"])
+            if description:
+                record["description"] = description
+            records.append(record)
         elif records and "mdl-typography--caption" in classes:
             # The caption follows the activity it belongs to, so it lands on the record
             # that was just read.
@@ -380,6 +388,33 @@ def _close_line(line: dict, section: list) -> dict:
     if text or line["url"]:
         section.append({"text": text, "url": line["url"]})
     return {"texts": [], "url": ""}
+
+
+def _parse_activity_lines(cell) -> list[dict]:
+    """Reads a body cell as the lines its line breaks separate, each with the first url it
+    links to. A line that holds neither text nor a link is left out, so the break the cell
+    tends to close with does not add an empty one."""
+
+    lines: list[dict] = []
+    line = {"texts": [cell.text or ""], "url": ""}
+    for child in cell:
+        if child.tag == "br":
+            line = _close_line(line, lines)
+        else:
+            if child.tag == "a" and not line["url"]:
+                line["url"] = child.get("href") or ""
+            line["texts"].append("".join(child.itertext()))
+        line["texts"].append(child.tail or "")
+    _close_line(line, lines)
+
+    return lines
+
+
+def _subtitle(line: dict) -> dict:
+    """Reads a line linking out from under an activity in the shape the json format writes
+    it: the name it shows and where it points."""
+
+    return {"name": line["text"], "url": _strip_redirect(line["url"])}
 
 
 def _parse_activity_caption(cell) -> dict:
@@ -448,6 +483,55 @@ def _strip_redirect(url: str) -> str:
 
     prefix = "https://www.google.com/url?q="
     return url[len(prefix):] if url.startswith(prefix) else url
+
+
+def _first_subtitle(item: dict) -> dict:
+    """Returns the subtitle an activity stands under, empty when it carries none. A record
+    may hold a list of them, but the sources read here name a single one — the channel of a
+    video — and only where the account still has it."""
+
+    subtitles = item.get("subtitles") or []
+    return next((subtitle for subtitle in subtitles if isinstance(subtitle, dict)), {})
+
+
+def _join_details(item: dict) -> str:
+    """Reads the details an activity carries as one column of text, empty when it carries
+    none. Most records have nothing here; the ones that do say how the activity came about,
+    such as a video that was watched from an ad.
+
+    A detail that points somewhere is written as its name and that url behind a colon. The
+    json format keeps the two apart, in a ``name`` and a ``url``, where the html writes them
+    as the one line ``Tried to open in app: https://...`` — so joining them here is what
+    makes both formats produce the same column."""
+
+    texts = []
+    for detail in item.get("details") or []:
+        if not isinstance(detail, dict):
+            continue
+        texts.append(": ".join(
+            part for part in (detail.get("name", ""), detail.get("url", "")) if part
+        ))
+
+    return ", ".join(texts)
+
+
+def _join_locations(item: dict) -> str:
+    """Reads the locations an activity was recorded from as one column of text, empty when
+    it carries none. Each is the area it names and the link to Maps that shows it, followed
+    by how it was arrived at behind a dash, the way the archive writes it. An activity may
+    be placed by several of them at once."""
+
+    texts = []
+    for location in item.get("locationInfos") or []:
+        if not isinstance(location, dict):
+            continue
+        area = " ".join(
+            part for part in (location.get("name", ""), location.get("url", "")) if part
+        )
+        source = location.get("source", "")
+        texts.append(f"{area} - {source}" if source else area)
+
+    return ", ".join(texts)
 
 
 #: Months as Takeout abbreviates them in the languages it writes in Latin script, by the
@@ -579,17 +663,21 @@ def youtube_watch_history_to_df(reader: ZipArchiveReader, errors: Counter, local
     Returns
     -------
     pd.DataFrame
-        Columns: ``Title``, ``URL``, ``Timestamp``.
+        Columns: ``Title``, ``URL``, ``Channel name``, ``Channel URL``, ``Details``,
+        ``Timestamp``.
         Empty DataFrame when no matching file is found or parsing fails.
 
     Table documentation::
 
         {
-          "summary": "Each row represents one video the participant watched on YouTube, including the video title, URL, and timestamp.",
+          "summary": "Each row represents one video the participant watched on YouTube, including the video title and URL, the channel that published it, how the view came about where the archive says so, and the timestamp.",
           "source_file": "the YouTube watch history, e.g. history/watch-history.json or Verlauf/Wiedergabeverlauf.html",
           "columns": {
             "Title": "Title of the watched video.",
             "URL": "URL of the watched video.",
+            "Channel name": "Name of the channel that published the video, empty when the archive does not name one.",
+            "Channel URL": "URL of the channel that published the video, empty when the archive does not link to one.",
+            "Details": "How the view came about, such as a video watched from an ad. Empty for most videos.",
             "Timestamp": "ISO 8601 timestamp of when the video was watched."
           }
         }
@@ -606,6 +694,9 @@ def youtube_watch_history_to_df(reader: ZipArchiveReader, errors: Counter, local
           "headers": {
             "Title": {"en": "Title", "nl": "Titel"},
             "URL": {"en": "URL", "nl": "URL"},
+            "Channel name": {"en": "Channel", "nl": "Kanaal"},
+            "Channel URL": {"en": "Channel URL", "nl": "Kanaal-URL"},
+            "Details": {"en": "Details", "nl": "Details"},
             "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
           },
           "visualizations": [
@@ -660,12 +751,19 @@ def youtube_watch_history_to_df(reader: ZipArchiveReader, errors: Counter, local
     datapoints = []
     try:
         for item in d:
+            channel = _first_subtitle(item)
             datapoints.append((
                 item.get("title", ""),
                 item.get("titleUrl", ""),
+                channel.get("name", ""),
+                channel.get("url", ""),
+                _join_details(item),
                 item.get("time", ""),
             ))
-        out = pd.DataFrame(datapoints, columns=["Title", "URL", "Timestamp"])  # pyright: ignore
+        out = pd.DataFrame(  # pyright: ignore
+            datapoints,
+            columns=["Title", "URL", "Channel name", "Channel URL", "Details", "Timestamp"],
+        )
     except Exception as e:
         logger.error("Exception caught: %s", e)
         errors[type(e).__name__] += 1
@@ -692,17 +790,18 @@ def youtube_search_history_to_df(reader: ZipArchiveReader, errors: Counter, loca
     Returns
     -------
     pd.DataFrame
-        Columns: ``Query``, ``URL``, ``Timestamp``.
+        Columns: ``Query``, ``URL``, ``Details``, ``Timestamp``.
         Empty DataFrame when no matching file is found or parsing fails.
 
     Table documentation::
 
         {
-          "summary": "Each row represents one search query in YouTube search history.",
+          "summary": "Each row represents one search query in YouTube search history, including how the search came about where the archive says so.",
           "source_file": "the YouTube search history, e.g. history/search-history.json or Verlauf/Suchverlauf.html",
           "columns": {
             "Query": "The searched query.",
             "URL": "URL of the search query.",
+            "Details": "How the search came about, such as a search that came from an ad. Empty for most searches.",
             "Timestamp": "ISO 8601 timestamp of when the search was performed."
           }
         }
@@ -722,6 +821,7 @@ def youtube_search_history_to_df(reader: ZipArchiveReader, errors: Counter, loca
           "headers": {
             "Query": {"en": "Search query", "nl": "Zoekopdracht"},
             "URL": {"en": "URL", "nl": "URL"},
+            "Details": {"en": "Details", "nl": "Details"},
             "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
           },
           "visualizations": [
@@ -761,9 +861,10 @@ def youtube_search_history_to_df(reader: ZipArchiveReader, errors: Counter, loca
             datapoints.append((
                 item.get("title", ""),
                 item.get("titleUrl", ""),
+                _join_details(item),
                 item.get("time", ""),
             ))
-        out = pd.DataFrame(datapoints, columns=["Query", "URL", "Timestamp"])  # pyright: ignore
+        out = pd.DataFrame(datapoints, columns=["Query", "URL", "Details", "Timestamp"])  # pyright: ignore
     except Exception as e:
         logger.error("Exception caught: %s", e)
         errors[type(e).__name__] += 1
@@ -952,16 +1053,18 @@ def search_history_to_df(reader: ZipArchiveReader, errors: Counter, locale: str)
     Returns
     -------
     pd.DataFrame
-        Columns: ``Query``, ``URL``, ``Timestamp``.
+        Columns: ``Query``, ``URL``, ``Locations``, ``Details``, ``Timestamp``.
         Empty DataFrame when no matching file is found or parsing fails.
 
     Table documentation::
         {
-          "summary": "Each row represents one search query in Google search history.",
+          "summary": "Each row represents one search query in Google search history, including the general area it was made from and how the search came about where the archive says so.",
           "source_file": "the Google search history, e.g. Search/MyActivity.json or Suche/MyActivity.html",
           "columns": {
             "Query": "The searched query.",
             "URL": "URL of the search query.",
+            "Locations": "The general area the search was made from, as a name, a link to Google Maps and, behind a dash, how the area was arrived at. Empty for most searches.",
+            "Details": "How the search came about, such as a search that came from an ad. Empty for most searches.",
             "Timestamp": "ISO 8601 timestamp of when the search was performed."
           }
         }
@@ -976,6 +1079,8 @@ def search_history_to_df(reader: ZipArchiveReader, errors: Counter, locale: str)
           "headers": {
             "Query": {"en": "Search query", "nl": "Zoekopdracht"},
             "URL": {"en": "URL", "nl": "URL"},
+            "Locations": {"en": "Locations", "nl": "Locaties"},
+            "Details": {"en": "Details", "nl": "Details"},
             "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
           }
         }
@@ -1002,9 +1107,14 @@ def search_history_to_df(reader: ZipArchiveReader, errors: Counter, locale: str)
             datapoints.append((
                 item.get("title", ""),
                 item.get("titleUrl", ""),
+                _join_locations(item),
+                _join_details(item),
                 item.get("time", ""),
             ))
-        out = pd.DataFrame(datapoints, columns=["Query", "URL", "Timestamp"])  # pyright: ignore
+        out = pd.DataFrame(  # pyright: ignore
+            datapoints,
+            columns=["Query", "URL", "Locations", "Details", "Timestamp"],
+        )
     except Exception as e:
         logger.error("Exception caught: %s", e)
         errors[type(e).__name__] += 1
@@ -1196,16 +1306,17 @@ def ads_history_to_df(reader: ZipArchiveReader, errors: Counter, locale: str) ->
     Returns
     -------
     pd.DataFrame
-        Columns: ``Event``, ``URL``, ``Timestamp``.
+        Columns: ``Event``, ``URL``, ``Details``, ``Timestamp``.
         Empty DataFrame when no matching file is found or parsing fails.
 
     Table documentation::
         {
-          "summary": "Each row represents one event in Google ads history.",
+          "summary": "Each row represents one event in Google ads history, including what the archive records about where the ad was shown.",
           "source_file": "the Google ads history, e.g. Ads/MyActivity.json",
           "columns": {
             "Event": "The ad event.",
             "URL": "URL of the ad event.",
+            "Details": "What the archive records about the ad event, such as where the ad was shown. Empty for most events.",
             "Timestamp": "ISO 8601 timestamp of when the ad event occurred."
           }
         }
@@ -1220,6 +1331,7 @@ def ads_history_to_df(reader: ZipArchiveReader, errors: Counter, locale: str) ->
           "headers": {
             "Event": {"en": "Event", "nl": "Gebeurtenis"},
             "URL": {"en": "URL", "nl": "URL"},
+            "Details": {"en": "Details", "nl": "Details"},
             "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
           }
         }
@@ -1246,9 +1358,10 @@ def ads_history_to_df(reader: ZipArchiveReader, errors: Counter, locale: str) ->
             datapoints.append((
                 item.get("title", ""),
                 item.get("titleUrl", ""),
+                _join_details(item),
                 item.get("time", "")
             ))
-        out = pd.DataFrame(datapoints, columns=["Event", "URL", "Timestamp"])  # pyright: ignore
+        out = pd.DataFrame(datapoints, columns=["Event", "URL", "Details", "Timestamp"])  # pyright: ignore
     except Exception as e:
         logger.error("Exception caught: %s", e)
         errors[type(e).__name__] += 1
@@ -1323,12 +1436,10 @@ def discover_history_to_df(reader: ZipArchiveReader, errors: Counter, locale: st
     datapoints = []
     try:
         for item in d:
-            details = ", ".join([detail.get("name", "") for detail in item.get("details", []) if isinstance(detail, dict)])
-            locationInfos = ", ".join([location.get("name", "") + ' ' + location.get("url", "") + ' ' + location.get("source", "") for location in item.get("locationInfos", []) if isinstance(location, dict)])
             datapoints.append((
                 item.get("title", ""),
-                locationInfos,
-                details,
+                _join_locations(item),
+                _join_details(item),
                 item.get("time", "")
             ))
         out = pd.DataFrame(datapoints, columns=["Title", "Locations", "Details", "Timestamp"])  # pyright: ignore

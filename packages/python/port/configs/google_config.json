@@ -38,6 +38,18 @@
           "en": "URL",
           "nl": "URL"
         },
+        "Channel name": {
+          "en": "Channel",
+          "nl": "Kanaal"
+        },
+        "Channel URL": {
+          "en": "Channel URL",
+          "nl": "Kanaal-URL"
+        },
+        "Details": {
+          "en": "Details",
+          "nl": "Details"
+        },
         "Timestamp": {
           "en": "Timestamp",
           "nl": "Datum en tijd"
@@ -90,11 +102,14 @@
       ],
       "extractor": "youtube_watch_history_to_df",
       "documentation": {
-        "summary": "Each row represents one video the participant watched on YouTube, including the video title, URL, and timestamp.",
+        "summary": "Each row represents one video the participant watched on YouTube, including the video title and URL, the channel that published it, how the view came about where the archive says so, and the timestamp.",
         "source_file": "the YouTube watch history, e.g. history/watch-history.json or Verlauf/Wiedergabeverlauf.html",
         "columns": {
           "Title": "Title of the watched video.",
           "URL": "URL of the watched video.",
+          "Channel name": "Name of the channel that published the video, empty when the archive does not name one.",
+          "Channel URL": "URL of the channel that published the video, empty when the archive does not link to one.",
+          "Details": "How the view came about, such as a video watched from an ad. Empty for most videos.",
           "Timestamp": "ISO 8601 timestamp of when the video was watched."
         }
       }
@@ -118,6 +133,10 @@
           "en": "URL",
           "nl": "URL"
         },
+        "Details": {
+          "en": "Details",
+          "nl": "Details"
+        },
         "Timestamp": {
           "en": "Timestamp",
           "nl": "Datum en tijd"
@@ -136,11 +155,12 @@
       ],
       "extractor": "youtube_search_history_to_df",
       "documentation": {
-        "summary": "Each row represents one search query in YouTube search history.",
+        "summary": "Each row represents one search query in YouTube search history, including how the search came about where the archive says so.",
         "source_file": "the YouTube search history, e.g. history/search-history.json or Verlauf/Suchverlauf.html",
         "columns": {
           "Query": "The searched query.",
           "URL": "URL of the search query.",
+          "Details": "How the search came about, such as a search that came from an ad. Empty for most searches.",
           "Timestamp": "ISO 8601 timestamp of when the search was performed."
         }
       }
@@ -260,6 +280,14 @@
           "en": "URL",
           "nl": "URL"
         },
+        "Locations": {
+          "en": "Locations",
+          "nl": "Locaties"
+        },
+        "Details": {
+          "en": "Details",
+          "nl": "Details"
+        },
         "Timestamp": {
           "en": "Timestamp",
           "nl": "Datum en tijd"
@@ -267,11 +295,13 @@
       },
       "extractor": "search_history_to_df",
       "documentation": {
-        "summary": "Each row represents one search query in Google search history.",
+        "summary": "Each row represents one search query in Google search history, including the general area it was made from and how the search came about where the archive says so.",
         "source_file": "the Google search history, e.g. Search/MyActivity.json or Suche/MyActivity.html",
         "columns": {
           "Query": "The searched query.",
           "URL": "URL of the search query.",
+          "Locations": "The general area the search was made from, as a name, a link to Google Maps and, behind a dash, how the area was arrived at. Empty for most searches.",
+          "Details": "How the search came about, such as a search that came from an ad. Empty for most searches.",
           "Timestamp": "ISO 8601 timestamp of when the search was performed."
         }
       }
@@ -365,6 +395,10 @@
           "en": "URL",
           "nl": "URL"
         },
+        "Details": {
+          "en": "Details",
+          "nl": "Details"
+        },
         "Timestamp": {
           "en": "Timestamp",
           "nl": "Datum en tijd"
@@ -372,11 +406,12 @@
       },
       "extractor": "ads_history_to_df",
       "documentation": {
-        "summary": "Each row represents one event in Google ads history.",
+        "summary": "Each row represents one event in Google ads history, including what the archive records about where the ad was shown.",
         "source_file": "the Google ads history, e.g. Ads/MyActivity.json",
         "columns": {
           "Event": "The ad event.",
           "URL": "URL of the ad event.",
+          "Details": "What the archive records about the ad event, such as where the ad was shown. Empty for most events.",
           "Timestamp": "ISO 8601 timestamp of when the ad event occurred."
         }
       }
