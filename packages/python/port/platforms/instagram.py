@@ -107,7 +107,46 @@ DDP_CATEGORIES = [
         ddp_filetype=DDPFiletype.HTML,
         language=Language.EN,
         known_files=[
-"followers_1.html", "following.html", "follow_requests_you've_received.html", "recent_follow_requests.html", "recently_unfollowed_profiles.html", "removed_suggestions.html", "posts_viewed.html", "posts_you're_not_interested_in.html", "videos_watched.html", "advertisers_using_your_activity_or_information.html", "other_categories_used_to_reach_you.html", "word_or_phrase_searches.html", "camera_information.html", "locations_of_interest.html", "profile_based_in.html", "account_supervision.html", "instagram_profile_information.html", "note_and_repost_interactions.html", "personal_information.html", "last_known_location.html", "login_activity.html", "profile_activity.html", "signup_details.html", "post_comments_1.html", "liked_comments.html", "liked_posts.html", "profile_photos.html", "stories.html", "chats.html", "secret_conversations.html", "eligibility.html", "surveys.html", "your_information_download_requests.html", "saved_music.html", "saved_posts.html", "checkout_payment_information.html", "recently_viewed_items.html", "polls.html", "stories_viewed.html", "story_likes.html", "start_here.html",
+            "followers_1.html",
+            "following.html", 
+            "follow_requests_you've_received.html", 
+            "recent_follow_requests.html", 
+            "recently_unfollowed_profiles.html", 
+            "removed_suggestions.html", 
+            "posts_viewed.html", 
+            "posts_you're_not_interested_in.html", 
+            "videos_watched.html", 
+            "advertisers_using_your_activity_or_information.html", 
+            "other_categories_used_to_reach_you.html", 
+            "word_or_phrase_searches.html", 
+            "camera_information.html", 
+            "locations_of_interest.html", 
+            "profile_based_in.html", 
+            "account_supervision.html", 
+            "instagram_profile_information.html", 
+            "note_and_repost_interactions.html", 
+            "personal_information.html", 
+            "last_known_location.html", "login_activity.html", 
+            "profile_activity.html", 
+            "signup_details.html", 
+            "post_comments_1.html", 
+            "liked_comments.html", 
+            "liked_posts.html", 
+            "profile_photos.html", 
+            "stories.html", 
+            "chats.html", 
+            "secret_conversations.html", 
+            "eligibility.html", 
+            "surveys.html", 
+            "your_information_download_requests.html", 
+            "saved_music.html", 
+            "saved_posts.html", 
+            "checkout_payment_information.html", 
+            "recently_viewed_items.html", 
+            "polls.html", 
+            "stories_viewed.html", 
+            "story_likes.html", 
+            "start_here.html",
         ],
     ),
 ]
@@ -1420,8 +1459,8 @@ def word_or_phrase_searches_to_df(
         {
           "id": "instagram_word_or_phrase_searches",
           "title": {
-            "en": "Your keyword searches on Instagram",
-            "nl": "Je zoekwoorden op Instagram"
+            "en": "Your searches on Instagram",
+            "nl": "Je zoekopdrachten op Instagram"
           },
           "description": {
             "en": "List of words or phrases you have searched for on Instagram.",
@@ -1455,8 +1494,23 @@ def _word_or_phrase_searches_json(reader: ZipArchiveReader, errors: Counter) -> 
 
         for item in items:
             string_map_data = item.get("string_map_data", {})
-            search = _first_present(string_map_data, ["Search", "Zoekopdracht", "Zoeken"])
-            time = _first_present(string_map_data, ["Time", "Tijd"])
+            # The English, Dutch and German keys come from real DDPs; the Spanish,
+            # Arabic, Turkish and Chinese ones are derived from Instagram's own
+            # translations and have not been checked against a real export yet.
+            search = _first_present(string_map_data, [
+                "Search", "Zoekopdracht", "Zoeken", "Suche",
+                "Búsqueda", "Buscar",
+                "بحث", "البحث",
+                "Arama", "Ara",
+                "搜索", "搜索内容",
+            ])
+            time = _first_present(string_map_data, [
+                "Time", "Tijd", "Datum/Uhrzeit der Suche", "Uhrzeit",
+                "Hora", "Fecha y hora",
+                "الوقت", "التاريخ والوقت",
+                "Saat", "Zaman",
+                "时间", "日期和时间",
+            ])
             datapoints.append((
                 eh.fix_latin1_string(str(search.get("value", ""))),
                 eh.epoch_to_iso(time.get("timestamp", ""), errors=errors),
@@ -1589,7 +1643,7 @@ def _stories_published_json(reader: ZipArchiveReader, errors: Counter) -> pd.Dat
         for item in items:
             title = eh.fix_latin1_string(item.get("title", ""))
             if not title:
-                title = "Story has no text"
+                title = "Story has no title"
             uri = item.get("uri", "")
             ext = os.path.splitext(uri)[1] if uri else ""
             datapoints.append((
@@ -1625,8 +1679,11 @@ def _stories_published_html(reader: ZipArchiveReader, errors: Counter) -> pd.Dat
             uri = a[0].get("href", "") if a else ""
             ext = os.path.splitext(uri)[1] if uri else ""
 
-            # No title in HTML format
-            title = "Story has no text"
+            # Title
+            title_h2 = section.xpath(".//h2[contains(@class, '_a6-h') and contains(@class, '_a6-i')]")
+            title = title_h2[0].text.strip() if title_h2 and title_h2[0].text else ""
+            if not title:
+                title = "Story has no title"
 
             # Timestamp
             ts = section.xpath(".//div[contains(@class, '_a6-o')]")
@@ -2202,11 +2259,11 @@ def posts_published_to_df(
           "id": "instagram_posts_published",
           "title": {
             "en": "Posts you published on Instagram",
-            "nl": "Berichten die je op Instagram hebt geplaatst"
+            "nl": "Publieke berichten die je op Instagram hebt geplaatst"
           },
           "description": {
             "en": "List of posts you have published on Instagram.",
-            "nl": "Lijst van berichten die je op Instagram hebt geplaatst."
+            "nl": "Lijst van publieke berichten die je op Instagram hebt geplaatst."
           },
           "headers": {
             "Title": {"en": "Title", "nl": "Titel"},
