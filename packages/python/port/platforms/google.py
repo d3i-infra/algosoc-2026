@@ -639,6 +639,130 @@ def _convert_with_dateutil(timestamp):
         return timestamp
 
 
+EXPLICIT_KEYWORDS = [
+      "outlook.live.com", "mail.google.com/mail", "mail.kpnmail.nl",
+      "outlook.office365.com", "porn",
+      "xhamster", 
+      "erotic", "kinky", "fetish", "jerk off",
+     "camgirl",  "hentai", "gangbang",  "femdom",
+     "onlyfans", "fansly",  "threesome", "adult video", "adult movie",
+     "adult escort", "prostitute", "escort service", "sex worker",
+     "stripper", "strip club", "exotic dancer",
+     "not safe for work", 
+     
+     "xvideos.com", "xnxx.com", "redtube.com", "xhamster.com", "deloris.ai",
+      "tube8.com", "spankbang.com", "youjizz.com", "fapdu.com", "9xbuddy.xyz",
+     "brazzers.com", "mofos.com", "naughtyamerica.com", "bangbros.com", 
+      "clips4sale.com", "camsoda.com", "chaturbate.com", "casualdating1.com",
+     "myfreecams.com", "livejasmin.com", "streamate.com", "bongacams.com", "deepmode.ai",
+     "onlyfans.com", "adultfriendfinder.com", "sextube.com", "beeg.com", "akg01.com",
+      "xtube.com", "slutload.com", "tnaflix.com", 
+     "javhd.com", "realitykings.com", "metart.com", "eroprofile.com", "nudelive.com",
+     "fantasti.cc", "hclips.com", "ashemaletube.com", 
+     "playvid.com", "4tube.com", "javfinder.com",  "sex.com", "hentaigasm.com",
+     "hentaistream.com", "adulttime.com", "wicked.com", "dogfartnetwork.com", "stripchat.com",
+     "keezmovies.com", "xempire.com", 
+     "thumzilla.com", "madthumbs.com", "drtuber.com", 
+     "fapdu.com", "freeones.com", "twistys.com", "3movs.com",  "candy.ai",
+   "recurbate.com", "tubegalore.com",
+    "lobstertube.com", "nuvid.com", "sexvid.xxx",
+     "xhamsterlive.com", "playboy.tv", "cams.com", "badoinkvr.com", 
+     "vrcosplayx.com", "metartx.com", "hegre-art.com", "joymii.com", 
+     "spankwire.com", "tingo.ai",
+       "boy18tube.com",	
+       "fapnfuck.com",
+       "fetishbank.net",
+       "gonzoxxxmovies.com",
+       "ixxx.com",
+       "webcamsex.nl",
+     
+     "jizzbunker.com", "eporner.com", "cam4.com", "sexier.com", "adultempire.com", "basedlabs.ai",
+     "joysporn.com", "slutroulette.com", "bigxvideos.com", "hotmovs.com", 
+
+     "siswet", "taylor sands", "naughty celeste",
+     "natasha nice", "angela white", "joey mills", "austin young",
+     "legrand wolf", "viktor rom", "malik delgaty", "daisy taylor",
+     "esluna love", "romy indy", "zara whites", "yasie lee", "tracy oba",
+     "nathalie kitten", "sebriena star", "tanya de vries", "logan moore",
+     "abella danger", "adriana chechik", "aimi yoshikawa", "amarna miller",
+     "angela white", "anna polina", "anri okita", "arabelle raphael",
+     "honey_sunshine", "ariana marie", "august ames", "ayu sakurai",
+     "belle knox", "bonnie rotten", "brett rossi", "carter cruise",
+     "casey calvert", "chanel preston", "charlotte sartre",
+     "iori kogawa", "jia lissa", "jessie andrews", "jessie rogers", "lana rhoades",
+     "lasirena69", "lauren phillips", "lizz tayler", "maitland ward",
+     "mia khalifa", "mia magma", "mia malkova", "nadia ali", "rebecca more",
+     "remy lacroix", "renee gracie", "reya sunshine", "rika hoshimi",
+     "riley reid", "saki hatsumi", "samantha bentley", "sara tommasi",
+     "tasha reign", "tsusaka aoi", "valentina nappi",
+     "brendon miller", "griffin barrows", "jordi el nino polla",
+     "matthew camp", "rocco steele", "ty mitchell", "amouranth", "belle delphine",
+     "cara cunningham", "nang mwe san", "projekt melody",
+     
+     # Dutch Porn Websites
+     "kinky.nl", "geilevrouwen.nl", "sexfilms.nl",
+     "echtneuken.nl", "viva.nl", "sexjobs.nl", "vagina.nl", "binkdate.nl", "chatgirl.nl",
+ 
+     # Gay Porn Websites
+     "www.men.com", "gaytube.com", "justusboys.com", "gaymaletube.com", "dudetube.com",
+     "nextdoorstudios.com", "cockyboys.com", "helixstudios.net", "hothouse.com", "corbinfisher.com",
+ 
+     # Lesbian Porn Websites
+     "girlsway.com", "naughtylady.com", "bellesa.co", "sweetsinner.com", "transangelsnetwork.com",
+     "girlfriendsfilms.com", "thelesbianexperience.com", "wifelovers.com", "wearehairy.com", "lucasentertainment.com",
+ 
+     # Trans Porn Websites
+     "shemale.xxx", "groobygirls.com", "ts-dating.com", "tgirls.com", "trannytube.tv",
+     "trans500.com", "pure-ts.com", "transangels.com"
+]    
+
+
+EXPLICIT_REGEX = re.compile("|".join(re.escape(k.lower()) for k in EXPLICIT_KEYWORDS))
+
+
+def filter_explicit_content(df, columns_to_check):
+    """Drops rows where any of the given columns contains an explicit keyword.
+
+    The index is reset because the consent form addresses rows by position,
+    so a gapped index renders as empty rows in the table shown to the
+    participant.
+    """
+    if df.empty:
+        return df
+    mask = pd.Series(False, index=df.index)
+    for col in columns_to_check:
+        remaining = ~mask  # only scan rows not already matched
+        if not remaining.any():
+            break
+        mask.loc[remaining] = (
+            df.loc[remaining, col]
+            .astype("string")
+            .str.lower()
+            .str.contains(EXPLICIT_REGEX, na=False)
+            .fillna(False)
+            .astype(bool)
+        )
+    return df[~mask].reset_index(drop=True)
+
+
+def redact_emails(df, columns_to_redact):
+    """Replaces email addresses in the given columns with ``[email]``.
+
+    Uses the shared ``EMAIL_PATTERN`` so that all platforms agree on what an
+    address looks like. Columns that a table does not have are skipped, and
+    missing values are left untouched.
+    """
+    for col in columns_to_redact:
+        if col not in df.columns:
+            continue
+        df[col] = (
+            df[col]
+            .astype("string")
+            .str.replace(eh.EMAIL_PATTERN, "[email]", regex=True)
+        )
+    return df
+
+
 # ---------------------------------------------------------------------------
 # Extractor functions
 # ---------------------------------------------------------------------------
@@ -692,7 +816,7 @@ def youtube_watch_history_to_df(reader: ZipArchiveReader, errors: Counter, local
             "nl": "Video's die je op YouTube hebt bekeken, inclusief tijdstippen."
           },
           "headers": {
-            "Title": {"en": "Title", "nl": "Titel"},
+            "Title": {"en": "Action", "nl": "Actie"},
             "URL": {"en": "URL", "nl": "URL"},
             "Channel name": {"en": "Channel", "nl": "Kanaal"},
             "Channel URL": {"en": "Channel URL", "nl": "Kanaal-URL"},
@@ -790,7 +914,7 @@ def youtube_search_history_to_df(reader: ZipArchiveReader, errors: Counter, loca
     Returns
     -------
     pd.DataFrame
-        Columns: ``Query``, ``URL``, ``Details``, ``Timestamp``.
+        Columns: ``Title``, ``URL``, ``Details``, ``Timestamp``.
         Empty DataFrame when no matching file is found or parsing fails.
 
     Table documentation::
@@ -799,7 +923,7 @@ def youtube_search_history_to_df(reader: ZipArchiveReader, errors: Counter, loca
           "summary": "Each row represents one search query in YouTube search history, including how the search came about where the archive says so.",
           "source_file": "the YouTube search history, e.g. history/search-history.json or Verlauf/Suchverlauf.html",
           "columns": {
-            "Query": "The searched query.",
+            "Title": "Description of the search action.",
             "URL": "URL of the search query.",
             "Details": "How the search came about, such as a search that came from an ad. Empty for most searches.",
             "Timestamp": "ISO 8601 timestamp of when the search was performed."
@@ -819,7 +943,7 @@ def youtube_search_history_to_df(reader: ZipArchiveReader, errors: Counter, loca
             "nl": "Je zoekopdrachten op YouTube met tijdstippen."
           },
           "headers": {
-            "Query": {"en": "Search query", "nl": "Zoekopdracht"},
+            "Title": {"en": "Action", "nl": "Actie"},
             "URL": {"en": "URL", "nl": "URL"},
             "Details": {"en": "Details", "nl": "Details"},
             "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
@@ -831,7 +955,7 @@ def youtube_search_history_to_df(reader: ZipArchiveReader, errors: Counter, loca
                 "nl": "Woorden in je YouTube zoekgeschiedenis"
               },
               "type": "wordcloud",
-              "textColumn": "Query",
+              "textColumn": "Title",
               "tokenize": true
             }
           ]
@@ -864,7 +988,7 @@ def youtube_search_history_to_df(reader: ZipArchiveReader, errors: Counter, loca
                 _join_details(item),
                 item.get("time", ""),
             ))
-        out = pd.DataFrame(datapoints, columns=["Query", "URL", "Details", "Timestamp"])  # pyright: ignore
+        out = pd.DataFrame(datapoints, columns=["Title", "URL", "Details", "Timestamp"])  # pyright: ignore
     except Exception as e:
         logger.error("Exception caught: %s", e)
         errors[type(e).__name__] += 1
@@ -1053,7 +1177,7 @@ def search_history_to_df(reader: ZipArchiveReader, errors: Counter, locale: str)
     Returns
     -------
     pd.DataFrame
-        Columns: ``Query``, ``URL``, ``Locations``, ``Details``, ``Timestamp``.
+        Columns: ``Title``, ``URL``, ``Locations``, ``Details``, ``Timestamp``.
         Empty DataFrame when no matching file is found or parsing fails.
 
     Table documentation::
@@ -1061,7 +1185,7 @@ def search_history_to_df(reader: ZipArchiveReader, errors: Counter, locale: str)
           "summary": "Each row represents one search query in Google search history, including the general area it was made from and how the search came about where the archive says so.",
           "source_file": "the Google search history, e.g. Search/MyActivity.json or Suche/MyActivity.html",
           "columns": {
-            "Query": "The searched query.",
+            "Title": "Description of the search action.",
             "URL": "URL of the search query.",
             "Locations": "The general area the search was made from, as a name, a link to Google Maps and, behind a dash, how the area was arrived at. Empty for most searches.",
             "Details": "How the search came about, such as a search that came from an ad. Empty for most searches.",
@@ -1077,7 +1201,7 @@ def search_history_to_df(reader: ZipArchiveReader, errors: Counter, locale: str)
             "nl": "Je zoekopdrachten op Google met tijdstippen."
           },
           "headers": {
-            "Query": {"en": "Search query", "nl": "Zoekopdracht"},
+            "Title": {"en": "Action", "nl": "Actie"},
             "URL": {"en": "URL", "nl": "URL"},
             "Locations": {"en": "Locations", "nl": "Locaties"},
             "Details": {"en": "Details", "nl": "Details"},
@@ -1113,8 +1237,9 @@ def search_history_to_df(reader: ZipArchiveReader, errors: Counter, locale: str)
             ))
         out = pd.DataFrame(  # pyright: ignore
             datapoints,
-            columns=["Query", "URL", "Locations", "Details", "Timestamp"],
+            columns=["Title", "URL", "Locations", "Details", "Timestamp"],
         )
+        out = filter_explicit_content(out, ["Title", "URL"])
     except Exception as e:
         logger.error("Exception caught: %s", e)
         errors[type(e).__name__] += 1
@@ -1163,7 +1288,7 @@ def chrome_history_to_df(reader: ZipArchiveReader, errors: Counter, locale: str)
             "nl": "Websites die je in Chrome hebt bezocht, inclusief tijdstippen."
           },
           "headers": {
-            "Title": {"en": "Title", "nl": "Titel"},
+            "Title": {"en": "Action", "nl": "Actie"},
             "URL": {"en": "URL", "nl": "URL"},
             "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
           }
@@ -1202,6 +1327,7 @@ def chrome_history_to_df(reader: ZipArchiveReader, errors: Counter, locale: str)
                     item.get("time", "")
                 ))
         out = pd.DataFrame(datapoints, columns=["Title", "URL", "Timestamp"])  # pyright: ignore
+        out = filter_explicit_content(out, ["Title", "URL"])
     except Exception as e:
         logger.error("Exception caught: %s", e)
         errors[type(e).__name__] += 1
@@ -1227,7 +1353,7 @@ def video_search_history_to_df(reader: ZipArchiveReader, errors: Counter, locale
     Returns
     -------
     pd.DataFrame
-        Columns: ``Query``, ``URL``, ``Timestamp``.
+        Columns: ``Title``, ``URL``, ``Timestamp``.
         Empty DataFrame when no matching file is found or parsing fails.
 
     Table documentation::
@@ -1235,8 +1361,8 @@ def video_search_history_to_df(reader: ZipArchiveReader, errors: Counter, locale
           "summary": "Each row represents one search event in Google video search history.",
           "source_file": "the Google video search history, e.g. Video Search/MyActivity.json",
           "columns": {
-            "Query": "The searched query.",
-            "URL": "URL of the search query.",
+            "Title": "Description of the video search action.",
+            "URL": "URL of the video search event.",
             "Timestamp": "ISO 8601 timestamp of when the search was performed."
           }
         }
@@ -1250,7 +1376,7 @@ def video_search_history_to_df(reader: ZipArchiveReader, errors: Counter, locale
             "nl": "Je zoekopdrachten op Google video met tijdstippen."
           },
           "headers": {
-            "Query": {"en": "Search query", "nl": "Zoekopdracht"},
+            "Title": {"en": "Action", "nl": "Actie"},
             "URL": {"en": "URL", "nl": "URL"},
             "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
           }
@@ -1280,7 +1406,8 @@ def video_search_history_to_df(reader: ZipArchiveReader, errors: Counter, locale
                 item.get("titleUrl", ""),
                 item.get("time", "")
             ))
-        out = pd.DataFrame(datapoints, columns=["Query", "URL", "Timestamp"])  # pyright: ignore
+        out = pd.DataFrame(datapoints, columns=["Title", "URL", "Timestamp"])  # pyright: ignore
+        out = filter_explicit_content(out, ["Title", "URL"])
     except Exception as e:
         logger.error("Exception caught: %s", e)
         errors[type(e).__name__] += 1
@@ -1306,7 +1433,7 @@ def ads_history_to_df(reader: ZipArchiveReader, errors: Counter, locale: str) ->
     Returns
     -------
     pd.DataFrame
-        Columns: ``Event``, ``URL``, ``Details``, ``Timestamp``.
+        Columns: ``Title``, ``URL``, ``Details``, ``Timestamp``.
         Empty DataFrame when no matching file is found or parsing fails.
 
     Table documentation::
@@ -1314,7 +1441,7 @@ def ads_history_to_df(reader: ZipArchiveReader, errors: Counter, locale: str) ->
           "summary": "Each row represents one event in Google ads history, including what the archive records about where the ad was shown.",
           "source_file": "the Google ads history, e.g. Ads/MyActivity.json",
           "columns": {
-            "Event": "The ad event.",
+            "Title": "The ad event.",
             "URL": "URL of the ad event.",
             "Details": "What the archive records about the ad event, such as where the ad was shown. Empty for most events.",
             "Timestamp": "ISO 8601 timestamp of when the ad event occurred."
@@ -1329,7 +1456,7 @@ def ads_history_to_df(reader: ZipArchiveReader, errors: Counter, locale: str) ->
             "nl": "Je advertentiegebeurtenissen op Google met tijdstippen."
           },
           "headers": {
-            "Event": {"en": "Event", "nl": "Gebeurtenis"},
+            "Title": {"en": "Action", "nl": "Actie"},
             "URL": {"en": "URL", "nl": "URL"},
             "Details": {"en": "Details", "nl": "Details"},
             "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
@@ -1361,7 +1488,8 @@ def ads_history_to_df(reader: ZipArchiveReader, errors: Counter, locale: str) ->
                 _join_details(item),
                 item.get("time", "")
             ))
-        out = pd.DataFrame(datapoints, columns=["Event", "URL", "Details", "Timestamp"])  # pyright: ignore
+        out = pd.DataFrame(datapoints, columns=["Title", "URL", "Details", "Timestamp"])  # pyright: ignore
+        out = filter_explicit_content(out, ["Title", "URL"])
     except Exception as e:
         logger.error("Exception caught: %s", e)
         errors[type(e).__name__] += 1
@@ -1410,7 +1538,7 @@ def discover_history_to_df(reader: ZipArchiveReader, errors: Counter, locale: st
             "nl": "Je Discover-gebeurtenissen op Google met tijdstippen."
           },
           "headers": {
-            "Title": {"en": "Title", "nl": "Titel"},
+            "Title": {"en": "Action", "nl": "Actie"},
             "Locations": {"en": "Locations", "nl": "Locaties"},
             "Details": {"en": "Details", "nl": "Details"},
             "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
@@ -1491,7 +1619,7 @@ def google_news_history_to_df(reader: ZipArchiveReader, errors: Counter, locale:
             "nl": "Je Google Nieuws-gebeurtenissen met tijdstippen."
           },
           "headers": {
-            "Title": {"en": "Title", "nl": "Titel"},
+            "Title": {"en": "Action", "nl": "Actie"},
             "URL": {"en": "URL", "nl": "URL"},
             "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
           }
@@ -1545,7 +1673,6 @@ EXTRACTOR_REGISTRY: dict[str, Callable[..., pd.DataFrame]] = {
     "ads_history_to_df": ads_history_to_df,
     "discover_history_to_df": discover_history_to_df,
     "google_news_history_to_df": google_news_history_to_df,
-    # "news_history_to_df": news_history_to_df,
 }
 
 
@@ -1571,7 +1698,16 @@ def extraction(google_zip: str, validation) -> ExtractionResult:
         table.extractor_kwargs = {**table.extractor_kwargs, 'locale': locale}
     errors: Counter = Counter()
     reader = ZipArchiveReader(google_zip, validation.archive_members, errors)
-    return run_extraction(reader, errors, config)
+
+    result = run_extraction(reader, errors, config)
+
+    # The free-text columns can carry addresses of the participant or of third
+    # parties, which are not part of what is asked to be donated.
+    TEXT_COLUMNS = ["Title", "Details"]
+    for table in result.tables:
+        redact_emails(table.data_frame, TEXT_COLUMNS)
+
+    return result
 
 
 class GoogleFlow(FlowBuilder):
