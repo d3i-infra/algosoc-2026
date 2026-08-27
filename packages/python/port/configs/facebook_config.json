@@ -139,36 +139,6 @@
       }
     },
     {
-      "id": "facebook_video_consumption_summary",
-      "title": {
-        "en": "Videos watched in the last 28 days",
-        "nl": "Video's bekeken in de afgelopen 28 dagen"
-      },
-      "description": {
-        "en": "This table shows how much time you spent watching videos on Facebook, bucketed by time period.",
-        "nl": "Deze tabel toont hoeveel tijd je hebt besteed aan het bekijken van video's op Facebook, ingedeeld per tijdsperiode."
-      },
-      "headers": {
-        "Label": {
-          "en": "Label",
-          "nl": "Label"
-        },
-        "Value": {
-          "en": "Value",
-          "nl": "Waarde"
-        }
-      },
-      "extractor": "video_consumption_summary_to_df",
-      "documentation": {
-        "summary": "Each row represents a video consumption metric for the participant on Facebook, bucketed by time period.",
-        "source_file": "your_facebook_activity/other_activity/your_video_consumption_summary.json / your_video_consumption_summary.html",
-        "columns": {
-          "Label": "Description of the video consumption metric.",
-          "Value": "Value of the metric."
-        }
-      }
-    },
-    {
       "id": "facebook_link_history",
       "title": {
         "en": "Links visited from Facebook",
@@ -735,36 +705,6 @@
         "source_file": "facebook_news/your_locations.json",
         "columns": {
           "Location": "Name of the configured location."
-        }
-      }
-    },
-    {
-      "id": "facebook_your_comment_active_days",
-      "title": {
-        "en": "Days you actively commented",
-        "nl": "Dagen waarop je actief comments hebt geplaatst"
-      },
-      "description": {
-        "en": "This table indicates the days on which you made comments on Facebook.",
-        "nl": "Deze tabel toont de dagen waarop je comments op Facebook hebt geplaatst."
-      },
-      "headers": {
-        "Label": {
-          "en": "Label",
-          "nl": "Label"
-        },
-        "Value": {
-          "en": "Value",
-          "nl": "Waarde"
-        }
-      },
-      "extractor": "your_comment_active_days_to_df",
-      "documentation": {
-        "summary": "Each row represents a label-value pair indicating the days on which the participant actively commented on Facebook.",
-        "source_file": "your_comment_active_days.json",
-        "columns": {
-          "Label": "Label describing the activity metric.",
-          "Value": "Value associated with the label."
         }
       }
     }
