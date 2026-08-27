@@ -73,6 +73,38 @@ DDP_CATEGORIES = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# Helper functions
+# ---------------------------------------------------------------------------
+
+def _sort_by_date(out: pd.DataFrame, date_column: str) -> pd.DataFrame:
+    """Order *out* from most recent to oldest on *date_column*.
+
+    Every Facebook table that carries a date is returned newest first so that
+    participants see their most recent activity at the top.
+
+    Parameters
+    ----------
+    out:
+        DataFrame to sort.
+    date_column:
+        Name of the column that contains ISO-formatted timestamp strings.
+        Rows with empty or unparsable timestamps are placed last.
+
+    Returns
+    -------
+    pd.DataFrame
+        Sorted DataFrame with a fresh index.  Returned unchanged when it is
+        empty or does not contain *date_column*.
+    """
+    if out.empty or date_column not in out.columns:
+        return out
+
+    return out.sort_values(
+        by=date_column, key=eh.sort_isotimestamp_empty_timestamp_last
+    ).reset_index(drop=True)
+
+
 def who_youve_followed_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
     """Extract the list of profiles and pages you follow on Facebook.
 
@@ -120,9 +152,9 @@ def who_youve_followed_to_df(reader: ZipArchiveReader, errors: Counter, validati
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
-        return _who_youve_followed_html(reader, errors)
+        return _sort_by_date(_who_youve_followed_html(reader, errors), "Timestamp")
 
-    return _who_youve_followed_json(reader, errors)
+    return _sort_by_date(_who_youve_followed_json(reader, errors), "Timestamp")
 
 
 def _who_youve_followed_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
@@ -333,7 +365,7 @@ def notifications_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFra
         logger.error("Exception caught: %s", e)
         errors[type(e).__name__] += 1
 
-    return out
+    return _sort_by_date(out, "Date")
 
 
 def content_sharing_you_have_created_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
@@ -404,7 +436,7 @@ def content_sharing_you_have_created_to_df(reader: ZipArchiveReader, errors: Cou
         logger.error("Exception caught: %s", e)
         errors[type(e).__name__] += 1
 
-    return out
+    return _sort_by_date(out, "Date")
 
 
 def facebook_reels_usage_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
@@ -637,9 +669,9 @@ def your_search_history_to_df(reader: ZipArchiveReader, errors: Counter, validat
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
-        return _your_search_history_html(reader, errors)
+        return _sort_by_date(_your_search_history_html(reader, errors), "Date")
 
-    return _your_search_history_json(reader, errors)
+    return _sort_by_date(_your_search_history_json(reader, errors), "Date")
 
 
 def _your_search_history_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
@@ -950,7 +982,7 @@ def recently_viewed_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataF
         logger.error("Exception caught: %s", e)
         errors[type(e).__name__] += 1
 
-    return out
+    return _sort_by_date(out, "Date")
 
 
 def recently_visited_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
@@ -1029,7 +1061,7 @@ def recently_visited_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.Data
         logger.error("Exception caught: %s", e)
         errors[type(e).__name__] += 1
 
-    return out
+    return _sort_by_date(out, "Date")
 
 
 def profile_update_history_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
@@ -1099,7 +1131,7 @@ def profile_update_history_to_df(reader: ZipArchiveReader, errors: Counter) -> p
     except Exception as e:
         logger.error("Exception caught: %s", e)
         errors[type(e).__name__] += 1
-    return out
+    return _sort_by_date(out, "Timestamp")
 
 
 def your_events_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
@@ -1149,9 +1181,9 @@ def your_events_to_df(reader: ZipArchiveReader, errors: Counter, validation=None
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
-        return _your_events_html(reader, errors)
+        return _sort_by_date(_your_events_html(reader, errors), "Created")
 
-    return _your_events_json(reader, errors)
+    return _sort_by_date(_your_events_json(reader, errors), "Created")
 
 
 def _your_events_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
@@ -1284,7 +1316,7 @@ def group_posts_and_comments_to_df(reader: ZipArchiveReader, errors: Counter) ->
         logger.error("Exception caught: %s", e)
         errors[type(e).__name__] += 1
 
-    return out
+    return _sort_by_date(out, "Date")
 
 
 def your_answers_to_membership_questions_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
@@ -1406,9 +1438,9 @@ def your_comments_in_groups_to_df(reader: ZipArchiveReader, errors: Counter, val
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
-        return _your_comments_in_groups_html(reader, errors)
+        return _sort_by_date(_your_comments_in_groups_html(reader, errors), "Timestamp")
 
-    return _your_comments_in_groups_json(reader, errors)
+    return _sort_by_date(_your_comments_in_groups_json(reader, errors), "Timestamp")
 
 
 def _your_comments_in_groups_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
@@ -1494,9 +1526,9 @@ def your_group_membership_activity_to_df(reader: ZipArchiveReader, errors: Count
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
-        return _your_group_membership_activity_html(reader, errors)
+        return _sort_by_date(_your_group_membership_activity_html(reader, errors), "Timestamp")
 
-    return _your_group_membership_activity_json(reader, errors)
+    return _sort_by_date(_your_group_membership_activity_json(reader, errors), "Timestamp")
 
 
 def _your_group_membership_activity_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
@@ -1617,9 +1649,9 @@ def pages_and_profiles_you_follow_to_df(reader: ZipArchiveReader, errors: Counte
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
-        return _pages_and_profiles_you_follow_html(reader, errors)
+        return _sort_by_date(_pages_and_profiles_you_follow_html(reader, errors), "Timestamp")
 
-    return _pages_and_profiles_you_follow_json(reader, errors)
+    return _sort_by_date(_pages_and_profiles_you_follow_json(reader, errors), "Timestamp")
 
 
 def _pages_and_profiles_you_follow_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
@@ -1727,9 +1759,9 @@ def pages_youve_liked_to_df(reader: ZipArchiveReader, errors: Counter, validatio
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
-        return _pages_youve_liked_html(reader, errors)
+        return _sort_by_date(_pages_youve_liked_html(reader, errors), "Timestamp")
 
-    return _pages_youve_liked_json(reader, errors)
+    return _sort_by_date(_pages_youve_liked_json(reader, errors), "Timestamp")
 
 
 def _pages_youve_liked_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
@@ -1860,7 +1892,7 @@ def your_saved_items_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.Data
         logger.error("Exception caught: %s", e)
         errors[type(e).__name__] += 1
 
-    return out
+    return _sort_by_date(out, "Timestamp")
 
 
 def comments_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
@@ -1912,9 +1944,9 @@ def comments_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
-        return _comments_html(reader, errors)
+        return _sort_by_date(_comments_html(reader, errors), "Timestamp")
 
-    return _comments_json(reader, errors)
+    return _sort_by_date(_comments_json(reader, errors), "Timestamp")
 
 
 def _comments_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
@@ -2030,9 +2062,9 @@ def likes_and_reactions_to_df(reader: ZipArchiveReader, errors: Counter, validat
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
-        return _likes_and_reactions_html(reader, errors)
+        return _sort_by_date(_likes_and_reactions_html(reader, errors), "Timestamp")
 
-    return _likes_and_reactions_json(reader, errors)
+    return _sort_by_date(_likes_and_reactions_json(reader, errors), "Timestamp")
 
 
 def _likes_and_reactions_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
@@ -2256,7 +2288,7 @@ def your_pages_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
         logger.error("Exception caught: %s", e)
         errors[type(e).__name__] += 1
 
-    return out
+    return _sort_by_date(out, "Timestamp")
 
 
 def story_reactions_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
@@ -2378,9 +2410,9 @@ def your_posts_check_ins_to_df(reader: ZipArchiveReader, errors: Counter, valida
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
-        return _your_posts_check_ins_html(reader, errors)
+        return _sort_by_date(_your_posts_check_ins_html(reader, errors), "Timestamp")
 
-    return _your_posts_check_ins_json(reader, errors)
+    return _sort_by_date(_your_posts_check_ins_json(reader, errors), "Timestamp")
 
 
 def _your_posts_check_ins_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
@@ -2531,7 +2563,7 @@ def likes_and_reactions_base_to_df(reader: ZipArchiveReader, errors: Counter) ->
         errors[type(e).__name__] += 1
 
     out = pd.DataFrame(datapoints, columns=["Reaction", "Name", "URL", "Timestamp"]) if datapoints else pd.DataFrame()  # pyright: ignore
-    return out
+    return _sort_by_date(out, "Timestamp")
 
 
 def controls_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
@@ -2612,7 +2644,7 @@ def controls_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
         logger.error("Exception caught: %s", e)
         errors[type(e).__name__] += 1
 
-    return out
+    return _sort_by_date(out, "Date")
 
 
 # ---------------------------------------------------------------------------
@@ -2667,9 +2699,9 @@ def profile_visits_to_df(reader: ZipArchiveReader, errors: Counter, validation=N
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
-        return _profile_visits_html(reader, errors)
+        return _sort_by_date(_profile_visits_html(reader, errors), "Timestamp")
 
-    return _profile_visits_json(reader, errors)
+    return _sort_by_date(_profile_visits_json(reader, errors), "Timestamp")
 
 
 def _profile_visits_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
@@ -2881,9 +2913,9 @@ def link_history_to_df(reader: ZipArchiveReader, errors: Counter, validation=Non
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
-        return _link_history_html(reader, errors)
+        return _sort_by_date(_link_history_html(reader, errors), "Timestamp")
 
-    return _link_history_json(reader, errors)
+    return _sort_by_date(_link_history_json(reader, errors), "Timestamp")
 
 
 def _link_history_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
@@ -3404,9 +3436,9 @@ def advertisers_youve_interacted_with_to_df(reader: ZipArchiveReader, errors: Co
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
-        return _advertisers_youve_interacted_with_html(reader, errors)
+        return _sort_by_date(_advertisers_youve_interacted_with_html(reader, errors), "Timestamp")
 
-    return _advertisers_youve_interacted_with_json(reader, errors)
+    return _sort_by_date(_advertisers_youve_interacted_with_json(reader, errors), "Timestamp")
 
 
 def _advertisers_youve_interacted_with_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
@@ -3541,9 +3573,9 @@ def your_contributions_to_df(reader: ZipArchiveReader, errors: Counter, validati
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
-        return _your_contributions_html(reader, errors)
+        return _sort_by_date(_your_contributions_html(reader, errors), "Date")
 
-    return _your_contributions_json(reader, errors)
+    return _sort_by_date(_your_contributions_json(reader, errors), "Date")
 
 
 def _your_contributions_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
@@ -3667,9 +3699,9 @@ def items_viewed_to_df(reader: ZipArchiveReader, errors: Counter, validation=Non
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
-        return _items_viewed_html(reader, errors)
+        return _sort_by_date(_items_viewed_html(reader, errors), "Date")
 
-    return _items_viewed_json(reader, errors)
+    return _sort_by_date(_items_viewed_json(reader, errors), "Date")
 
 
 def _items_viewed_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
@@ -3761,7 +3793,7 @@ EXTRACTOR_REGISTRY: dict[str, Callable[..., pd.DataFrame]] = {
     "ads_interests_to_df": ads_interests_to_df,                                                  # logged_information/other_logged_information/ads_interests.json
     "profile_visits_to_df": profile_visits_to_df,                                                # logged_information/interactions/profile_visits.json
     "facebook_reels_usage_to_df": facebook_reels_usage_to_df,                                    # logged_information/other_logged_information/facebook_reels_usage_information.json
-    "video_consumption_summary_to_df": video_consumption_summary_to_df,                          # your_facebook_activity/other_activity/your_video_consumption_summary.json
+    #"video_consumption_summary_to_df": video_consumption_summary_to_df,                          # your_facebook_activity/other_activity/your_video_consumption_summary.json
     "link_history_to_df": link_history_to_df,                                                    # your_facebook_activity/other_activity/link_history.json
     "your_events_to_df": your_events_to_df,                                                      # your_facebook_activity/events/your_events.json
     "your_group_membership_activity_to_df": your_group_membership_activity_to_df,                 # your_facebook_activity/groups/your_group_membership_activity.json
@@ -3779,7 +3811,7 @@ EXTRACTOR_REGISTRY: dict[str, Callable[..., pd.DataFrame]] = {
     "pages_youve_liked_to_df": pages_youve_liked_to_df,                                          # your_facebook_activity/pages/pages_you've_liked.json
     "items_viewed_to_df": items_viewed_to_df,                                                    # logged_information/interactions/items_viewed.json
     "news_your_locations_to_df": news_your_locations_to_df,                                      # PENDING — Locations Facebook News is set to
-    "your_comment_active_days_to_df": your_comment_active_days_to_df,                            # PENDING — Days with active commenting
+    #"your_comment_active_days_to_df": your_comment_active_days_to_df,                            # PENDING — Days with active commenting
     # --- Not in spreadsheet — commented out ---
     # "notifications_to_df": notifications_to_df,
     # "content_sharing_you_have_created_to_df": content_sharing_you_have_created_to_df,
