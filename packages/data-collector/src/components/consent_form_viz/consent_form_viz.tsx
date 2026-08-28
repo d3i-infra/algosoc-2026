@@ -16,21 +16,35 @@ import {
     PropsUIPromptConsentFormTableViz,
     PropsUITableRow,
 } from "./types"
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import _ from "lodash"
 import { TableContainer } from "./table_container"
+import { TableSelector } from "./table_selector"
 
 type Props = PropsUIPromptConsentFormViz & ReactFactoryContext
 
 export const ConsentFormViz = (props: Props): JSX.Element => {
   const [tables, setTables] = useState<TableWithContext[]>(() => parseTables(props.tables))
   const { locale, resolve } = props
-  const { description, donateQuestion, donateButton, cancelButton } = prepareCopy(props)
+  const { description, donateQuestion, donateButton, cancelButton, shareAllNote } = prepareCopy(props)
   const [isDonating, setIsDonating] = useState(false)
+  const [selectedTableId, setSelectedTableId] = useState<string>("")
 
   useEffect(() => {
     setTables(parseTables(props.tables))
   }, [props.tables])
+
+  const sortedTables = useMemo(
+    () => [...tables].sort((a, b) => a.title.localeCompare(b.title, locale)),
+    [tables, locale]
+  )
+
+  // Falling back to the first table keeps the selection valid when the tables
+  // change (e.g. on a new donation) without needing an extra effect.
+  const selectedTable = useMemo(
+    () => sortedTables.find((table) => table.id === selectedTableId) ?? sortedTables[0],
+    [sortedTables, selectedTableId]
+  )
 
   const updateTable = useCallback((tableId: string, table: TableWithContext) => {
     setTables((tables) => {
@@ -164,14 +178,36 @@ export const ConsentFormViz = (props: Props): JSX.Element => {
         ))}
       </div>
       <div className="flex flex-col gap-16 w-full">
-        <div className="grid gap-8 max-w-full">
-          {tables.map((table) => {
-            return (
-              <TableContainer key={table.id} id={table.id} table={table} updateTable={updateTable} locale={locale} />
-            )
-          })}
+        <div className="grid gap-4 max-w-full">
+          {selectedTable != null && (
+            <>
+              <TableSelector
+                tables={sortedTables}
+                selectedId={selectedTable.id}
+                onSelect={setSelectedTableId}
+                locale={locale}
+              />
+              {/* Keyed on the table id so switching unmounts the previous table:
+                  its figures (each of which runs a web worker) are torn down
+                  instead of all tables holding one at the same time. */}
+              <TableContainer
+                key={selectedTable.id}
+                id={selectedTable.id}
+                table={selectedTable}
+                updateTable={updateTable}
+                locale={locale}
+              />
+            </>
+          )}
         </div>
         <div>
+          {/* Only one table is on screen, so spell out that sharing covers all of them. */}
+          {sortedTables.length > 1 && (
+            <BodyLarge
+              margin=""
+              text={shareAllNote.replace("{n}", sortedTables.length.toLocaleString(locale, { useGrouping: true }))}
+            />
+          )}
           <BodyLarge margin="" text={donateQuestion} />
 
           <div className="flex flex-row gap-4 mt-4 mb-4">
@@ -194,6 +230,7 @@ interface Copy {
   donateQuestion: string
   donateButton: string
   cancelButton: string
+  shareAllNote: string
 }
 
 function prepareCopy({ donateQuestion, donateButton, description, locale }: Props): Copy {
@@ -202,6 +239,7 @@ function prepareCopy({ donateQuestion, donateButton, description, locale }: Prop
     donateQuestion: Translator.translate(donateQuestion ?? defaultDonateQuestionLabel, locale),
     donateButton: Translator.translate(donateButton ?? defaultDonateButtonLabel, locale),
     cancelButton: Translator.translate(defaultCancelButtonLabel, locale),
+    shareAllNote: Translator.translate(defaultShareAllNote, locale),
   }
 }
 
@@ -226,6 +264,11 @@ const defaultCancelButtonLabel = new TextBundle()
   .add('en', 'No')
   .add('de', 'Nein')
   .add('nl', 'Nee')
+
+const defaultShareAllNote = new TextBundle()
+  .add('en', 'Sharing covers all {n} tables, also the ones you have not opened.')
+  .add('de', 'Geteilt werden alle {n} Tabellen, auch die, die Sie nicht geöffnet haben.')
+  .add('nl', 'U deelt alle {n} tabellen, ook de tabellen die u niet heeft geopend.')
 
 const defaultDescription = new TextBundle()
   .add('en', 'Determine whether you would like to share the data below. Carefully check the data and adjust when required. With your contribution, you help the previously described research. Thank you in advance.')
