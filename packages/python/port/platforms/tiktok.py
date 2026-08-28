@@ -1536,7 +1536,7 @@ def off_tiktok_to_df(reader: ZipArchiveReader, errors: Counter, validation) -> p
     try:
         rows = [
             (
-                _item_get(item, "Date", "Datum"),
+                _item_get(item, "Date", "Datum", "TimeStamp"),
                 _item_get(item, "Source", "Bron"),
                 _item_get(item, "Event", "Evenement"),
             )
