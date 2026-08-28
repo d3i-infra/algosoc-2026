@@ -183,8 +183,9 @@ class TestWatchHistoryRow:
 
 
 class TestSearchLocations:
-    """A Google search is recorded with the general area it was made from, which the table
-    carries as the area, its link to Maps and, behind a dash, how it was arrived at."""
+    """A Google search is recorded with the general area it was made from. Where the
+    participant was is not extracted: no column carries it, and it does not reach the
+    donation by way of one of the columns that stand beside it."""
 
     AREA = "https://www.google.com/maps/@?api=1&map_action=map&center=10.000000,20.000000"
 
@@ -202,29 +203,29 @@ class TestSearchLocations:
             **extra,
         }
 
-    def test_a_location_reads_as_its_area_link_and_source(self):
-        row = self.row(self.search(locationInfos=[
-            {"name": "At this general area", "url": self.AREA, "source": "From your device"}
-        ]))
-
-        assert row["Locations"] == f"At this general area {self.AREA} - From your device"
-
-    def test_several_locations_stand_beside_each_other(self):
-        row = self.row(self.search(locationInfos=[
+    def located(self) -> dict:
+        return self.search(locationInfos=[
             {"name": "At this general area", "url": self.AREA, "source": "From your device"},
             {"name": "Somewhere else", "url": self.AREA, "source": "Based on your past activity"},
-        ]))
+        ])
 
-        assert row["Locations"].count(" - ") == 2
-        assert "Somewhere else" in row["Locations"]
+    def test_the_table_has_no_column_for_locations(self):
+        assert "Locations" not in self.row(self.located())
 
-    def test_a_location_without_a_source_carries_no_dash(self):
-        row = self.row(self.search(locationInfos=[{"name": "Somewhere", "url": self.AREA}]))
+    def test_no_column_carries_where_the_search_was_made_from(self):
+        row = self.row(self.located())
 
-        assert row["Locations"] == f"Somewhere {self.AREA}"
+        assert not any(self.AREA in str(value) for value in row.values())
+        assert not any("general area" in str(value) for value in row.values())
+        assert not any("Somewhere else" in str(value) for value in row.values())
 
-    def test_a_search_placed_nowhere_leaves_the_column_empty(self):
-        assert self.row(self.search())["Locations"] == ""
+    def test_the_search_itself_is_still_extracted(self):
+        """Dropping the location leaves the rest of the row as it was."""
+        row = self.row(self.located())
+
+        assert row["Title"] == "Searched for cats"
+        assert row["URL"] == "https://www.google.com/search?q=cats"
+        assert row["Timestamp"] == "2026-06-15T20:30:41Z"
 
 
 class TestDetailsColumn:

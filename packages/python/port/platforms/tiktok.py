@@ -367,7 +367,7 @@ def activity_summary_to_df(reader: ZipArchiveReader, errors: Counter, validation
             "nl": "Overzicht van het aantal bekeken, becommentarieerde en gedeelde video's sinds registratie."
           },
           "headers": {
-            "Metric": {"en": "Activity metric", "nl": "Activiteitsmaat"},
+            "Metric": {"en": "Activity", "nl": "Activiteit"},
             "Count": {"en": "Count", "nl": "Aantal"}
           }
         }
@@ -409,10 +409,9 @@ def activity_summary_to_df(reader: ZipArchiveReader, errors: Counter, validation
         return out
     try:
         metric_priority = [
-            ("Videos watched since registration", ["videoCount"]),
-            ("Videos watched to the end since registration", ["videosWatchedToTheEndSinceAccountRegistration", "Videos watched to the end since account registration", "Video's tot het einde bekeken sinds accountregistratie"]),
-            ("Videos commented on since registration", ["videosCommentedOnSinceAccountRegistration", "commentVideoCount", "Videos commented on since account registration", "Video's waarop is gereageerd sinds accountregistratie"]),
-            ("Videos shared since registration", ["videosSharedSinceAccountRegistration", "sharedVideoCount", "Videos shared since account registration", "Video's gedeeld sinds accountregistratie"]),
+            ("Video's die u volledig heeft bekeken sinds uw registratie", ["videosWatchedToTheEndSinceAccountRegistration", "Videos watched to the end since account registration", "Video's tot het einde bekeken sinds accountregistratie"]),
+            ("Video's waarop u heeft gereageerd sinds uw registratie", ["videosCommentedOnSinceAccountRegistration", "commentVideoCount", "Videos commented on since account registration", "Video's waarop is gereageerd sinds accountregistratie"]),
+            ("Video's die u heeft gedeeld sinds uw registratie", ["videosSharedSinceAccountRegistration", "sharedVideoCount", "Videos shared since account registration", "Video's gedeeld sinds accountregistratie"]),
         ]
         rows = []
         for label, keys in metric_priority:
@@ -524,10 +523,10 @@ def settings_to_df(reader: ZipArchiveReader, errors: Counter, validation) -> pd.
         if not isinstance(content_preferences, dict):
             return out
         field_map = {
-            "Keyword filters for videos in Following feed": "Keyword filter for videos in the following feed",
-            "Keyword filters for videos in For You feed": "Keyword filters for videos in For You feed",
-            "Trefwoordfilters voor video's in de 'Volgend'-feed": "Keyword filter for videos in the following feed",
-            "Trefwoordfilters voor video's in de 'Voor jou'-feed": "Keyword filters for videos in For You feed",
+            "Keyword filters for videos in Following feed": "Zoekwoordfilter voor video's in uw Volgend-feed",
+            "Keyword filters for videos in For You feed": "Zoekwoordfilters voor video's in uw Voor Jou-feed",
+            "Trefwoordfilters voor video's in de 'Volgend'-feed": "Zoekwoordfilter voor video's in uw Volgend-feed",
+            "Trefwoordfilters voor video's in de 'Voor jou'-feed": "Zoekwoordfilters voor video's in uw Voor Jou-feed",
         }
         rows.extend(
             (label, ", ".join(content_preferences.get(key, [])))
@@ -1069,7 +1068,7 @@ def like_list_to_df(reader: ZipArchiveReader, errors: Counter, validation) -> pd
           },
           "headers": {
             "Date": {"en": "Date", "nl": "Datum en tijd"},
-            "Link": {"en": "Link", "nl": "Link"}
+            "Link": {"en": "URL", "nl": "URL"}
           }
         }
     """
@@ -1157,7 +1156,7 @@ def searches_to_df(reader: ZipArchiveReader, errors: Counter, validation) -> pd.
 
         {
           "id": "tiktok_searches",
-          "title": {"en": "Search history", "nl": "Zoekgeschiedenis"},
+          "title": {"en": "Searches", "nl": "Zoekopdrachten"},
           "description": {
             "en": "Search terms you have used on TikTok.",
             "nl": "Zoektermen die je hebt gebruikt op TikTok."
@@ -1489,8 +1488,8 @@ def off_tiktok_to_df(reader: ZipArchiveReader, errors: Counter, validation) -> p
           "id": "tiktok_off_tiktok",
           "title": {"en": "Your off-TikTok activities", "nl": "Je activiteiten buiten TikTok"},
           "description": {
-            "en": "Activities you have had outside of TikTok.",
-            "nl": "Activiteiten die je hebt gevolgd buiten TikTok."
+            "en": "Activities outside of TikTok that have been tracked by TikTok.",
+            "nl": "Activiteiten buiten TikTok die door TikTok zijn bijgehouden."
           },
           "headers": {
             "Date": {"en": "Date", "nl": "Datum en tijd"},

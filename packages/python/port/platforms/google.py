@@ -326,8 +326,8 @@ def _parse_activity_html(data: io.BytesIO) -> list[dict]:
     select the records that are theirs by url, exactly as they do for the json format.
 
     The caption cell beside it carries the lists some sources record with an activity —
-    the locations and details of a Discover card, say — which ``_parse_activity_caption``
-    reads onto the same record.
+    the details of a Discover card, say — which ``_parse_activity_caption`` reads onto the
+    same record.
 
     The document is walked as a stream and each cell is dropped once it is read, so peak
     memory stays proportional to one activity rather than to the size of the file — a watch
@@ -419,8 +419,8 @@ def _subtitle(line: dict) -> dict:
 
 def _parse_activity_caption(cell) -> dict:
     """Reads the lists an activity carries beside it, in the shape the json format writes
-    them: ``details`` as ``{"name": ...}`` and ``locationInfos`` as ``{"name": ..., "url":
-    ..., "source": ...}``. Returns only the lists that are there, as the json does.
+    them: ``details`` as ``{"name": ...}``. Returns the list only when it is there, as the
+    json does.
 
     The caption is a run of sections, each headed by a bold label and holding one entry per
     line break::
@@ -431,7 +431,11 @@ def _parse_activity_caption(cell) -> dict:
     Which section is which is read from where it sits and what it holds, not from the
     labels, which are written in the language of the account: the caption opens with the
     products and closes with why the activity was kept, and in between a section of
-    locations links to Maps. What is left is the details."""
+    locations links to Maps. What is left is the details.
+
+    Where the participant was is deliberately not extracted, but the locations section is
+    still recognized here — telling it apart from the details is what keeps it out of the
+    record."""
 
     sections: list[list[dict]] = [[]]
     line = {"texts": [cell.text or ""], "url": ""}
@@ -457,24 +461,11 @@ def _parse_activity_caption(cell) -> dict:
             # it was kept, neither of which says anything about the activity itself.
             continue
         if any(MAPS_LINK in line["url"] for line in section):
-            caption["locationInfos"] = [_location(line) for line in section]
-        else:
-            caption["details"] = [{"name": line["text"]} for line in section if line["text"]]
+            # Where the activity was recorded from, which is dropped rather than read.
+            continue
+        caption["details"] = [{"name": line["text"]} for line in section if line["text"]]
 
     return caption
-
-
-def _location(line: dict) -> dict:
-    """Reads a location entry, whose source of the location follows its name."""
-
-    name, separator, source = line["text"].rpartition(" - ")
-    if not separator:
-        name, source = line["text"], ""
-
-    location = {"name": name, "url": line["url"]}
-    if source:
-        location["source"] = source
-    return location
 
 
 def _strip_redirect(url: str) -> str:
@@ -511,25 +502,6 @@ def _join_details(item: dict) -> str:
         texts.append(": ".join(
             part for part in (detail.get("name", ""), detail.get("url", "")) if part
         ))
-
-    return ", ".join(texts)
-
-
-def _join_locations(item: dict) -> str:
-    """Reads the locations an activity was recorded from as one column of text, empty when
-    it carries none. Each is the area it names and the link to Maps that shows it, followed
-    by how it was arrived at behind a dash, the way the archive writes it. An activity may
-    be placed by several of them at once."""
-
-    texts = []
-    for location in item.get("locationInfos") or []:
-        if not isinstance(location, dict):
-            continue
-        area = " ".join(
-            part for part in (location.get("name", ""), location.get("url", "")) if part
-        )
-        source = location.get("source", "")
-        texts.append(f"{area} - {source}" if source else area)
 
     return ", ".join(texts)
 
@@ -830,8 +802,8 @@ def youtube_watch_history_to_df(reader: ZipArchiveReader, errors: Counter, local
                 "nl": "Bekeken video's in de loop van de tijd"
               },
               "type": "area",
-              "group": {"column": "Timestamp", "dateFormat": "auto"},
-              "values": [{"aggregate": "count", "label": "Count"}]
+              "group": {"column": "Timestamp", "dateFormat": "auto", "label": {"en": "Date", "nl": "Datum"}},
+              "values": [{"aggregate": "count", "label": {"en": "Number of videos", "nl": "Bekeken video's"}}]
             },
             {
               "title": {
@@ -839,8 +811,8 @@ def youtube_watch_history_to_df(reader: ZipArchiveReader, errors: Counter, local
                 "nl": "Bekeken video's per uur van de dag"
               },
               "type": "bar",
-              "group": {"column": "Timestamp", "dateFormat": "hour_cycle", "label": "Hour of the day"},
-              "values": [{"label": "Count"}]
+              "group": {"column": "Timestamp", "dateFormat": "hour_cycle", "label": {"en": "Hour of the day", "nl": "Uur van de dag"}},
+              "values": [{"label": {"en": "Number of videos", "nl": "Aantal video's"}}]
             },
             {
               "title": {
@@ -1177,17 +1149,16 @@ def search_history_to_df(reader: ZipArchiveReader, errors: Counter, locale: str)
     Returns
     -------
     pd.DataFrame
-        Columns: ``Title``, ``URL``, ``Locations``, ``Details``, ``Timestamp``.
+        Columns: ``Title``, ``URL``, ``Details``, ``Timestamp``.
         Empty DataFrame when no matching file is found or parsing fails.
 
     Table documentation::
         {
-          "summary": "Each row represents one search query in Google search history, including the general area it was made from and how the search came about where the archive says so.",
+          "summary": "Each row represents one search query in Google search history, including how the search came about where the archive says so.",
           "source_file": "the Google search history, e.g. Search/MyActivity.json or Suche/MyActivity.html",
           "columns": {
             "Title": "Description of the search action.",
             "URL": "URL of the search query.",
-            "Locations": "The general area the search was made from, as a name, a link to Google Maps and, behind a dash, how the area was arrived at. Empty for most searches.",
             "Details": "How the search came about, such as a search that came from an ad. Empty for most searches.",
             "Timestamp": "ISO 8601 timestamp of when the search was performed."
           }
@@ -1203,7 +1174,6 @@ def search_history_to_df(reader: ZipArchiveReader, errors: Counter, locale: str)
           "headers": {
             "Title": {"en": "Action", "nl": "Actie"},
             "URL": {"en": "URL", "nl": "URL"},
-            "Locations": {"en": "Locations", "nl": "Locaties"},
             "Details": {"en": "Details", "nl": "Details"},
             "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
           }
@@ -1231,13 +1201,12 @@ def search_history_to_df(reader: ZipArchiveReader, errors: Counter, locale: str)
             datapoints.append((
                 item.get("title", ""),
                 item.get("titleUrl", ""),
-                _join_locations(item),
                 _join_details(item),
                 item.get("time", ""),
             ))
         out = pd.DataFrame(  # pyright: ignore
             datapoints,
-            columns=["Title", "URL", "Locations", "Details", "Timestamp"],
+            columns=["Title", "URL", "Details", "Timestamp"],
         )
         out = filter_explicit_content(out, ["Title", "URL"])
     except Exception as e:
@@ -1515,7 +1484,7 @@ def discover_history_to_df(reader: ZipArchiveReader, errors: Counter, locale: st
     Returns
     -------
     pd.DataFrame
-        Columns: ``Title``, ``Locations``, ``Details``, ``Timestamp``.
+        Columns: ``Title``, ``Details``, ``Timestamp``.
         Empty DataFrame when no matching file is found or parsing fails.
 
     Table documentation::
@@ -1524,7 +1493,6 @@ def discover_history_to_df(reader: ZipArchiveReader, errors: Counter, locale: st
           "source_file": "the Google Discover history, e.g. Discover/MyActivity.json",
           "columns": {
             "Title": "The title of the Discover event.",
-            "Locations": "The locations associated with the Discover event.",
             "Details": "Additional details about the Discover event.",
             "Timestamp": "ISO 8601 timestamp of when the Discover event occurred."
           }
@@ -1539,7 +1507,6 @@ def discover_history_to_df(reader: ZipArchiveReader, errors: Counter, locale: st
           },
           "headers": {
             "Title": {"en": "Action", "nl": "Actie"},
-            "Locations": {"en": "Locations", "nl": "Locaties"},
             "Details": {"en": "Details", "nl": "Details"},
             "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
           }
@@ -1566,11 +1533,10 @@ def discover_history_to_df(reader: ZipArchiveReader, errors: Counter, locale: st
         for item in d:
             datapoints.append((
                 item.get("title", ""),
-                _join_locations(item),
                 _join_details(item),
                 item.get("time", "")
             ))
-        out = pd.DataFrame(datapoints, columns=["Title", "Locations", "Details", "Timestamp"])  # pyright: ignore
+        out = pd.DataFrame(datapoints, columns=["Title", "Details", "Timestamp"])  # pyright: ignore
     except Exception as e:
         logger.error("Exception caught: %s", e)
         errors[type(e).__name__] += 1

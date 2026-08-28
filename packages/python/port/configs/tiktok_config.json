@@ -25,8 +25,8 @@
       },
       "headers": {
         "Metric": {
-          "en": "Activity metric",
-          "nl": "Activiteitsmaat"
+          "en": "Activity",
+          "nl": "Activiteit"
         },
         "Count": {
           "en": "Count",
@@ -239,8 +239,8 @@
           "nl": "Datum en tijd"
         },
         "Link": {
-          "en": "Link",
-          "nl": "Link"
+          "en": "URL",
+          "nl": "URL"
         }
       },
       "extractor": "like_list_to_df",
@@ -256,8 +256,8 @@
     {
       "id": "tiktok_searches",
       "title": {
-        "en": "Search history",
-        "nl": "Zoekgeschiedenis"
+        "en": "Searches",
+        "nl": "Zoekopdrachten"
       },
       "description": {
         "en": "Search terms you have used on TikTok.",
@@ -392,8 +392,8 @@
         "nl": "Je activiteiten buiten TikTok"
       },
       "description": {
-        "en": "Activities you have had outside of TikTok.",
-        "nl": "Activiteiten die je hebt gevolgd buiten TikTok."
+        "en": "Activities outside of TikTok that have been tracked by TikTok.",
+        "nl": "Activiteiten buiten TikTok die door TikTok zijn bijgehouden."
       },
       "headers": {
         "Date": {

@@ -64,12 +64,19 @@
           "type": "area",
           "group": {
             "column": "Timestamp",
-            "dateFormat": "auto"
+            "dateFormat": "auto",
+            "label": {
+              "en": "Date",
+              "nl": "Datum"
+            }
           },
           "values": [
             {
               "aggregate": "count",
-              "label": "Count"
+              "label": {
+                "en": "Number of videos",
+                "nl": "Bekeken video's"
+              }
             }
           ]
         },
@@ -82,11 +89,17 @@
           "group": {
             "column": "Timestamp",
             "dateFormat": "hour_cycle",
-            "label": "Hour of the day"
+            "label": {
+              "en": "Hour of the day",
+              "nl": "Uur van de dag"
+            }
           },
           "values": [
             {
-              "label": "Count"
+              "label": {
+                "en": "Number of videos",
+                "nl": "Aantal video's"
+              }
             }
           ]
         },
@@ -280,10 +293,6 @@
           "en": "URL",
           "nl": "URL"
         },
-        "Locations": {
-          "en": "Locations",
-          "nl": "Locaties"
-        },
         "Details": {
           "en": "Details",
           "nl": "Details"
@@ -295,12 +304,11 @@
       },
       "extractor": "search_history_to_df",
       "documentation": {
-        "summary": "Each row represents one search query in Google search history, including the general area it was made from and how the search came about where the archive says so.",
+        "summary": "Each row represents one search query in Google search history, including how the search came about where the archive says so.",
         "source_file": "the Google search history, e.g. Search/MyActivity.json or Suche/MyActivity.html",
         "columns": {
           "Title": "Description of the search action.",
           "URL": "URL of the search query.",
-          "Locations": "The general area the search was made from, as a name, a link to Google Maps and, behind a dash, how the area was arrived at. Empty for most searches.",
           "Details": "How the search came about, such as a search that came from an ad. Empty for most searches.",
           "Timestamp": "ISO 8601 timestamp of when the search was performed."
         }
@@ -431,10 +439,6 @@
           "en": "Action",
           "nl": "Actie"
         },
-        "Locations": {
-          "en": "Locations",
-          "nl": "Locaties"
-        },
         "Details": {
           "en": "Details",
           "nl": "Details"
@@ -450,7 +454,6 @@
         "source_file": "the Google Discover history, e.g. Discover/MyActivity.json",
         "columns": {
           "Title": "The title of the Discover event.",
-          "Locations": "The locations associated with the Discover event.",
           "Details": "Additional details about the Discover event.",
           "Timestamp": "ISO 8601 timestamp of when the Discover event occurred."
         }

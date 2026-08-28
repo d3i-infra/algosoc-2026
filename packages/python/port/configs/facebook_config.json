@@ -15,8 +15,8 @@
     {
       "id": "facebook_search_history",
       "title": {
-        "en": "Your search history",
-        "nl": "Je zoekgeschiedenis"
+        "en": "Searches",
+        "nl": "Zoekopdrachten"
       },
       "description": {
         "en": "This table contains a record of your search queries on Facebook.",
@@ -29,7 +29,7 @@
         },
         "Date": {
           "en": "Date",
-          "nl": "Datum"
+          "nl": "Datum en tijd"
         }
       },
       "visualizations": [
@@ -65,8 +65,8 @@
       },
       "headers": {
         "Ad": {
-          "en": "Ad",
-          "nl": "Advertentie"
+          "en": "Interest",
+          "nl": "Interesse"
         }
       },
       "extractor": "ads_interests_to_df",
@@ -94,7 +94,7 @@
           "nl": "Naam"
         },
         "Timestamp": {
-          "en": "Timestamp",
+          "en": "Date",
           "nl": "Datum en tijd"
         }
       },
@@ -120,8 +120,8 @@
       },
       "headers": {
         "Reel interaction": {
-          "en": "Reel interaction",
-          "nl": "Interactie met reels"
+          "en": "Statistic",
+          "nl": "Statistiek"
         },
         "Value": {
           "en": "Value",
@@ -158,7 +158,7 @@
           "nl": "Titel"
         },
         "Timestamp": {
-          "en": "Timestamp",
+          "en": "Date",
           "nl": "Datum en tijd"
         }
       },
@@ -176,8 +176,8 @@
     {
       "id": "facebook_your_events",
       "title": {
-        "en": "Your events",
-        "nl": "Je evenementen"
+        "en": "Events",
+        "nl": "Evenementen"
       },
       "description": {
         "en": "This table contains Facebook events you created or were invited to.",
@@ -189,8 +189,8 @@
           "nl": "Naam"
         },
         "Created": {
-          "en": "Created",
-          "nl": "Aangemaakt"
+          "en": "Date",
+          "nl": "Datum en tijd"
         }
       },
       "extractor": "your_events_to_df",
@@ -206,8 +206,8 @@
     {
       "id": "facebook_your_group_membership_activity",
       "title": {
-        "en": "Facebook groups you are a member of",
-        "nl": "Facebookgroepen waar je lid van bent"
+        "en": "Group membership",
+        "nl": "Groepslidmaatschap"
       },
       "description": {
         "en": "This table lists the Facebook groups you are currently a member of.",
@@ -223,7 +223,7 @@
           "nl": "Groepsnaam"
         },
         "Timestamp": {
-          "en": "Timestamp",
+          "en": "Date",
           "nl": "Datum en tijd"
         }
       },
@@ -250,8 +250,8 @@
       },
       "headers": {
         "Label": {
-          "en": "Label",
-          "nl": "Label"
+          "en": "Setting",
+          "nl": "Instelling"
         },
         "Value": {
           "en": "Value",
@@ -305,12 +305,12 @@
       },
       "headers": {
         "Label": {
-          "en": "Label",
-          "nl": "Label"
+          "en": "How they reached you",
+          "nl": "Hoe zij u bereikten"
         },
         "Value": {
-          "en": "Value",
-          "nl": "Waarde"
+          "en": "Advertiser",
+          "nl": "Adverteerder"
         }
       },
       "extractor": "advertisers_using_your_activity_to_df",
@@ -347,7 +347,7 @@
           "nl": "URL"
         },
         "Timestamp": {
-          "en": "Timestamp",
+          "en": "Date",
           "nl": "Datum en tijd"
         }
       },
@@ -366,8 +366,8 @@
     {
       "id": "facebook_comments",
       "title": {
-        "en": "Your comments",
-        "nl": "Je comments"
+        "en": "Comments",
+        "nl": "Reacties"
       },
       "description": {
         "en": "This table shows all the comments you have made on Facebook posts and other content.",
@@ -383,7 +383,7 @@
           "nl": "Reactie"
         },
         "Timestamp": {
-          "en": "Timestamp",
+          "en": "Date",
           "nl": "Datum en tijd"
         }
       },
@@ -418,7 +418,7 @@
           "nl": "Reactie"
         },
         "Timestamp": {
-          "en": "Timestamp",
+          "en": "Date",
           "nl": "Datum en tijd"
         }
       },
@@ -457,7 +457,7 @@
           "nl": "URL"
         },
         "Timestamp": {
-          "en": "Timestamp",
+          "en": "Date",
           "nl": "Datum en tijd"
         }
       },
@@ -476,8 +476,8 @@
     {
       "id": "facebook_your_contributions",
       "title": {
-        "en": "Your contributions in groups",
-        "nl": "Je bijdragen in groepen"
+        "en": "Contributions in groups",
+        "nl": "Berichten in groepen"
       },
       "description": {
         "en": "This table shows your posts and comments contributed to Facebook groups.",
@@ -490,7 +490,7 @@
         },
         "Date": {
           "en": "Date",
-          "nl": "Datum"
+          "nl": "Datum en tijd"
         },
         "URL": {
           "en": "URL",
@@ -511,8 +511,8 @@
     {
       "id": "facebook_your_comments_in_groups",
       "title": {
-        "en": "Your comments in groups",
-        "nl": "Je comments in groepen"
+        "en": "Comments in groups",
+        "nl": "Reacties in groepen"
       },
       "description": {
         "en": "This table specifically lists the comments you have made in Facebook groups.",
@@ -532,7 +532,7 @@
           "nl": "Groep"
         },
         "Timestamp": {
-          "en": "Timestamp",
+          "en": "Date",
           "nl": "Datum en tijd"
         }
       },
@@ -551,8 +551,8 @@
     {
       "id": "facebook_who_youve_followed",
       "title": {
-        "en": "Who you follow",
-        "nl": "Wie je volgt"
+        "en": "Followed accounts",
+        "nl": "Gevolgde accounts"
       },
       "description": {
         "en": "This table shows the Facebook profiles and pages you currently follow.",
@@ -564,7 +564,7 @@
           "nl": "Naam"
         },
         "Timestamp": {
-          "en": "Timestamp",
+          "en": "Date",
           "nl": "Datum en tijd"
         }
       },
@@ -594,7 +594,7 @@
           "nl": "Titel"
         },
         "Timestamp": {
-          "en": "Timestamp",
+          "en": "Date",
           "nl": "Datum en tijd"
         }
       },
@@ -628,7 +628,7 @@
           "nl": "URL"
         },
         "Timestamp": {
-          "en": "Timestamp",
+          "en": "Date",
           "nl": "Datum en tijd"
         }
       },
@@ -668,7 +668,7 @@
         },
         "Date": {
           "en": "Date",
-          "nl": "Datum"
+          "nl": "Datum en tijd"
         }
       },
       "extractor": "items_viewed_to_df",

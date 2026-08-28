@@ -310,8 +310,8 @@ def following_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) 
         {
           "id": "instagram_following",
           "title": {
-            "en": "Accounts that you follow on Instagram",
-            "nl": "Accounts die je volgt op Instagram"
+            "en": "Followed Accounts",
+            "nl": "Gevolgde Accounts"
           },
           "description": {
             "en": "In this table, you find the accounts that you follow on Instagram.",
@@ -442,7 +442,7 @@ def posts_viewed_to_df(reader: ZipArchiveReader, errors: Counter, validation=Non
             "nl": "In deze tabel zie je de accounts van berichten die je op Instagram hebt bekeken, gesorteerd op tijd. Hieronder vind je visualisaties van verschillende onderdelen van deze tabel. Eerst zie je een tijdlijn met het aantal berichten dat je in de loop van de tijd hebt bekeken. Daarna zie je een histogram dat aangeeft hoeveel berichten je per uur van de dag hebt bekeken."
           },
           "headers": {
-            "Author": {"en": "Author", "nl": "Auteur"},
+            "Author": {"en": "Author", "nl": "Account"},
             "URL": {"en": "URL", "nl": "URL"},
             "Date": {"en": "Date", "nl": "Datum en tijd"}
           },
@@ -453,8 +453,8 @@ def posts_viewed_to_df(reader: ZipArchiveReader, errors: Counter, validation=Non
                 "nl": "Het totale aantal Instagram-berichten dat je in de loop van de tijd hebt bekeken"
               },
               "type": "area",
-              "group": {"column": "Date", "dateFormat": "auto"},
-              "values": [{"label": "Count", "aggregate": "count"}]
+              "group": {"column": "Date", "dateFormat": "auto", "label": {"en": "Date", "nl": "Datum"}},
+              "values": [{"label": {"en": "Number of posts", "nl": "Aantal berichten"}, "aggregate": "count"}]
             },
             {
               "title": {
@@ -462,8 +462,8 @@ def posts_viewed_to_df(reader: ZipArchiveReader, errors: Counter, validation=Non
                 "nl": "Het totale aantal Instagram-berichten dat je per uur van de dag hebt bekeken"
               },
               "type": "bar",
-              "group": {"column": "Date", "dateFormat": "hour_cycle", "label": "Hour of the day"},
-              "values": [{"label": "Count"}]
+              "group": {"column": "Date", "dateFormat": "hour_cycle", "label": {"en": "Hour of the day", "nl": "Uur van de dag"}},
+              "values": [{"label": {"en": "Number of posts", "nl": "Aantal berichten"}}]
             }
           ]
         }
@@ -599,7 +599,7 @@ def videos_watched_to_df(
             "nl": "In deze tabel zie je de accounts van video's die je op Instagram hebt bekeken, gesorteerd op tijd. Hieronder zie je een tijdlijn met het aantal video's dat je in de loop van de tijd hebt bekeken."
           },
           "headers": {
-            "Author": {"en": "Author", "nl": "Auteur"},
+            "Author": {"en": "Author", "nl": "Account"},
             "URL": {"en": "URL", "nl": "URL"},
             "Date": {"en": "Date", "nl": "Datum en tijd"}
           },
@@ -610,8 +610,8 @@ def videos_watched_to_df(
                 "nl": "Het totale aantal video's dat je op Instagram hebt bekeken in de loop van de tijd"
               },
               "type": "area",
-              "group": {"column": "Date", "dateFormat": "auto"},
-              "values": [{"aggregate": "count", "label": "Count"}]
+              "group": {"column": "Date", "dateFormat": "auto", "label": {"en": "Date", "nl": "Datum"}},
+              "values": [{"aggregate": "count", "label": {"en": "Videos watched", "nl": "Bekeken video's"}}]
             }
           ]
         }
@@ -743,7 +743,7 @@ def post_comments_to_df(
           },
           "headers": {
             "Comment": {"en": "Comment", "nl": "Reactie"},
-            "Media owner": {"en": "Media owner", "nl": "Media-eigenaar"},
+            "Media owner": {"en": "Media owner", "nl": "Account"},
             "Date": {"en": "Date", "nl": "Datum en tijd"}
           }
         }
@@ -886,8 +886,8 @@ def liked_comments_to_df(
             "nl": "Lijst van reacties die je leuk vond op Instagram."
           },
           "headers": {
-            "Account name": {"en": "Account name", "nl": "Accountnaam"},
-            "Value": {"en": "Value", "nl": "Waarde"},
+            "Account name": {"en": "Account name", "nl": "Account"},
+            "Value": {"en": "Comment", "nl": "Reactie"},
             "Date": {"en": "Date", "nl": "Datum en tijd"}
           }
         }
@@ -1020,10 +1020,10 @@ def liked_posts_to_df(
             "en": "Instagram liked posts",
             "nl": "Instagram-berichten die je leuk vond"
           },
-          "description": {"en": "", "nl": ""},
+          "description": {"en": "This table shows posts you liked on Instagram, including the account whose post was liked and when the like was given.", "nl": "In deze tabel ziet u de Instagram-berichten die u leuk vond, met de account die het bericht plaatste."},
           "headers": {
-            "Account name": {"en": "Account name", "nl": "Accountnaam"},
-            "Value": {"en": "Value", "nl": "Waarde"},
+            "Account name": {"en": "Account name", "nl": "Account"},
+            "Value": {"en": "Display name", "nl": "Weergavenaam"},
             "Date": {"en": "Date", "nl": "Datum en tijd"}
           },
           "visualizations": [
@@ -1150,13 +1150,13 @@ def story_likes_to_df(
 
         {
           "id": "instagram_story_likes",
-          "title": {"en": "Story likes on Instagram", "nl": "Story-likes op Instagram"},
+          "title": {"en": "Liked Stories", "nl": "Gelikete Stories"},
           "description": {
             "en": "List of Instagram stories you liked.",
             "nl": "Lijst van Instagram-stories die je leuk vond."
           },
           "headers": {
-            "Account name": {"en": "Account name", "nl": "Accountnaam"},
+            "Account name": {"en": "Account name", "nl": "Account"},
             "Date": {"en": "Date", "nl": "Datum en tijd"}
           }
         }
@@ -1263,7 +1263,7 @@ def saved_posts_to_df(
             "Caption": "Caption text of the saved post.",
             "URL": "URL linking to the saved post.",
             "Username": "Username of the account that created the saved post.",
-            "Hashtags": "Space-separated hashtags associated with the saved post, or 'No hashtags' if none.",
+            "Hashtags": "Space-separated hashtags associated with the saved post, or 'Geen hashtags' if none.",
             "Timestamp": "ISO 8601 timestamp of when the post was saved."
           }
         }
@@ -1273,8 +1273,8 @@ def saved_posts_to_df(
         {
           "id": "instagram_saved_posts",
           "title": {
-            "en": "Your saved posts on Instagram",
-            "nl": "Je opgeslagen berichten op Instagram"
+            "en": "Saved posts",
+            "nl": "Opgeslagen berichten"
           },
           "description": {
             "en": "List of posts you have saved on Instagram.",
@@ -1283,7 +1283,7 @@ def saved_posts_to_df(
           "headers": {
             "Caption": {"en": "Caption", "nl": "Bijschrift"},
             "URL": {"en": "URL", "nl": "URL"},
-            "Username": {"en": "Username", "nl": "Gebruikersnaam"},
+            "Username": {"en": "Username", "nl": "Account"},
             "Hashtags": {"en": "Hashtags", "nl": "Hashtags"},
             "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
           }
@@ -1333,7 +1333,7 @@ def _saved_posts_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame
                             tag = eh.find_item(denested, "value")
                             if tag:
                                 tags.append(eh.fix_latin1_string(tag))
-                        hashtags = " ".join(tags) if tags else "No hashtags"
+                        hashtags = " ".join(tags) if tags else "Geen hashtags"
                     elif title == "Owner":
                         dict_list = lv.get("dict", [])
                         for dict_item in dict_list:
@@ -1342,7 +1342,7 @@ def _saved_posts_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame
                                     username = eh.fix_latin1_string(inner.get("value", ""))
 
             if not hashtags:
-                hashtags = "No hashtags"
+                hashtags = "Geen hashtags"
 
             datapoints.append((
                 caption,
@@ -1389,7 +1389,7 @@ def _saved_posts_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame
             _, username = _extract_owner_from_html(section)
 
             # Hashtags
-            hashtags = "No hashtags"
+            hashtags = "Geen hashtags"
             hashtag_h2 = section.xpath('.//h2[text()="Hashtags"]')
             if hashtag_h2:
                 hashtag_div = hashtag_h2[0].getparent()
@@ -1459,8 +1459,8 @@ def word_or_phrase_searches_to_df(
         {
           "id": "instagram_word_or_phrase_searches",
           "title": {
-            "en": "Your searches on Instagram",
-            "nl": "Je zoekopdrachten op Instagram"
+            "en": "Searches",
+            "nl": "Zoekopdrachten"
           },
           "description": {
             "en": "List of words or phrases you have searched for on Instagram.",
@@ -1606,8 +1606,8 @@ def stories_published_to_df(
         {
           "id": "instagram_stories_published",
           "title": {
-            "en": "Stories you published on Instagram",
-            "nl": "Stories die je op Instagram hebt geplaatst"
+            "en": "Published stories",
+            "nl": "Geplaatste stories"
           },
           "description": {
             "en": "List of stories you have published on Instagram.",
@@ -1615,7 +1615,7 @@ def stories_published_to_df(
           },
           "headers": {
             "Text": {"en": "Text", "nl": "Tekst"},
-            "Media type": {"en": "Media type", "nl": "Mediatype"},
+            "Media type": {"en": "File type", "nl": "Bestandstype"},
             "Date": {"en": "Date", "nl": "Datum en tijd"}
           }
         }
@@ -1643,7 +1643,7 @@ def _stories_published_json(reader: ZipArchiveReader, errors: Counter) -> pd.Dat
         for item in items:
             title = eh.fix_latin1_string(item.get("title", ""))
             if not title:
-                title = "Story has no title"
+                title = "Story zonder tekst"
             uri = item.get("uri", "")
             ext = os.path.splitext(uri)[1] if uri else ""
             datapoints.append((
@@ -1683,7 +1683,7 @@ def _stories_published_html(reader: ZipArchiveReader, errors: Counter) -> pd.Dat
             title_h2 = section.xpath(".//h2[contains(@class, '_a6-h') and contains(@class, '_a6-i')]")
             title = title_h2[0].text.strip() if title_h2 and title_h2[0].text else ""
             if not title:
-                title = "Story has no title"
+                title = "Story zonder tekst"
 
             # Timestamp
             ts = section.xpath(".//div[contains(@class, '_a6-o')]")
@@ -1756,7 +1756,7 @@ def advertisers_using_activity_to_df(
           },
           "headers": {
             "Advertiser": {"en": "Advertiser", "nl": "Adverteerder"},
-            "Category": {"en": "Category", "nl": "Categorie"}
+            "Category": {"en": "How they reached you", "nl": "Hoe zij u bereikten"}
           }
         }
     """
@@ -1891,7 +1891,7 @@ def ads_viewed_to_df(
             "nl": "Lijst van advertenties die je op Instagram hebt bekeken."
           },
           "headers": {
-            "Account name": {"en": "Account name", "nl": "Accountnaam"},
+            "Account name": {"en": "Account name", "nl": "Account"},
             "Name": {"en": "Name", "nl": "Naam"},
             "URL": {"en": "URL", "nl": "URL"},
             "Date": {"en": "Date", "nl": "Datum en tijd"}
@@ -1975,8 +1975,8 @@ def profile_searches_to_df(
         {
           "id": "instagram_profile_searches",
           "title": {
-            "en": "Your Instagram profile searches",
-            "nl": "Je Instagram-profielzoekopdrachten"
+            "en": "Profile searches",
+            "nl": "Profielzoekopdrachten"
           },
           "description": {
             "en": "List of profiles you have searched for on Instagram.",
@@ -2066,7 +2066,7 @@ def threads_viewed_to_df(
             "nl": "Lijst van Threads-berichten die je hebt bekeken."
           },
           "headers": {
-            "Author": {"en": "Author", "nl": "Auteur"},
+            "Author": {"en": "Author", "nl": "Account"},
             "URL": {"en": "URL", "nl": "URL"},
             "Date": {"en": "Date", "nl": "Datum en tijd"}
           }
@@ -2258,8 +2258,8 @@ def posts_published_to_df(
         {
           "id": "instagram_posts_published",
           "title": {
-            "en": "Posts you published on Instagram",
-            "nl": "Publieke berichten die je op Instagram hebt geplaatst"
+            "en": "Posts",
+            "nl": "Geplaatste berichten"
           },
           "description": {
             "en": "List of posts you have published on Instagram.",

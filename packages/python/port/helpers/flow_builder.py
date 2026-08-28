@@ -32,8 +32,8 @@ class FlowBuilder:
                 "nl": f"Selecteer uw {self.platform_name} bestand",
             }),
             "review_data_header": props.Translatable({
-                "en": f"Your {self.platform_name} data",
-                "nl": f"Uw {self.platform_name} gegevens",
+                "en": f"Review your data    ",
+                "nl": f"Bekijk uw gegevens",
             }),
             "retry_header": props.Translatable({
                 "en": "Try again",
@@ -41,7 +41,7 @@ class FlowBuilder:
             }),
             "review_data_description": props.Translatable({
                 "en": f"Below you will find a curated selection of {self.platform_name} data.",
-                "nl": f"Hieronder vindt u een zorgvuldig samengestelde selectie van {self.platform_name} gegevens.",
+                "nl": f"Hieronder ziet u de gegevens die uit uw {self.platform_name} datapakket gehaald worden. Op dit moment zijn er nog geen gegevens gedeeld met de onderzoekers van het Centerpanel. Voordat u deze gegevens deelt, kunt u ze bekijken en beslissen wat u wel of niet wilt delen. U kunt gegevens verwijderen door op het selectievakje ernaast te klikken en op Verwijder te klikken. Als u alles hebt gecontroleerd, klik dan op doneren onderaan de pagina.",
             }),
         }
 

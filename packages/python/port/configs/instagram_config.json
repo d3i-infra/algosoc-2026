@@ -16,8 +16,8 @@
     {
       "id": "instagram_following",
       "title": {
-        "en": "Accounts that you follow on Instagram",
-        "nl": "Accounts die je volgt op Instagram"
+        "en": "Followed Accounts",
+        "nl": "Gevolgde Accounts"
       },
       "description": {
         "en": "In this table, you find the accounts that you follow on Instagram.",
@@ -61,7 +61,7 @@
       "headers": {
         "Author": {
           "en": "Author",
-          "nl": "Auteur"
+          "nl": "Account"
         },
         "URL": {
           "en": "URL",
@@ -81,11 +81,18 @@
           "type": "area",
           "group": {
             "column": "Date",
-            "dateFormat": "auto"
+            "dateFormat": "auto",
+            "label": {
+              "en": "Date",
+              "nl": "Datum"
+            }
           },
           "values": [
             {
-              "label": "Count",
+              "label": {
+                "en": "Number of posts",
+                "nl": "Aantal berichten"
+              },
               "aggregate": "count"
             }
           ]
@@ -99,11 +106,17 @@
           "group": {
             "column": "Date",
             "dateFormat": "hour_cycle",
-            "label": "Hour of the day"
+            "label": {
+              "en": "Hour of the day",
+              "nl": "Uur van de dag"
+            }
           },
           "values": [
             {
-              "label": "Count"
+              "label": {
+                "en": "Number of posts",
+                "nl": "Aantal berichten"
+              }
             }
           ]
         }
@@ -132,7 +145,7 @@
       "headers": {
         "Author": {
           "en": "Author",
-          "nl": "Auteur"
+          "nl": "Account"
         },
         "URL": {
           "en": "URL",
@@ -152,12 +165,19 @@
           "type": "area",
           "group": {
             "column": "Date",
-            "dateFormat": "auto"
+            "dateFormat": "auto",
+            "label": {
+              "en": "Date",
+              "nl": "Datum"
+            }
           },
           "values": [
             {
               "aggregate": "count",
-              "label": "Count"
+              "label": {
+                "en": "Videos watched",
+                "nl": "Bekeken video's"
+              }
             }
           ]
         }
@@ -190,7 +210,7 @@
         },
         "Media owner": {
           "en": "Media owner",
-          "nl": "Media-eigenaar"
+          "nl": "Account"
         },
         "Date": {
           "en": "Date",
@@ -221,11 +241,11 @@
       "headers": {
         "Account name": {
           "en": "Account name",
-          "nl": "Accountnaam"
+          "nl": "Account"
         },
         "Value": {
-          "en": "Value",
-          "nl": "Waarde"
+          "en": "Comment",
+          "nl": "Reactie"
         },
         "Date": {
           "en": "Date",
@@ -250,17 +270,17 @@
         "nl": "Instagram-berichten die je leuk vond"
       },
       "description": {
-        "en": "",
-        "nl": ""
+        "en": "This table shows posts you liked on Instagram, including the account whose post was liked and when the like was given.",
+        "nl": "In deze tabel ziet u de Instagram-berichten die u leuk vond, met de account die het bericht plaatste."
       },
       "headers": {
         "Account name": {
           "en": "Account name",
-          "nl": "Accountnaam"
+          "nl": "Account"
         },
         "Value": {
-          "en": "Value",
-          "nl": "Waarde"
+          "en": "Display name",
+          "nl": "Weergavenaam"
         },
         "Date": {
           "en": "Date",
@@ -292,8 +312,8 @@
     {
       "id": "instagram_story_likes",
       "title": {
-        "en": "Story likes on Instagram",
-        "nl": "Story-likes op Instagram"
+        "en": "Liked Stories",
+        "nl": "Gelikete Stories"
       },
       "description": {
         "en": "List of Instagram stories you liked.",
@@ -302,7 +322,7 @@
       "headers": {
         "Account name": {
           "en": "Account name",
-          "nl": "Accountnaam"
+          "nl": "Account"
         },
         "Date": {
           "en": "Date",
@@ -322,8 +342,8 @@
     {
       "id": "instagram_saved_posts",
       "title": {
-        "en": "Your saved posts on Instagram",
-        "nl": "Je opgeslagen berichten op Instagram"
+        "en": "Saved posts",
+        "nl": "Opgeslagen berichten"
       },
       "description": {
         "en": "List of posts you have saved on Instagram.",
@@ -340,7 +360,7 @@
         },
         "Username": {
           "en": "Username",
-          "nl": "Gebruikersnaam"
+          "nl": "Account"
         },
         "Hashtags": {
           "en": "Hashtags",
@@ -359,7 +379,7 @@
           "Caption": "Caption text of the saved post.",
           "URL": "URL linking to the saved post.",
           "Username": "Username of the account that created the saved post.",
-          "Hashtags": "Space-separated hashtags associated with the saved post, or 'No hashtags' if none.",
+          "Hashtags": "Space-separated hashtags associated with the saved post, or 'Geen hashtags' if none.",
           "Timestamp": "ISO 8601 timestamp of when the post was saved."
         }
       }
@@ -367,8 +387,8 @@
     {
       "id": "instagram_word_or_phrase_searches",
       "title": {
-        "en": "Your searches on Instagram",
-        "nl": "Je zoekopdrachten op Instagram"
+        "en": "Searches",
+        "nl": "Zoekopdrachten"
       },
       "description": {
         "en": "List of words or phrases you have searched for on Instagram.",
@@ -397,8 +417,8 @@
     {
       "id": "instagram_stories_published",
       "title": {
-        "en": "Stories you published on Instagram",
-        "nl": "Stories die je op Instagram hebt geplaatst"
+        "en": "Published stories",
+        "nl": "Geplaatste stories"
       },
       "description": {
         "en": "List of stories you have published on Instagram.",
@@ -410,8 +430,8 @@
           "nl": "Tekst"
         },
         "Media type": {
-          "en": "Media type",
-          "nl": "Mediatype"
+          "en": "File type",
+          "nl": "Bestandstype"
         },
         "Date": {
           "en": "Date",
@@ -445,8 +465,8 @@
           "nl": "Adverteerder"
         },
         "Category": {
-          "en": "Category",
-          "nl": "Categorie"
+          "en": "How they reached you",
+          "nl": "Hoe zij u bereikten"
         }
       },
       "extractor": "advertisers_using_activity_to_df",
@@ -472,7 +492,7 @@
       "headers": {
         "Account name": {
           "en": "Account name",
-          "nl": "Accountnaam"
+          "nl": "Account"
         },
         "Name": {
           "en": "Name",
@@ -502,8 +522,8 @@
     {
       "id": "instagram_profile_searches",
       "title": {
-        "en": "Your Instagram profile searches",
-        "nl": "Je Instagram-profielzoekopdrachten"
+        "en": "Profile searches",
+        "nl": "Profielzoekopdrachten"
       },
       "description": {
         "en": "List of profiles you have searched for on Instagram.",
@@ -542,7 +562,7 @@
       "headers": {
         "Author": {
           "en": "Author",
-          "nl": "Auteur"
+          "nl": "Account"
         },
         "URL": {
           "en": "URL",
@@ -607,8 +627,8 @@
     {
       "id": "instagram_posts_published",
       "title": {
-        "en": "Posts you published on Instagram",
-        "nl": "Publieke berichten die je op Instagram hebt geplaatst"
+        "en": "Posts",
+        "nl": "Geplaatste berichten"
       },
       "description": {
         "en": "List of posts you have published on Instagram.",

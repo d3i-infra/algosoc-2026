@@ -138,8 +138,8 @@ def who_youve_followed_to_df(reader: ZipArchiveReader, errors: Counter, validati
         {
           "id": "facebook_who_youve_followed",
           "title": {
-            "en": "Who you follow",
-            "nl": "Wie je volgt"
+            "en": "Followed accounts",
+            "nl": "Gevolgde accounts"
           },
           "description": {
             "en": "This table shows the Facebook profiles and pages you currently follow.",
@@ -147,7 +147,7 @@ def who_youve_followed_to_df(reader: ZipArchiveReader, errors: Counter, validati
           },
           "headers": {
             "Name": {"en": "Name", "nl": "Naam"},
-            "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
+            "Timestamp": {"en": "Date", "nl": "Datum en tijd"}
           }
         }
     """
@@ -336,7 +336,7 @@ def notifications_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFra
             "Text": {"en": "Text", "nl": "Tekst"},
             "Link": {"en": "Link", "nl": "Link"},
             "Read": {"en": "Read", "nl": "Gelezen"},
-            "Date": {"en": "Date", "nl": "Datum"}
+            "Date": {"en": "Date", "nl": "Datum en tijd"}
           }
         }
     """
@@ -480,7 +480,7 @@ def facebook_reels_usage_to_df(reader: ZipArchiveReader, errors: Counter, valida
             "nl": "Deze tabel toont je interacties met Facebook Reels, zoals video's die je hebt bekeken of waarmee je hebt gecommuniceerd."
           },
           "headers": {
-            "Reel interaction": {"en": "Reel interaction", "nl": "Interactie met reels"},
+            "Reel interaction": {"en": "Statistic", "nl": "Statistiek"},
             "Value": {"en": "Value", "nl": "Waarde"}
           }
         }
@@ -647,8 +647,8 @@ def your_search_history_to_df(reader: ZipArchiveReader, errors: Counter, validat
         {
           "id": "facebook_search_history",
           "title": {
-            "en": "Your search history",
-            "nl": "Je zoekgeschiedenis"
+            "en": "Searches",
+            "nl": "Zoekopdrachten"
           },
           "description": {
             "en": "This table contains a record of your search queries on Facebook.",
@@ -656,7 +656,7 @@ def your_search_history_to_df(reader: ZipArchiveReader, errors: Counter, validat
           },
           "headers": {
             "Search term": {"en": "Search term", "nl": "Zoekterm"},
-            "Date": {"en": "Date", "nl": "Datum"}
+            "Date": {"en": "Date", "nl": "Datum en tijd"}
           },
           "visualizations": [
             {
@@ -834,7 +834,7 @@ def ads_interests_to_df(reader: ZipArchiveReader, errors: Counter, validation=No
             "nl": "Deze tabel toont de interesses die Facebook heeft geïdentificeerd om je gepersonaliseerde advertenties te tonen."
           },
           "headers": {
-            "Ad": {"en": "Ad", "nl": "Advertentie"}
+            "Ad": {"en": "Interest", "nl": "Interesse"}
           }
         }
     """
@@ -940,7 +940,7 @@ def recently_viewed_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataF
             "Category": {"en": "Category", "nl": "Categorie"},
             "Name": {"en": "Name", "nl": "Naam"},
             "Link": {"en": "Link", "nl": "Link"},
-            "Date": {"en": "Date", "nl": "Datum"}
+            "Date": {"en": "Date", "nl": "Datum en tijd"}
           }
         }
     """
@@ -1031,7 +1031,7 @@ def recently_visited_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.Data
             "Category": {"en": "Category", "nl": "Categorie"},
             "Name": {"en": "Name", "nl": "Naam"},
             "Link": {"en": "Link", "nl": "Link"},
-            "Date": {"en": "Date", "nl": "Datum"}
+            "Date": {"en": "Date", "nl": "Datum en tijd"}
           }
         }
     """
@@ -1106,7 +1106,7 @@ def profile_update_history_to_df(reader: ZipArchiveReader, errors: Counter) -> p
           },
           "headers": {
             "Title": {"en": "Title", "nl": "Titel"},
-            "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
+            "Timestamp": {"en": "Date", "nl": "Datum en tijd"}
           }
         }
     """
@@ -1167,8 +1167,8 @@ def your_events_to_df(reader: ZipArchiveReader, errors: Counter, validation=None
         {
           "id": "facebook_your_events",
           "title": {
-            "en": "Your events",
-            "nl": "Je evenementen"
+            "en": "Events",
+            "nl": "Evenementen"
           },
           "description": {
             "en": "This table contains Facebook events you created or were invited to.",
@@ -1176,7 +1176,7 @@ def your_events_to_df(reader: ZipArchiveReader, errors: Counter, validation=None
           },
           "headers": {
             "Name": {"en": "Name", "nl": "Naam"},
-            "Created": {"en": "Created", "nl": "Aangemaakt"}
+            "Created": {"en": "Date", "nl": "Datum en tijd"}
           }
         }
     """
@@ -1285,7 +1285,7 @@ def group_posts_and_comments_to_df(reader: ZipArchiveReader, errors: Counter) ->
           "headers": {
             "Title": {"en": "Title", "nl": "Titel"},
             "Post": {"en": "Post", "nl": "Bericht"},
-            "Date": {"en": "Date", "nl": "Datum"},
+            "Date": {"en": "Date", "nl": "Datum en tijd"},
             "URL": {"en": "URL", "nl": "URL"}
           }
         }
@@ -1422,8 +1422,8 @@ def your_comments_in_groups_to_df(reader: ZipArchiveReader, errors: Counter, val
         {
           "id": "facebook_your_comments_in_groups",
           "title": {
-            "en": "Your comments in groups",
-            "nl": "Je comments in groepen"
+            "en": "Comments in groups",
+            "nl": "Reacties in groepen"
           },
           "description": {
             "en": "This table specifically lists the comments you have made in Facebook groups.",
@@ -1433,7 +1433,7 @@ def your_comments_in_groups_to_df(reader: ZipArchiveReader, errors: Counter, val
             "Title": {"en": "Title", "nl": "Titel"},
             "Comment": {"en": "Comment", "nl": "Reactie"},
             "Group": {"en": "Group", "nl": "Groep"},
-            "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
+            "Timestamp": {"en": "Date", "nl": "Datum en tijd"}
           }
         }
     """
@@ -1511,8 +1511,8 @@ def your_group_membership_activity_to_df(reader: ZipArchiveReader, errors: Count
         {
           "id": "facebook_your_group_membership_activity",
           "title": {
-            "en": "Facebook groups you are a member of",
-            "nl": "Facebookgroepen waar je lid van bent"
+            "en": "Group membership",
+            "nl": "Groepslidmaatschap"
           },
           "description": {
             "en": "This table lists the Facebook groups you are currently a member of.",
@@ -1521,7 +1521,7 @@ def your_group_membership_activity_to_df(reader: ZipArchiveReader, errors: Count
           "headers": {
             "Title": {"en": "Title", "nl": "Titel"},
             "Group name": {"en": "Group name", "nl": "Groepsnaam"},
-            "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
+            "Timestamp": {"en": "Date", "nl": "Datum en tijd"}
           }
         }
     """
@@ -1644,7 +1644,7 @@ def pages_and_profiles_you_follow_to_df(reader: ZipArchiveReader, errors: Counte
           },
           "headers": {
             "Title": {"en": "Title", "nl": "Titel"},
-            "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
+            "Timestamp": {"en": "Date", "nl": "Datum en tijd"}
           }
         }
     """
@@ -1754,7 +1754,7 @@ def pages_youve_liked_to_df(reader: ZipArchiveReader, errors: Counter, validatio
           "headers": {
             "Name": {"en": "Name", "nl": "Naam"},
             "URL": {"en": "URL", "nl": "URL"},
-            "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
+            "Timestamp": {"en": "Date", "nl": "Datum en tijd"}
           }
         }
     """
@@ -1866,7 +1866,7 @@ def your_saved_items_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.Data
           },
           "headers": {
             "Title": {"en": "Title", "nl": "Titel"},
-            "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
+            "Timestamp": {"en": "Date", "nl": "Datum en tijd"}
           }
         }
     """
@@ -1929,8 +1929,8 @@ def comments_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -
         {
           "id": "facebook_comments",
           "title": {
-            "en": "Your comments",
-            "nl": "Je comments"
+            "en": "Comments",
+            "nl": "Reacties"
           },
           "description": {
             "en": "This table shows all the comments you have made on Facebook posts and other content.",
@@ -1939,7 +1939,7 @@ def comments_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -
           "headers": {
             "Title": {"en": "Title", "nl": "Titel"},
             "Comment": {"en": "Comment", "nl": "Reactie"},
-            "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
+            "Timestamp": {"en": "Date", "nl": "Datum en tijd"}
           }
         }
     """
@@ -2057,7 +2057,7 @@ def likes_and_reactions_to_df(reader: ZipArchiveReader, errors: Counter, validat
           "headers": {
             "Title": {"en": "Title", "nl": "Titel"},
             "Reaction": {"en": "Reaction", "nl": "Reactie"},
-            "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
+            "Timestamp": {"en": "Date", "nl": "Datum en tijd"}
           }
         }
     """
@@ -2261,7 +2261,7 @@ def your_pages_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
           "headers": {
             "Name": {"en": "Name", "nl": "Naam"},
             "URL": {"en": "URL", "nl": "URL"},
-            "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
+            "Timestamp": {"en": "Date", "nl": "Datum en tijd"}
           }
         }
     """
@@ -2405,7 +2405,7 @@ def your_posts_check_ins_to_df(reader: ZipArchiveReader, errors: Counter, valida
             "Title": {"en": "Title", "nl": "Titel"},
             "Post": {"en": "Post", "nl": "Bericht"},
             "URL": {"en": "URL", "nl": "URL"},
-            "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
+            "Timestamp": {"en": "Date", "nl": "Datum en tijd"}
           }
         }
     """
@@ -2532,7 +2532,7 @@ def likes_and_reactions_base_to_df(reader: ZipArchiveReader, errors: Counter) ->
             "Reaction": {"en": "Reaction", "nl": "Reactie"},
             "Name": {"en": "Name", "nl": "Naam"},
             "URL": {"en": "URL", "nl": "URL"},
-            "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
+            "Timestamp": {"en": "Date", "nl": "Datum en tijd"}
           }
         }
     """
@@ -2614,7 +2614,7 @@ def controls_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
           "headers": {
             "Action": {"en": "Action", "nl": "Actie"},
             "Content": {"en": "Content", "nl": "Inhoud"},
-            "Date": {"en": "Date", "nl": "Datum"}
+            "Date": {"en": "Date", "nl": "Datum en tijd"}
           }
         }
     """
@@ -2694,7 +2694,7 @@ def profile_visits_to_df(reader: ZipArchiveReader, errors: Counter, validation=N
           },
           "headers": {
             "Name": {"en": "Name", "nl": "Naam"},
-            "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
+            "Timestamp": {"en": "Date", "nl": "Datum en tijd"}
           }
         }
     """
@@ -2799,7 +2799,7 @@ def video_consumption_summary_to_df(reader: ZipArchiveReader, errors: Counter, v
             "nl": "Deze tabel toont hoeveel tijd je hebt besteed aan het bekijken van video's op Facebook, ingedeeld per tijdsperiode."
           },
           "headers": {
-            "Label": {"en": "Label", "nl": "Label"},
+            "Label": {"en": "Type of consumption", "nl": "Soort weergave"},
             "Value": {"en": "Value", "nl": "Waarde"}
           }
         }
@@ -2908,7 +2908,7 @@ def link_history_to_df(reader: ZipArchiveReader, errors: Counter, validation=Non
           "headers": {
             "URL": {"en": "URL", "nl": "URL"},
             "Title": {"en": "Title", "nl": "Titel"},
-            "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
+            "Timestamp": {"en": "Date", "nl": "Datum en tijd"}
           }
         }
     """
@@ -2934,7 +2934,7 @@ def _link_history_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFram
             label_values = item.get("label_values", [])
             for lv in label_values:
                 if lv.get("label") == "Title of website page you visited":
-                    title = lv.get("value", "Page has no title")
+                    title = lv.get("value", "Pagina heeft geen titel")
                     break
             datapoints.append((
                 eh.find_item(denested_dict, "href"),
@@ -3022,7 +3022,7 @@ def ad_preferences_to_df(reader: ZipArchiveReader, errors: Counter, validation=N
             "nl": "Deze tabel toont je advertentievoorkeuren op Facebook, inclusief targetinginstellingen en opt-outs."
           },
           "headers": {
-            "Label": {"en": "Label", "nl": "Label"},
+            "Label": {"en": "Setting", "nl": "Instelling"},
             "Value": {"en": "Value", "nl": "Waarde"}
           }
         }
@@ -3296,8 +3296,8 @@ def advertisers_using_your_activity_to_df(reader: ZipArchiveReader, errors: Coun
             "nl": "Deze tabel toont adverteerders die je activiteit of informatie hebben gebruikt om je te targeten op Facebook."
           },
           "headers": {
-            "Label": {"en": "Label", "nl": "Label"},
-            "Value": {"en": "Value", "nl": "Waarde"}
+            "Label": {"en": "How they reached you", "nl": "Hoe zij u bereikten"},
+            "Value": {"en": "Advertiser", "nl": "Adverteerder"}
           }
         }
     """
@@ -3431,7 +3431,7 @@ def advertisers_youve_interacted_with_to_df(reader: ZipArchiveReader, errors: Co
             "Action": {"en": "Action", "nl": "Actie"},
             "Title": {"en": "Title", "nl": "Titel"},
             "URL": {"en": "URL", "nl": "URL"},
-            "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
+            "Timestamp": {"en": "Date", "nl": "Datum en tijd"}
           }
         }
     """
@@ -3558,8 +3558,8 @@ def your_contributions_to_df(reader: ZipArchiveReader, errors: Counter, validati
         {
           "id": "facebook_your_contributions",
           "title": {
-            "en": "Your contributions in groups",
-            "nl": "Je bijdragen in groepen"
+            "en": "Contributions in groups",
+            "nl": "Berichten in groepen"
           },
           "description": {
             "en": "This table shows your posts and comments contributed to Facebook groups.",
@@ -3567,7 +3567,7 @@ def your_contributions_to_df(reader: ZipArchiveReader, errors: Counter, validati
           },
           "headers": {
             "Value": {"en": "Value", "nl": "Waarde"},
-            "Date": {"en": "Date", "nl": "Datum"},
+            "Date": {"en": "Date", "nl": "Datum en tijd"},
             "URL": {"en": "URL", "nl": "URL"}
           }
         }
@@ -3694,7 +3694,7 @@ def items_viewed_to_df(reader: ZipArchiveReader, errors: Counter, validation=Non
             "Title": {"en": "Title", "nl": "Titel"},
             "Product Name": {"en": "Product Name", "nl": "Productnaam"},
             "Description": {"en": "Description", "nl": "Beschrijving"},
-            "Date": {"en": "Date", "nl": "Datum"}
+            "Date": {"en": "Date", "nl": "Datum en tijd"}
           }
         }
     """

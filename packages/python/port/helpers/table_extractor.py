@@ -172,7 +172,7 @@ def run_extraction(reader, errors: Counter, config: list[TableConfig]) -> Extrac
             t.description = props.Translatable({
                 k: v + " " + msg for k, v in t.description.translations.items()
             })
-            t.data_frame = pd.DataFrame({"info": ["No data, see description"]})
+            t.data_frame = pd.DataFrame({"Geen gegevens": ["Geen gegevens gevonden, zie de beschrijving hierboven."]})
 
     return ExtractionResult(
         tables=tables,
