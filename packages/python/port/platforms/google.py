@@ -77,14 +77,13 @@ logger = logging.getLogger(__name__)
 #: to a bare filename that occurs in more than one folder of the archive — that lookup
 #: is ambiguous and resolves to nothing.
 #:
-#: Adding a locale is one block; nothing outside this file needs to change.
+#: Adding a DDP locale is one block; nothing outside this needs to change to extract the
+#: files.
 #:
-#: The English, Dutch and German filenames come from real DDPs, and the German folder
-#: names as well. The Arabic, Turkish and Chinese entries are derived from the labels
-#: YouTube uses for these pages in those languages and have not been checked against a
-#: real export yet — capitalization and spacing are the most likely thing to be wrong.
-#: Chinese covers Simplified only; a Traditional export writes different characters
-#: (e.g. 觀看紀錄 instead of 观看记录).
+#: Most entries come from real DDPs; the remaining ones are derived from the older labels
+#: Google uses/used for these pages in that language. They are kept side by side, where 
+#: the extraction will be performed to the first item that matches (``Anzeigen``/``Ads``,
+#: ``MyActivity``/``MeineAktivitäten``). Chinese covers Simplified only.
 TAKEOUT_PATHS: dict[str, dict[str, list[str]]] = {
     "en": {
         "youtube.watch_history": ["YouTube and YouTube Music/history/watch-history", "My Activity/YouTube/MyActivity"],
@@ -113,68 +112,68 @@ TAKEOUT_PATHS: dict[str, dict[str, list[str]]] = {
         "news.history": ["Mijn activiteit/Nieuws/MyActivity"],
     },
     "de": {
-        "youtube.watch_history": ["YouTube und YouTube Music/Verlauf/Wiedergabeverlauf", "Meine Aktivitäten/YouTube/MyActivity"],
-        "youtube.search_history": ["YouTube und YouTube Music/Verlauf/Suchverlauf", "Meine Aktivitäten/YouTube/MyActivity"],
+        "youtube.watch_history": ["YouTube und YouTube Music/Verlauf/Wiedergabeverlauf", "Meine Aktivitäten/YouTube/MyActivity", "Meine Aktivitäten/YouTube/MeineAktivitäten"],
+        "youtube.search_history": ["YouTube und YouTube Music/Verlauf/Suchverlauf", "Meine Aktivitäten/YouTube/MyActivity", "Meine Aktivitäten/YouTube/MeineAktivitäten"],
         "youtube.subscriptions": ["YouTube und YouTube Music/Abos/Abos"],
         "youtube.comments": ["YouTube und YouTube Music/Kommentare/Kommentare"],
-        "search.search_history": ["Meine Aktivitäten/Suche/MyActivity"],
-        "chrome.history": ["Chrome/Verlauf", "Meine Aktivitäten/Chrome/MyActivity"],
-        "video_search.history": ["Meine Aktivitäten/Videosuchen/MyActivity"],
-        "ads.history": ["Meine Aktivitäten/Anzeigen/MyActivity"],
-        "discover.history": ["Meine Aktivitäten/Entdecken/MyActivity"],
-        "google_news.history": ["Meine Aktivitäten/Google News/MyActivity"],
+        "search.search_history": ["Meine Aktivitäten/Suche/MyActivity", "Meine Aktivitäten/Google Suche/MyActivity", "Meine Aktivitäten/Google Suche/MeineAktivitäten"],
+        "chrome.history": ["Chrome/Verlauf", "Meine Aktivitäten/Chrome/MyActivity", "Meine Aktivitäten/Chrome/MeineAktivitäten"],
+        "video_search.history": ["Meine Aktivitäten/Videosuchen/MyActivity", "Meine Aktivitäten/Videosuche/MyActivity", "Meine Aktivitäten/Videosuche/MeineAktivitäten"],
+        "ads.history": ["Meine Aktivitäten/Anzeigen/MyActivity", "Meine Aktivitäten/Anzeigen/MeineAktivitäten"],
+        "discover.history": ["Meine Aktivitäten/Entdecken/MyActivity", "Meine Aktivitäten/Entdecken/MeineAktivitäten"],
+        "google_news.history": ["Meine Aktivitäten/Google News/MyActivity", "Meine Aktivitäten/Google News/MeineAktivitäten"],
         "news.history": ["Meine Aktivitäten/Nachrichten/MyActivity"],
     },
     "es": {
-        "youtube.watch_history": ["YouTube y YouTube Music/historial/historial de reproducciones", "Mi actividad/YouTube/MyActivity"],
-        "youtube.search_history": ["YouTube y YouTube Music/historial/historial de búsquedas", "Mi actividad/YouTube/MyActivity"],
+        "youtube.watch_history": ["YouTube y YouTube Music/historial/historial de reproducciones", "YouTube y YouTube Music/historial/historial-de-reproducciones", "Mi actividad/YouTube/MyActivity"],
+        "youtube.search_history": ["YouTube y YouTube Music/historial/historial de búsquedas", "YouTube y YouTube Music/historial/historial-de-búsquedas", "Mi actividad/YouTube/MyActivity"],
         "youtube.subscriptions": ["YouTube y YouTube Music/suscripciones/suscripciones"],
         "youtube.comments": ["YouTube y YouTube Music/comentarios/comentarios"],
-        "search.search_history": ["Mi actividad/Búsqueda/MyActivity"],
-        "chrome.history": ["Chrome/Historial", "Mi actividad/Chrome/MyActivity"],
-        "video_search.history": ["Mi actividad/Búsqueda de videos/MyActivity"],
-        "ads.history": ["Mi actividad/Anuncios/MyActivity"],
-        "discover.history": ["Mi actividad/Descubrir/MyActivity"],
-        "google_news.history": ["Mi actividad/Google Noticias/MyActivity"],
-        "news.history": ["Mi actividad/Noticias/MyActivity"],
+        "search.search_history": ["Mi actividad/Búsqueda/MyActivity", "Mi actividad/Búsqueda/MiActividad"],
+        "chrome.history": ["Chrome/Historial", "Mi actividad/Chrome/MyActivity", "Mi actividad/Chrome/MiActividad"],
+        "video_search.history": ["Mi actividad/Búsqueda de videos/MyActivity", "Mi actividad/Búsqueda de videos/MiActividad"],
+        "ads.history": ["Mi actividad/Publicidad/MyActivity", "Mi actividad/Publicidad/MiActividad"],
+        "discover.history": ["Mi actividad/Discover/MyActivity", "Mi actividad/Discover/MiActividad", "Mi actividad/Descubrir/MyActivity", "Mi actividad/Descubrir/MiActividad"],
+        "google_news.history": ["Mi actividad/Google News/MyActivity", "Mi actividad/Google News/MiActividad", "Mi actividad/Google Noticias/MyActivity", "Mi actividad/Google Noticias/MiActividad"],
+        "news.history": ["Mi actividad/Noticias/MyActivity", "Mi actividad/Noticias/MiActividad"],
     },
     "ar": {
-        "youtube.watch_history": ["YouTube و YouTube Music/سجل/سجل المشاهدة", "أنشطتي/YouTube/MyActivity"],
-        "youtube.search_history": ["YouTube و YouTube Music/سجل/سجل البحث", "أنشطتي/YouTube/MyActivity"],
-        "youtube.subscriptions": ["YouTube و YouTube Music/اشتراكات/اشتراكات"],
-        "youtube.comments": ["YouTube و YouTube Music/تعليقات/تعليقات"],
-        "search.search_history": ["أنشطتي/بحث/MyActivity"],
-        "chrome.history": ["Chrome/السجل", "أنشطتي/Chrome/MyActivity"],
-        "video_search.history": ["أنشطتي/البحث عن الفيديو/MyActivity"],
-        "ads.history": ["أنشطتي/الإعلانات/MyActivity"],
-        "discover.history": ["أنشطتي/اكتشف/MyActivity"],
-        "google_news.history": ["أنشطتي/أخبار جوجل/MyActivity"],
+        "youtube.watch_history": ["YouTube و YouTube Music/سجل/سجل المشاهدة", "YouTube وYouTube Music/السجلّ/سجل المشاهدة", "أنشطتي/YouTube/MyActivity", "نشاطي/YouTube/MyActivity", "نشاطي/YouTube/نشاطي"],
+        "youtube.search_history": ["YouTube و YouTube Music/سجل/سجل البحث", "YouTube وYouTube Music/السجلّ/سجلّ البحث", "أنشطتي/YouTube/MyActivity", "نشاطي/YouTube/MyActivity", "نشاطي/YouTube/نشاطي"],
+        "youtube.subscriptions": ["YouTube و YouTube Music/اشتراكات/اشتراكات", "YouTube وYouTube Music/اشتراكات/اشتراكات"],
+        "youtube.comments": ["YouTube و YouTube Music/تعليقات/تعليقات", "YouTube وYouTube Music/تعليقات/تعليقات"],
+        "search.search_history": ["أنشطتي/بحث/MyActivity", "نشاطي/البحث/MyActivity", "نشاطي/البحث/نشاطي"],
+        "chrome.history": ["Chrome/السجل", "Chrome/السجلّ", "أنشطتي/Chrome/MyActivity", "نشاطي/Chrome/MyActivity", "نشاطي/Chrome/نشاطي"],
+        "video_search.history": ["أنشطتي/البحث عن الفيديو/MyActivity", "نشاطي/بحث الفيديو/MyActivity", "نشاطي/بحث الفيديو/نشاطي"],
+        "ads.history": ["أنشطتي/الإعلانات/MyActivity", "نشاطي/الإعلانات/MyActivity", "نشاطي/الإعلانات/نشاطي"],
+        "discover.history": ["أنشطتي/اكتشف/MyActivity", "نشاطي/اكتشف/MyActivity", "نشاطي/اكتشف/نشاطي"],
+        "google_news.history": ["أنشطتي/أخبار جوجل/MyActivity", "نشاطي/أخبار Google/MyActivity", "نشاطي/أخبار Google/نشاطي"],
         "news.history": ["أنشطتي/الأخبار/MyActivity"],
     },
     "tr": {
-        "youtube.watch_history": ["YouTube ve YouTube Music/geçmiş/İzleme geçmişi", "Etkinliğim/YouTube/MyActivity"],
-        "youtube.search_history": ["YouTube ve YouTube Music/geçmiş/Arama geçmişi", "Etkinliğim/YouTube/MyActivity"],
+        "youtube.watch_history": ["YouTube ve YouTube Music/geçmiş/İzleme geçmişi", "YouTube ve YouTube Music/geçmiş/izleme geçmişi", "Etkinliğim/YouTube/MyActivity", "Etkinliğim/YouTube/Etkinliğim"],
+        "youtube.search_history": ["YouTube ve YouTube Music/geçmiş/Arama geçmişi", "YouTube ve YouTube Music/geçmiş/arama geçmişi", "Etkinliğim/YouTube/MyActivity", "Etkinliğim/YouTube/Etkinliğim"],
         "youtube.subscriptions": ["YouTube ve YouTube Music/Abonelikler/Abonelikler"],
         "youtube.comments": ["YouTube ve YouTube Music/Yorumlar/Yorumlar"],
-        "search.search_history": ["Etkinliğim/Arama/MyActivity"],
-        "chrome.history": ["Chrome/Geçmiş", "Etkinliğim/Chrome/MyActivity"],
-        "video_search.history": ["Etkinliğim/Video Arama/MyActivity"],
-        "ads.history": ["Etkinliğim/Reklamlar/MyActivity"],
-        "discover.history": ["Etkinliğim/Keşfet/MyActivity"],
-        "google_news.history": ["Etkinliğim/Google Haberler/MyActivity"],
+        "search.search_history": ["Etkinliğim/Arama/MyActivity", "Etkinliğim/Arama/Etkinliğim"],
+        "chrome.history": ["Chrome/Geçmiş", "Chrome/Tarih", "Etkinliğim/Chrome/MyActivity", "Etkinliğim/Chrome/Etkinliğim"],
+        "video_search.history": ["Etkinliğim/Video Arama/MyActivity", "Etkinliğim/Video Arama/Etkinliğim"],
+        "ads.history": ["Etkinliğim/Reklamlar/MyActivity", "Etkinliğim/Reklamlar/Etkinliğim"],
+        "discover.history": ["Etkinliğim/Keşfet/MyActivity", "Etkinliğim/Keşfet/Etkinliğim"],
+        "google_news.history": ["Etkinliğim/Google Haberler/MyActivity", "Etkinliğim/Google Haberler/Etkinliğim"],
         "news.history": ["Etkinliğim/Haberler/MyActivity"],
     },
     "zh": {
-        "youtube.watch_history": ["YouTube 和 YouTube Music/记录/观看记录", "我的活动/YouTube/MyActivity"],
-        "youtube.search_history": ["YouTube 和 YouTube Music/记录/搜索记录", "我的活动/YouTube/MyActivity"],
+        "youtube.watch_history": ["YouTube 和 YouTube Music/记录/观看记录", "YouTube 和 YouTube Music/历史记录/观看记录", "我的活动/YouTube/MyActivity", "我的活动/YouTube/我的活动记录"],
+        "youtube.search_history": ["YouTube 和 YouTube Music/记录/搜索记录", "YouTube 和 YouTube Music/历史记录/搜索记录", "我的活动/YouTube/MyActivity", "我的活动/YouTube/我的活动记录"],
         "youtube.subscriptions": ["YouTube 和 YouTube Music/订阅内容/订阅内容"],
         "youtube.comments": ["YouTube 和 YouTube Music/评论/评论"],
-        "search.search_history": ["我的活动/搜索/MyActivity"],
-        "chrome.history": ["Chrome/历史记录", "我的活动/Chrome/MyActivity"],
-        "video_search.history": ["我的活动/视频搜索/MyActivity"],
-        "ads.history": ["我的活动/广告/MyActivity"],
-        "discover.history": ["我的活动/发现/MyActivity"],
-        "google_news.history": ["我的活动/Google 新闻/MyActivity"],
+        "search.search_history": ["我的活动/搜索/MyActivity", "我的活动/Search/MyActivity", "我的活动/Search/我的活动记录"],
+        "chrome.history": ["Chrome/历史记录", "我的活动/Chrome/MyActivity", "我的活动/Chrome/我的活动记录"],
+        "video_search.history": ["我的活动/视频搜索/MyActivity", "我的活动/Video Search/MyActivity", "我的活动/Video Search/我的活动记录"],
+        "ads.history": ["我的活动/广告/MyActivity", "我的活动/Ads/MyActivity", "我的活动/Ads/我的活动记录"],
+        "discover.history": ["我的活动/发现/MyActivity", "我的活动/发现/我的活动记录"],
+        "google_news.history": ["我的活动/Google 新闻/MyActivity", "我的活动/Google News/MyActivity", "我的活动/Google News/我的活动记录"],
         "news.history": ["我的活动/新闻/MyActivity"],
     },
 }
