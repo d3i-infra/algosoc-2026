@@ -92,8 +92,8 @@ pytests/scenarios/*PRIVATE.json
 
 .~lock.*#
 
-# Config files (keep example configs)
-*_config.json
+# Config files: this study commits its platform configs — deployment serves
+# /config?platform=<name> from the checkout (upstream keeps only the example).
 !*example_config.json
 
 # Claude Code: track shared settings.json only — local overrides and agent

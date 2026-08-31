@@ -1,4 +1,5 @@
-"""Study-side anonymization helpers (algosoc-2026): email and username redaction.
+"""Study-side extraction helpers (algosoc-2026): email/username redaction and the
+typed XPath helper the study's HTML extractors use.
 
 These helpers are study-local — they are applied inside each platform's
 ``extraction()`` after the tables are built, so they must leave missing cells
@@ -82,3 +83,23 @@ class TestAnonymizeDataframe:
         df = pd.DataFrame({"Title": pd.Series([], dtype="object")})
         anonymize_dataframe(df, ["Title"], username="jane")
         assert df.empty
+
+
+class TestXpathNodes:
+    def test_node_query_returns_the_element_list(self):
+        from lxml import etree
+        from port.helpers.extraction_helpers import xpath_nodes
+
+        tree = etree.HTML("<html><body><section>a</section><section>b</section></body></html>")
+        nodes = xpath_nodes(tree, "//section")
+        assert [n.text for n in nodes] == ["a", "b"]
+
+    def test_non_node_results_are_no_matches(self):
+        from lxml import etree
+        from port.helpers.extraction_helpers import xpath_nodes
+
+        tree = etree.HTML("<html><body><p>x</p></body></html>")
+        assert xpath_nodes(tree, "count(//p)") == []
+        assert xpath_nodes(tree, "string(//p)") == []
+        assert xpath_nodes(tree, "boolean(//p)") == []
+        assert xpath_nodes(tree, "//nothing") == []

@@ -1,0 +1,712 @@
+{
+  "platform_info": {
+    "name": "Facebook",
+    "filetypes": [
+      "json"
+    ],
+    "languages": [
+      "en",
+      "nl"
+    ],
+    "description": "Handles DDPs in English. These data donation flows have not been tested yet, if you find anything wrong with them report to datadonation@uu.nl and they will be fixed!",
+    "time_last_tested": "not yet implemented"
+  },
+  "tables": [
+    {
+      "id": "facebook_search_history",
+      "title": {
+        "en": "Searches",
+        "nl": "Zoekopdrachten"
+      },
+      "description": {
+        "en": "This table contains a record of your search queries on Facebook.",
+        "nl": "Deze tabel bevat een overzicht van je zoekopdrachten op Facebook."
+      },
+      "headers": {
+        "Search term": {
+          "en": "Search term",
+          "nl": "Zoekterm"
+        },
+        "Date": {
+          "en": "Date",
+          "nl": "Datum en tijd"
+        }
+      },
+      "visualizations": [
+        {
+          "title": {
+            "en": "Terms you searched for",
+            "nl": "Zoektermen waar je naar zocht"
+          },
+          "type": "wordcloud",
+          "textColumn": "Search term",
+          "tokenize": false
+        }
+      ],
+      "extractor": "your_search_history_to_df",
+      "documentation": {
+        "summary": "Each row represents a search query the participant made on Facebook, including the search term and date.",
+        "source_file": "logged_information/search/your_search_history.json / your_search_history.html",
+        "columns": {
+          "Search term": "The search query entered by the participant.",
+          "Date": "ISO 8601 timestamp of when the search was made."
+        }
+      }
+    },
+    {
+      "id": "facebook_ads_interests",
+      "title": {
+        "en": "Your ad interests",
+        "nl": "Je advertentie-interesses"
+      },
+      "description": {
+        "en": "This table shows the interests Facebook has identified for showing you personalized ads.",
+        "nl": "Deze tabel toont de interesses die Facebook heeft geïdentificeerd om je gepersonaliseerde advertenties te tonen."
+      },
+      "headers": {
+        "Ad": {
+          "en": "Interest",
+          "nl": "Interesse"
+        }
+      },
+      "extractor": "ads_interests_to_df",
+      "documentation": {
+        "summary": "Each row represents an interest topic Facebook has associated with the participant for ad targeting purposes.",
+        "source_file": "ads_interests.json / ads_interests.html",
+        "columns": {
+          "Ad": "Interest topic used for ad targeting."
+        }
+      }
+    },
+    {
+      "id": "facebook_profile_visits",
+      "title": {
+        "en": "Profiles you visited recently",
+        "nl": "Profielen die je recentelijk hebt bezocht"
+      },
+      "description": {
+        "en": "This table shows the Facebook profiles you have recently visited.",
+        "nl": "Deze tabel toont de Facebook-profielen die je recentelijk hebt bezocht."
+      },
+      "headers": {
+        "Name": {
+          "en": "Name",
+          "nl": "Naam"
+        },
+        "Timestamp": {
+          "en": "Date",
+          "nl": "Datum en tijd"
+        }
+      },
+      "extractor": "profile_visits_to_df",
+      "documentation": {
+        "summary": "Each row represents a Facebook profile the participant recently visited, including the name and timestamp.",
+        "source_file": "logged_information/interactions/profile_visits.json / profile_visits.html",
+        "columns": {
+          "Name": "Name of the visited profile.",
+          "Timestamp": "ISO 8601 timestamp of when the visit occurred."
+        }
+      }
+    },
+    {
+      "id": "facebook_reels_usage",
+      "title": {
+        "en": "Interactions with Facebook Reels",
+        "nl": "Interacties met Facebook Reels"
+      },
+      "description": {
+        "en": "This table shows your interactions with Facebook Reels, such as videos you've watched or engaged with.",
+        "nl": "Deze tabel toont je interacties met Facebook Reels, zoals video's die je hebt bekeken of waarmee je hebt gecommuniceerd."
+      },
+      "headers": {
+        "Reel interaction": {
+          "en": "Statistic",
+          "nl": "Statistiek"
+        },
+        "Value": {
+          "en": "Value",
+          "nl": "Waarde"
+        }
+      },
+      "extractor": "facebook_reels_usage_to_df",
+      "documentation": {
+        "summary": "Each row represents a type of interaction the participant had with Facebook Reels and its associated value.",
+        "source_file": "facebook_reels_usage_information.json / facebook_reels_usage_information.html",
+        "columns": {
+          "Reel interaction": "Type of interaction with Facebook Reels.",
+          "Value": "Value associated with the interaction."
+        }
+      }
+    },
+    {
+      "id": "facebook_link_history",
+      "title": {
+        "en": "Links visited from Facebook",
+        "nl": "Links bezocht vanuit Facebook"
+      },
+      "description": {
+        "en": "This table shows outbound links you opened in Facebook's in-app browser.",
+        "nl": "Deze tabel toont uitgaande links die je hebt geopend in de in-app browser van Facebook."
+      },
+      "headers": {
+        "URL": {
+          "en": "URL",
+          "nl": "URL"
+        },
+        "Title": {
+          "en": "Title",
+          "nl": "Titel"
+        },
+        "Timestamp": {
+          "en": "Date",
+          "nl": "Datum en tijd"
+        }
+      },
+      "extractor": "link_history_to_df",
+      "documentation": {
+        "summary": "Each row represents an outbound link the participant opened in Facebook's in-app browser, with a timestamp.",
+        "source_file": "your_facebook_activity/other_activity/link_history.json / link_history.html",
+        "columns": {
+          "URL": "URL of the link visited.",
+          "Title": "Title of the website page visited.",
+          "Timestamp": "ISO 8601 timestamp of when the link was visited."
+        }
+      }
+    },
+    {
+      "id": "facebook_your_events",
+      "title": {
+        "en": "Events",
+        "nl": "Evenementen"
+      },
+      "description": {
+        "en": "This table contains Facebook events you created or were invited to.",
+        "nl": "Deze tabel bevat Facebook-evenementen die je hebt aangemaakt of waarvoor je bent uitgenodigd."
+      },
+      "headers": {
+        "Name": {
+          "en": "Name",
+          "nl": "Naam"
+        },
+        "Created": {
+          "en": "Date",
+          "nl": "Datum en tijd"
+        }
+      },
+      "extractor": "your_events_to_df",
+      "documentation": {
+        "summary": "Each row represents a Facebook event the participant created or was invited to, including the event name and creation timestamp.",
+        "source_file": "your_facebook_activity/events/your_events.json / your_events.html",
+        "columns": {
+          "Name": "Name of the Facebook event.",
+          "Created": "ISO 8601 timestamp of when the event was created."
+        }
+      }
+    },
+    {
+      "id": "facebook_your_group_membership_activity",
+      "title": {
+        "en": "Group membership",
+        "nl": "Groepslidmaatschap"
+      },
+      "description": {
+        "en": "This table lists the Facebook groups you are currently a member of.",
+        "nl": "Deze tabel toont de Facebookgroepen waar je momenteel lid van bent."
+      },
+      "headers": {
+        "Title": {
+          "en": "Title",
+          "nl": "Titel"
+        },
+        "Group name": {
+          "en": "Group name",
+          "nl": "Groepsnaam"
+        },
+        "Timestamp": {
+          "en": "Date",
+          "nl": "Datum en tijd"
+        }
+      },
+      "extractor": "your_group_membership_activity_to_df",
+      "documentation": {
+        "summary": "Each row represents a Facebook group the participant joined, including the title, group name, and the time of joining.",
+        "source_file": "your_group_membership_activity.json / your_group_membership_activity.html",
+        "columns": {
+          "Title": "Title or description of the membership activity.",
+          "Group name": "Name of the Facebook group.",
+          "Timestamp": "ISO 8601 timestamp of when the participant joined."
+        }
+      }
+    },
+    {
+      "id": "facebook_ad_preferences",
+      "title": {
+        "en": "Ad-preference settings",
+        "nl": "Advertentievoorkeuren"
+      },
+      "description": {
+        "en": "This table shows your ad-preference settings on Facebook, including targeting toggles and opt-outs.",
+        "nl": "Deze tabel toont je advertentievoorkeuren op Facebook, inclusief targetinginstellingen en opt-outs."
+      },
+      "headers": {
+        "Label": {
+          "en": "Setting",
+          "nl": "Instelling"
+        },
+        "Value": {
+          "en": "Value",
+          "nl": "Waarde"
+        }
+      },
+      "extractor": "ad_preferences_to_df",
+      "documentation": {
+        "summary": "Each row represents an ad-preference setting the participant has on Facebook, such as targeting toggles and opt-outs.",
+        "source_file": "ads_information/ad_preferences.json / ad_preferences.html",
+        "columns": {
+          "Label": "Name of the ad-preference setting.",
+          "Value": "Current value of the setting."
+        }
+      }
+    },
+    {
+      "id": "facebook_other_categories_used_to_reach_you",
+      "title": {
+        "en": "Other targeting categories used to reach you",
+        "nl": "Overige targetingcategorieën die zijn gebruikt om je te bereiken"
+      },
+      "description": {
+        "en": "This table shows other categories advertisers used to target you on Facebook.",
+        "nl": "Deze tabel toont overige categorieën die adverteerders hebben gebruikt om je te bereiken op Facebook."
+      },
+      "headers": {
+        "Category": {
+          "en": "Category",
+          "nl": "Categorie"
+        }
+      },
+      "extractor": "other_categories_used_to_reach_you_to_df",
+      "documentation": {
+        "summary": "Each row represents a targeting category advertisers used to reach the participant on Facebook.",
+        "source_file": "ads_information/other_categories_used_to_reach_you.json / other_categories_used_to_reach_you.html",
+        "columns": {
+          "Category": "Targeting category used by advertisers."
+        }
+      }
+    },
+    {
+      "id": "facebook_advertisers_using_your_activity",
+      "title": {
+        "en": "Advertisers using your activity or information",
+        "nl": "Adverteerders die je activiteit of informatie gebruiken"
+      },
+      "description": {
+        "en": "This table shows advertisers who used your activity or information to target you on Facebook.",
+        "nl": "Deze tabel toont adverteerders die je activiteit of informatie hebben gebruikt om je te targeten op Facebook."
+      },
+      "headers": {
+        "Label": {
+          "en": "How they reached you",
+          "nl": "Hoe zij u bereikten"
+        },
+        "Value": {
+          "en": "Advertiser",
+          "nl": "Adverteerder"
+        }
+      },
+      "extractor": "advertisers_using_your_activity_to_df",
+      "documentation": {
+        "summary": "Each row represents an advertiser who used the participant's activity or information for ad targeting on Facebook, grouped by targeting method.",
+        "source_file": "ads_information/advertisers_using_your_activity_or_information.json / advertisers_using_your_activity_or_information.html",
+        "columns": {
+          "Label": "The method used by the advertiser to target the participant (e.g. a list uploaded by the advertiser).",
+          "Value": "Name of the advertiser or value of the setting."
+        }
+      }
+    },
+    {
+      "id": "facebook_advertisers_youve_interacted_with",
+      "title": {
+        "en": "Ads you clicked or engaged with",
+        "nl": "Advertenties waarop je hebt geklikt of gereageerd"
+      },
+      "description": {
+        "en": "This table shows the ads you have clicked or otherwise engaged with on Facebook.",
+        "nl": "Deze tabel toont de advertenties waarop je hebt geklikt of waarmee je hebt gecommuniceerd op Facebook."
+      },
+      "headers": {
+        "Action": {
+          "en": "Action",
+          "nl": "Actie"
+        },
+        "Title": {
+          "en": "Title",
+          "nl": "Titel"
+        },
+        "URL": {
+          "en": "URL",
+          "nl": "URL"
+        },
+        "Timestamp": {
+          "en": "Date",
+          "nl": "Datum en tijd"
+        }
+      },
+      "extractor": "advertisers_youve_interacted_with_to_df",
+      "documentation": {
+        "summary": "Each row represents an ad the participant clicked or engaged with on Facebook, including the action taken, ad title, URL, and timestamp.",
+        "source_file": "ads_information/advertisers_you've_interacted_with.json / advertisers_you've_interacted_with.html",
+        "columns": {
+          "Action": "Type of interaction with the ad (e.g. Click).",
+          "Title": "Title of the ad interacted with.",
+          "URL": "URL of the ad or post interacted with.",
+          "Timestamp": "ISO 8601 timestamp of when the interaction occurred."
+        }
+      }
+    },
+    {
+      "id": "facebook_comments",
+      "title": {
+        "en": "Comments",
+        "nl": "Reacties"
+      },
+      "description": {
+        "en": "This table shows all the comments you have made on Facebook posts and other content.",
+        "nl": "Deze tabel toont alle comments die je op Facebook-berichten en andere content hebt geplaatst."
+      },
+      "headers": {
+        "Title": {
+          "en": "Title",
+          "nl": "Titel"
+        },
+        "Comment": {
+          "en": "Comment",
+          "nl": "Reactie"
+        },
+        "Timestamp": {
+          "en": "Date",
+          "nl": "Datum en tijd"
+        }
+      },
+      "extractor": "comments_to_df",
+      "documentation": {
+        "summary": "Each row represents a comment the participant made on a Facebook post or other content, including the title, comment text, and timestamp.",
+        "source_file": "comments_and_reactions/comments.json / comments.html",
+        "columns": {
+          "Title": "Title of the post the comment was made on.",
+          "Comment": "Text content of the comment.",
+          "Timestamp": "ISO 8601 timestamp of when the comment was made."
+        }
+      }
+    },
+    {
+      "id": "facebook_likes_and_reactions",
+      "title": {
+        "en": "Posts you liked",
+        "nl": "Posts die je leuk vond"
+      },
+      "description": {
+        "en": "This table shows the titles of posts you liked on Facebook.",
+        "nl": "Deze tabel toont de titels van posts die je leuk vond op Facebook."
+      },
+      "headers": {
+        "Title": {
+          "en": "Title",
+          "nl": "Titel"
+        },
+        "Reaction": {
+          "en": "Reaction",
+          "nl": "Reactie"
+        },
+        "Timestamp": {
+          "en": "Date",
+          "nl": "Datum en tijd"
+        }
+      },
+      "extractor": "likes_and_reactions_to_df",
+      "documentation": {
+        "summary": "Each row represents a post the participant liked or reacted to on Facebook, including the post title, reaction type, and timestamp.",
+        "source_file": "likes_and_reactions_1.json (and numbered variants) / likes_and_reactions_*.html",
+        "columns": {
+          "Title": "Title of the post that was liked or reacted to.",
+          "Reaction": "Type of reaction (e.g. Like, Love, Haha).",
+          "Timestamp": "ISO 8601 timestamp of when the reaction was made."
+        }
+      }
+    },
+    {
+      "id": "facebook_your_posts_and_check_ins",
+      "title": {
+        "en": "Your posts and check-ins",
+        "nl": "Je posts en check-ins"
+      },
+      "description": {
+        "en": "This table shows the posts and places you have checked into on Facebook.",
+        "nl": "Deze tabel toont de berichten en plaatsen waar je op Facebook hebt ingecheckt."
+      },
+      "headers": {
+        "Title": {
+          "en": "Title",
+          "nl": "Titel"
+        },
+        "Post": {
+          "en": "Post",
+          "nl": "Bericht"
+        },
+        "URL": {
+          "en": "URL",
+          "nl": "URL"
+        },
+        "Timestamp": {
+          "en": "Date",
+          "nl": "Datum en tijd"
+        }
+      },
+      "extractor": "your_posts_check_ins_to_df",
+      "documentation": {
+        "summary": "Each row represents a post or check-in the participant made on Facebook, including the title, post content, URL, and timestamp.",
+        "source_file": "your_posts__check_ins__photos_and_videos_1.json (and numbered variants) / your_posts__check_ins__photos_and_videos_*.html",
+        "columns": {
+          "Title": "Title of the post or check-in.",
+          "Post": "Text content of the post.",
+          "URL": "URL associated with the post or check-in.",
+          "Timestamp": "ISO 8601 timestamp of when the post or check-in was made."
+        }
+      }
+    },
+    {
+      "id": "facebook_your_contributions",
+      "title": {
+        "en": "Contributions in groups",
+        "nl": "Berichten in groepen"
+      },
+      "description": {
+        "en": "This table shows your posts and comments contributed to Facebook groups.",
+        "nl": "Deze tabel toont je berichten en comments die je hebt bijgedragen in Facebook-groepen."
+      },
+      "headers": {
+        "Value": {
+          "en": "Value",
+          "nl": "Waarde"
+        },
+        "Date": {
+          "en": "Date",
+          "nl": "Datum en tijd"
+        },
+        "URL": {
+          "en": "URL",
+          "nl": "URL"
+        }
+      },
+      "extractor": "your_contributions_to_df",
+      "documentation": {
+        "summary": "Each row represents a post or comment the participant contributed to a Facebook group, including the content, date, and URL.",
+        "source_file": "your_facebook_activity/groups/your_contributions.json / your_contributions.html",
+        "columns": {
+          "Value": "Concatenated text content of the contribution.",
+          "Date": "ISO 8601 timestamp of when the contribution was made.",
+          "URL": "URL of the contribution."
+        }
+      }
+    },
+    {
+      "id": "facebook_your_comments_in_groups",
+      "title": {
+        "en": "Comments in groups",
+        "nl": "Reacties in groepen"
+      },
+      "description": {
+        "en": "This table specifically lists the comments you have made in Facebook groups.",
+        "nl": "Deze tabel toont specifiek de comments die je in Facebook-groepen hebt geplaatst."
+      },
+      "headers": {
+        "Title": {
+          "en": "Title",
+          "nl": "Titel"
+        },
+        "Comment": {
+          "en": "Comment",
+          "nl": "Reactie"
+        },
+        "Group": {
+          "en": "Group",
+          "nl": "Groep"
+        },
+        "Timestamp": {
+          "en": "Date",
+          "nl": "Datum en tijd"
+        }
+      },
+      "extractor": "your_comments_in_groups_to_df",
+      "documentation": {
+        "summary": "Each row represents a comment the participant made in a Facebook group, including the title, comment text, group name, and timestamp.",
+        "source_file": "your_comments_in_groups.json",
+        "columns": {
+          "Title": "Title of the post the comment was made on.",
+          "Comment": "Text content of the comment.",
+          "Group": "Name of the Facebook group.",
+          "Timestamp": "ISO 8601 timestamp of when the comment was made."
+        }
+      }
+    },
+    {
+      "id": "facebook_who_youve_followed",
+      "title": {
+        "en": "Followed accounts",
+        "nl": "Gevolgde accounts"
+      },
+      "description": {
+        "en": "This table shows the Facebook profiles and pages you currently follow.",
+        "nl": "Deze tabel toont de Facebook-profielen en -pagina's die je momenteel volgt."
+      },
+      "headers": {
+        "Name": {
+          "en": "Name",
+          "nl": "Naam"
+        },
+        "Timestamp": {
+          "en": "Date",
+          "nl": "Datum en tijd"
+        }
+      },
+      "extractor": "who_youve_followed_to_df",
+      "documentation": {
+        "summary": "Each row represents a Facebook profile or page that the participant follows, including the name and the time they started following.",
+        "source_file": "who_you_ve_followed.json / who_you've_followed.html",
+        "columns": {
+          "Name": "Name of the followed profile or page.",
+          "Timestamp": "ISO 8601 timestamp of when the participant started following."
+        }
+      }
+    },
+    {
+      "id": "facebook_pages_and_profiles_you_follow",
+      "title": {
+        "en": "Pages and profiles that you follow",
+        "nl": "Pagina's en profielen die je volgt"
+      },
+      "description": {
+        "en": "This table displays the Facebook Pages and profiles that you actively follow.",
+        "nl": "Deze tabel toont de Facebookpagina's en -profielen die je actief volgt."
+      },
+      "headers": {
+        "Title": {
+          "en": "Title",
+          "nl": "Titel"
+        },
+        "Timestamp": {
+          "en": "Date",
+          "nl": "Datum en tijd"
+        }
+      },
+      "extractor": "pages_and_profiles_you_follow_to_df",
+      "documentation": {
+        "summary": "Each row represents a Facebook Page or profile the participant follows, including the title and time they started following.",
+        "source_file": "pages_and_profiles_you_follow.json / pages_and_profiles_you_follow.html",
+        "columns": {
+          "Title": "Title of the followed Page or profile.",
+          "Timestamp": "ISO 8601 timestamp of when the participant started following."
+        }
+      }
+    },
+    {
+      "id": "facebook_pages_youve_liked",
+      "title": {
+        "en": "Pages that you have liked",
+        "nl": "Pagina's die je leuk vindt"
+      },
+      "description": {
+        "en": "This table contains a history of the Facebook Pages you have liked.",
+        "nl": "Deze tabel bevat een overzicht van de Facebookpagina's die je leuk vindt."
+      },
+      "headers": {
+        "Name": {
+          "en": "Name",
+          "nl": "Naam"
+        },
+        "URL": {
+          "en": "URL",
+          "nl": "URL"
+        },
+        "Timestamp": {
+          "en": "Date",
+          "nl": "Datum en tijd"
+        }
+      },
+      "extractor": "pages_youve_liked_to_df",
+      "documentation": {
+        "summary": "Each row represents a Facebook Page the participant has liked, including the page name, URL, and timestamp.",
+        "source_file": "pages_you_ve_liked.json / pages_you've_liked.html",
+        "columns": {
+          "Name": "Name of the liked Facebook Page.",
+          "URL": "URL of the liked Facebook Page.",
+          "Timestamp": "ISO 8601 timestamp of when the page was liked."
+        }
+      }
+    },
+    {
+      "id": "facebook_items_viewed",
+      "title": {
+        "en": "Facebook items recently viewed",
+        "nl": "Facebook-items die je recentelijk hebt bekeken"
+      },
+      "description": {
+        "en": "This table shows the Facebook items you have recently viewed.",
+        "nl": "Deze tabel toont de Facebook-items die je recentelijk hebt bekeken."
+      },
+      "headers": {
+        "Title": {
+          "en": "Title",
+          "nl": "Titel"
+        },
+        "Product Name": {
+          "en": "Product Name",
+          "nl": "Productnaam"
+        },
+        "Description": {
+          "en": "Description",
+          "nl": "Beschrijving"
+        },
+        "Date": {
+          "en": "Date",
+          "nl": "Datum en tijd"
+        }
+      },
+      "extractor": "items_viewed_to_df",
+      "documentation": {
+        "summary": "Each row represents a Facebook item the participant recently viewed, including the title, product name, description, and date.",
+        "source_file": "logged_information/interactions/items_viewed.json / items_viewed.html",
+        "columns": {
+          "Title": "Title of the viewed item.",
+          "Product Name": "Product name of the viewed item.",
+          "Description": "Description of the viewed item.",
+          "Date": "ISO 8601 timestamp of when the item was viewed."
+        }
+      }
+    },
+    {
+      "id": "facebook_news_your_locations",
+      "title": {
+        "en": "The locations Facebook news is set to",
+        "nl": "De locaties waar Facebook Nieuws op is ingesteld"
+      },
+      "description": {
+        "en": "This table displays the geographical locations for which your Facebook News feed is configured.",
+        "nl": "Deze tabel toont de geografische locaties waarvoor je Facebook Nieuwsfeed is geconfigureerd."
+      },
+      "headers": {
+        "Location": {
+          "en": "Location",
+          "nl": "Locatie"
+        }
+      },
+      "extractor": "news_your_locations_to_df",
+      "documentation": {
+        "summary": "Each row represents a geographical location for which the participant's Facebook News feed is configured.",
+        "source_file": "facebook_news/your_locations.json",
+        "columns": {
+          "Location": "Name of the configured location."
+        }
+      }
+    }
+  ]
+}

@@ -368,7 +368,7 @@ def activity_summary_to_df(reader: ZipArchiveReader, errors: Counter, validation
             "nl": "Overzicht van het aantal bekeken, becommentarieerde en gedeelde video's sinds registratie."
           },
           "headers": {
-            "Metric": {"en": "Activity metric", "nl": "Activiteitsmaat"},
+            "Metric": {"en": "Activity", "nl": "Activiteit"},
             "Count": {"en": "Count", "nl": "Aantal"}
           }
         }
@@ -388,6 +388,7 @@ def activity_summary_to_df(reader: ZipArchiveReader, errors: Counter, validation
         except Exception as e:
             logger.error("Exception caught: %s", e)
             errors[type(e).__name__] += 1
+            return out
     elif validation.current_ddp_category.ddp_filetype == DDPFiletype.TXT:
         if validation.current_ddp_category.language == Language.NL:
             data = reader.raw("Samenvatting van activiteit.txt")
@@ -406,6 +407,7 @@ def activity_summary_to_df(reader: ZipArchiveReader, errors: Counter, validation
         except Exception as e:
             logger.error("Exception caught: %s", e)
             errors[type(e).__name__] += 1
+            return out
     else:
         return out
     try:
@@ -415,10 +417,9 @@ def activity_summary_to_df(reader: ZipArchiveReader, errors: Counter, validation
         if not isinstance(summary, dict):
             return out
         metric_priority = [
-            ("Videos watched since registration", ["videoCount"]),
-            ("Videos watched to the end since registration", ["videosWatchedToTheEndSinceAccountRegistration", "Videos watched to the end since account registration", "Video's tot het einde bekeken sinds accountregistratie"]),
-            ("Videos commented on since registration", ["videosCommentedOnSinceAccountRegistration", "commentVideoCount", "Videos commented on since account registration", "Video's waarop is gereageerd sinds accountregistratie"]),
-            ("Videos shared since registration", ["videosSharedSinceAccountRegistration", "sharedVideoCount", "Videos shared since account registration", "Video's gedeeld sinds accountregistratie"]),
+            ("Video's die u volledig heeft bekeken sinds uw registratie", ["videosWatchedToTheEndSinceAccountRegistration", "Videos watched to the end since account registration", "Video's tot het einde bekeken sinds accountregistratie"]),
+            ("Video's waarop u heeft gereageerd sinds uw registratie", ["videosCommentedOnSinceAccountRegistration", "commentVideoCount", "Videos commented on since account registration", "Video's waarop is gereageerd sinds accountregistratie"]),
+            ("Video's die u heeft gedeeld sinds uw registratie", ["videosSharedSinceAccountRegistration", "sharedVideoCount", "Videos shared since account registration", "Video's gedeeld sinds accountregistratie"]),
         ]
         rows = []
         for label, keys in metric_priority:
@@ -499,6 +500,7 @@ def settings_to_df(reader: ZipArchiveReader, errors: Counter, validation) -> pd.
         except Exception as e:
             logger.error("Exception caught: %s", e)
             errors[type(e).__name__] += 1
+            return out
     elif validation.current_ddp_category.ddp_filetype == DDPFiletype.TXT:
         if validation.current_ddp_category.language == Language.NL:
             data = reader.raw("Instellingen.txt")
@@ -517,6 +519,7 @@ def settings_to_df(reader: ZipArchiveReader, errors: Counter, validation) -> pd.
         except Exception as e:
             logger.error("Exception caught: %s", e)
             errors[type(e).__name__] += 1
+            return out
     else:
         return out
     try:
@@ -535,10 +538,10 @@ def settings_to_df(reader: ZipArchiveReader, errors: Counter, validation) -> pd.
         if not isinstance(content_preferences, dict):
             return out
         field_map = {
-            "Keyword filters for videos in Following feed": "Keyword filter for videos in the following feed",
-            "Keyword filters for videos in For You feed": "Keyword filters for videos in For You feed",
-            "Trefwoordfilters voor video's in de 'Volgend'-feed": "Keyword filter for videos in the following feed",
-            "Trefwoordfilters voor video's in de 'Voor jou'-feed": "Keyword filters for videos in For You feed",
+            "Keyword filters for videos in Following feed": "Zoekwoordfilter voor video's in uw Volgend-feed",
+            "Keyword filters for videos in For You feed": "Zoekwoordfilters voor video's in uw Voor Jou-feed",
+            "Trefwoordfilters voor video's in de 'Volgend'-feed": "Zoekwoordfilter voor video's in uw Volgend-feed",
+            "Trefwoordfilters voor video's in de 'Voor jou'-feed": "Zoekwoordfilters voor video's in uw Voor Jou-feed",
         }
         rows.extend(
             (label, ", ".join(content_preferences.get(key, [])))
@@ -616,6 +619,7 @@ def watch_history_to_df(reader: ZipArchiveReader, errors: Counter, validation) -
         except Exception as e:
             logger.error("Exception caught: %s", e)
             errors[type(e).__name__] += 1
+            return out
     elif validation.current_ddp_category.ddp_filetype == DDPFiletype.TXT:
         if validation.current_ddp_category.language == Language.NL:
             data = reader.raw("Kijkgeschiedenis.txt")
@@ -638,6 +642,7 @@ def watch_history_to_df(reader: ZipArchiveReader, errors: Counter, validation) -
         except Exception as e:
             logger.error("Exception caught: %s", e)
             errors[type(e).__name__] += 1
+            return out
     else:
         return out    
     try:
@@ -718,6 +723,7 @@ def favorite_videos_to_df(reader: ZipArchiveReader, errors: Counter, validation)
         except Exception as e:
             logger.error("Exception caught: %s", e)
             errors[type(e).__name__] += 1
+            return out
     elif validation.current_ddp_category.ddp_filetype == DDPFiletype.TXT:
         if validation.current_ddp_category.language == Language.NL:
             data = reader.raw("Favoriete video's.txt")
@@ -739,6 +745,7 @@ def favorite_videos_to_df(reader: ZipArchiveReader, errors: Counter, validation)
         except Exception as e:
             logger.error("Exception caught: %s", e)
             errors[type(e).__name__] += 1
+            return out
     try:
         # Guard: the branches above assign `items` inside a try/except, so an
         # error there can leave it unbound or holding a non-list. Kept inside
@@ -816,6 +823,7 @@ def follower_to_df(reader: ZipArchiveReader, errors: Counter, validation) -> pd.
         except Exception as e:
             logger.error("Exception caught: %s", e)
             errors[type(e).__name__] += 1
+            return out
     elif validation.current_ddp_category.ddp_filetype == DDPFiletype.TXT:
         if validation.current_ddp_category.language == Language.NL:
             data = reader.raw("Volger.txt")
@@ -837,6 +845,7 @@ def follower_to_df(reader: ZipArchiveReader, errors: Counter, validation) -> pd.
         except Exception as e:
             logger.error("Exception caught: %s", e)
             errors[type(e).__name__] += 1
+            return out
     try:
         # Guard: the branches above assign `items` inside a try/except, so an
         # error there can leave it unbound or holding a non-list. Kept inside
@@ -914,6 +923,7 @@ def following_to_df(reader: ZipArchiveReader, errors: Counter, validation) -> pd
         except Exception as e:
             logger.error("Exception caught: %s", e)
             errors[type(e).__name__] += 1
+            return out
     elif validation.current_ddp_category.ddp_filetype == DDPFiletype.TXT:
         if validation.current_ddp_category.language == Language.NL:
             data = reader.raw("Volgend.txt")
@@ -935,6 +945,7 @@ def following_to_df(reader: ZipArchiveReader, errors: Counter, validation) -> pd
         except Exception as e:
             logger.error("Exception caught: %s", e)
             errors[type(e).__name__] += 1
+            return out
     try:
         # Guard: the branches above assign `items` inside a try/except, so an
         # error there can leave it unbound or holding a non-list. Kept inside
@@ -1013,6 +1024,7 @@ def hashtag_to_df(reader: ZipArchiveReader, errors: Counter, validation) -> pd.D
         except Exception as e:
             logger.error("Exception caught: %s", e)
             errors[type(e).__name__] += 1
+            return out
     elif validation.current_ddp_category.ddp_filetype == DDPFiletype.TXT:
         if validation.current_ddp_category.language == Language.NL:
             data = reader.raw("Hashtag.txt")
@@ -1034,6 +1046,7 @@ def hashtag_to_df(reader: ZipArchiveReader, errors: Counter, validation) -> pd.D
         except Exception as e:
             logger.error("Exception caught: %s", e)
             errors[type(e).__name__] += 1
+            return out
     try:
         # Guard: the branches above assign `items` inside a try/except, so an
         # error there can leave it unbound or holding a non-list. Kept inside
@@ -1095,7 +1108,7 @@ def like_list_to_df(reader: ZipArchiveReader, errors: Counter, validation) -> pd
           },
           "headers": {
             "Date": {"en": "Date", "nl": "Datum en tijd"},
-            "Link": {"en": "Link", "nl": "Link"}
+            "Link": {"en": "URL", "nl": "URL"}
           }
         }
     """
@@ -1113,6 +1126,7 @@ def like_list_to_df(reader: ZipArchiveReader, errors: Counter, validation) -> pd
         except Exception as e:
             logger.error("Exception caught: %s", e)
             errors[type(e).__name__] += 1
+            return out
     elif validation.current_ddp_category.ddp_filetype == DDPFiletype.TXT:  
         if validation.current_ddp_category.language == Language.NL:
             data = reader.raw("Likelijst.txt")
@@ -1134,6 +1148,7 @@ def like_list_to_df(reader: ZipArchiveReader, errors: Counter, validation) -> pd
         except Exception as e:
             logger.error("Exception caught: %s", e)
             errors[type(e).__name__] += 1
+            return out
     try:
         # Guard: the branches above assign `items` inside a try/except, so an
         # error there can leave it unbound or holding a non-list. Kept inside
@@ -1186,7 +1201,7 @@ def searches_to_df(reader: ZipArchiveReader, errors: Counter, validation) -> pd.
 
         {
           "id": "tiktok_searches",
-          "title": {"en": "Search history", "nl": "Zoekgeschiedenis"},
+          "title": {"en": "Searches", "nl": "Zoekopdrachten"},
           "description": {
             "en": "Search terms you have used on TikTok.",
             "nl": "Zoektermen die je hebt gebruikt op TikTok."
@@ -1220,6 +1235,7 @@ def searches_to_df(reader: ZipArchiveReader, errors: Counter, validation) -> pd.
         except Exception as e:
             logger.error("Exception caught: %s", e)
             errors[type(e).__name__] += 1
+            return out
     elif validation.current_ddp_category.ddp_filetype == DDPFiletype.TXT:
         if validation.current_ddp_category.language == Language.NL:
             data = reader.raw("Zoekopdrachten.txt")
@@ -1241,6 +1257,7 @@ def searches_to_df(reader: ZipArchiveReader, errors: Counter, validation) -> pd.
         except Exception as e:
             logger.error("Exception caught: %s", e)
             errors[type(e).__name__] += 1
+            return out
     try:       
         # Guard: the branches above assign `items` inside a try/except, so an
         # error there can leave it unbound or holding a non-list. Kept inside
@@ -1324,6 +1341,7 @@ def share_history_to_df(reader: ZipArchiveReader, errors: Counter, validation) -
         except Exception as e:
             logger.error("Exception caught: %s", e)
             errors[type(e).__name__] += 1
+            return out
     elif validation.current_ddp_category.ddp_filetype == DDPFiletype.TXT:
         if validation.current_ddp_category.language == Language.NL:
             data = reader.raw("Geschiedenis delen.txt")
@@ -1345,6 +1363,7 @@ def share_history_to_df(reader: ZipArchiveReader, errors: Counter, validation) -
         except Exception as e:
             logger.error("Exception caught: %s", e)
             errors[type(e).__name__] += 1
+            return out
     try:
         # Guard: the branches above assign `items` inside a try/except, so an
         # error there can leave it unbound or holding a non-list. Kept inside
@@ -1442,6 +1461,7 @@ def comments_to_df(reader: ZipArchiveReader, errors: Counter, validation) -> pd.
         except Exception as e:
             logger.error("Exception caught: %s", e)
             errors[type(e).__name__] += 1
+            return out
     elif validation.current_ddp_category.ddp_filetype == DDPFiletype.TXT:
         if validation.current_ddp_category.language == Language.NL:
             data = reader.raw("Reacties.txt")
@@ -1463,6 +1483,7 @@ def comments_to_df(reader: ZipArchiveReader, errors: Counter, validation) -> pd.
         except Exception as e:
             logger.error("Exception caught: %s", e)
             errors[type(e).__name__] += 1
+            return out
     try:
         # Guard: the branches above assign `items` inside a try/except, so an
         # error there can leave it unbound or holding a non-list. Kept inside
@@ -1479,6 +1500,201 @@ def comments_to_df(reader: ZipArchiveReader, errors: Counter, validation) -> pd.
             for item in items
         ]
         out = pd.DataFrame(rows, columns=["Date", "Comment", "Photo", "Url"])  # pyright: ignore
+        out = out.sort_values("Date", ascending=False)
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+    return out
+
+
+def off_tiktok_to_df(reader: ZipArchiveReader, errors: Counter, validation) -> pd.DataFrame:
+    """Extract activity data outside of TikTok.
+
+    Reads ``Profile And Settings > Off TikTok Activity > OffTikTokActivityDataList`` from the 
+    TikTok export JSON or from ``Activiteit buiten TikTok.txt`` or ``Activity off TikTok.txt`` in 
+    case of a TXT export.
+
+    Parameters
+    ----------
+    reader:
+        Archive reader used to load JSON or TXT files from the DDP zip.
+    errors:
+        Mutable counter that accumulates error type counts encountered during
+        extraction.  Updated in-place.
+    validation:
+        Validation results for the extracted data used to determine ddp type and language.
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: ``Date``, ``Source``, ``Event``.
+        Empty DataFrame when the data is absent or parsing fails.
+
+    Table documentation::
+
+        {
+          "summary": "Each row represents one activity the participant had outside of TikTok.",
+          "source_file": "user_data_tiktok.json or user_data.json",
+          "columns": {
+            "Date": "Timestamp of the activity.",
+            "Source": "The source of the activity.",
+            "Event": "Description of the activity event."
+          }
+        }
+
+    Table config::
+
+        {
+          "id": "tiktok_off_tiktok",
+          "title": {"en": "Your off-TikTok activities", "nl": "Je activiteiten buiten TikTok"},
+          "description": {
+            "en": "Activities outside of TikTok that have been tracked by TikTok.",
+            "nl": "Activiteiten buiten TikTok die door TikTok zijn bijgehouden."
+          },
+          "headers": {
+            "Date": {"en": "Date", "nl": "Datum en tijd"},
+            "Source": {"en": "Source", "nl": "Bron"},
+            "Event": {"en": "Event", "nl": "Gebeurtenis"}
+          }
+        }
+    """
+    out = pd.DataFrame()
+    if validation.current_ddp_category.ddp_filetype == DDPFiletype.JSON:
+        data = _load_user_data(reader)
+        out = pd.DataFrame()
+        try:
+            items = _get(data, "Profile And Settings", "Off TikTok Activity", "OffTikTokActivityDataList")
+            if not isinstance(items, list):
+                return out
+        except Exception as e:
+            logger.error("Exception caught: %s", e)
+            errors[type(e).__name__] += 1
+            return out
+    elif validation.current_ddp_category.ddp_filetype == DDPFiletype.TXT:
+        if validation.current_ddp_category.language == Language.NL:
+            data = reader.raw("Activiteit buiten TikTok.txt")
+        elif validation.current_ddp_category.language == Language.EN:
+            data = reader.raw("Off-TikTok Activities.txt")
+        else:
+            return out
+        if not data.found:
+            return out    
+        try:
+            items = _parse_tiktok_txt(data.data)
+            if not isinstance(items, list):
+                # When only one record is present, this is not automatically recognized as a list of records.
+                # Therefor the returned dict needs to be stored in a list to proceed.
+                if isinstance(items, dict):
+                    items = [items]
+                else:
+                    return out
+        except Exception as e:
+            logger.error("Exception caught: %s", e)
+            errors[type(e).__name__] += 1
+            return out
+    try:
+        rows = [
+            (
+                _item_get(item, "Date", "Datum", "TimeStamp"),
+                _item_get(item, "Source", "Bron"),
+                _item_get(item, "Event", "Evenement"),
+            )
+            for item in items
+        ]
+        out = pd.DataFrame(rows, columns=["Date", "Source", "Event"])  # pyright: ignore
+        out = out.sort_values("Date", ascending=False)
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+    return out
+
+
+def ad_interests_to_df(reader: ZipArchiveReader, errors: Counter, validation) -> pd.DataFrame:
+    """Extract TikTok ad interests.
+
+    Reads ``Your Activity > Ad Interests `` from the TikTok export JSON 
+    or from ``Advertentie-interesses.txt`` or ``Ad Interests.txt`` in case of a TXT export.
+
+    Parameters
+    ----------
+    reader:
+        Archive reader used to load JSON or TXT files from the DDP zip.
+    errors:
+        Mutable counter that accumulates error type counts encountered during extraction.  
+        Updated in-place.
+    validation:
+        Validation results for the extracted data used to determine ddp type and language.
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: ``Date``, ``Interest``.
+        Empty DataFrame when the data is absent or parsing fails.
+
+    Table documentation::
+        {
+            "summary": "Ad interest categories associated with the participant's TikTok activity.",
+            "source_file": "user_data_tiktok.json or user_data.json",
+            "columns": {
+                "Interests": "The ad interests associated with the participant's TikTok activity."
+            }
+        }
+
+    Table config::
+        {
+            "id": "tiktok_ad_interests",
+            "title": {"en": "Ad interests", "nl": "Advertentie-interesses"},
+            "description": {
+                "en": "Ad interests associated with your TikTok activity.",
+                "nl": "Advertentie-interesses gekoppeld aan je TikTok-activiteit."
+            },
+            "headers": {
+                "Interests": {"en": "Interests", "nl": "Interesses"}
+            }
+        }
+    """
+    out = pd.DataFrame()
+    if validation.current_ddp_category.ddp_filetype == DDPFiletype.JSON:
+        data = _load_user_data(reader)
+        out = pd.DataFrame()
+        try:
+            items = _get(data, "Your Activity", "Ad Interests")
+            if not isinstance(items, list):
+                return out
+        except Exception as e:
+            logger.error("Exception caught: %s", e)
+            errors[type(e).__name__] += 1
+            return out
+    elif validation.current_ddp_category.ddp_filetype == DDPFiletype.TXT:
+        if validation.current_ddp_category.language == Language.NL:
+            data = reader.raw("Advertentie-interesses.txt")
+        elif validation.current_ddp_category.language == Language.EN:
+            data = reader.raw("Ad Interests.txt")
+        else:
+            return out
+        if not data.found:
+            return out    
+        try:
+            items = _parse_tiktok_txt(data.data)
+            if not isinstance(items, list):
+                # When only one record is present, this is not automatically recognized as a list of records.
+                # Therefor the returned dict needs to be stored in a list to proceed.
+                if isinstance(items, dict):
+                    items = [items]
+                else:
+                    return out
+        except Exception as e:
+            logger.error("Exception caught: %s", e)
+            errors[type(e).__name__] += 1
+            return out
+    try:
+        rows = [
+            (
+                _item_get(item, "Categorieën advertentie-interesses", "AdInterestCategories", "Ad Interest Categories"),
+            )
+            for item in items
+        ]
+        out = pd.DataFrame(rows, columns=["Date", "Interest"])  # pyright: ignore
         out = out.sort_values("Date", ascending=False)
     except Exception as e:
         logger.error("Exception caught: %s", e)
@@ -1503,6 +1719,8 @@ EXTRACTOR_REGISTRY: dict[str, Callable[..., pd.DataFrame]] = {
     "searches_to_df": searches_to_df,
     "share_history_to_df": share_history_to_df,
     "comments_to_df": comments_to_df,
+    "off_tiktok_to_df": off_tiktok_to_df,
+    "ad_interests_to_df": ad_interests_to_df,
 }
 
 

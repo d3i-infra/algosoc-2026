@@ -572,6 +572,17 @@ def read_csv_from_bytes_to_df(json_bytes: io.BytesIO) -> pd.DataFrame:
     return pd.DataFrame(read_csv_from_bytes(json_bytes))
 
 
+def xpath_nodes(node: Any, expression: str) -> list[Any]:
+    """Run an XPath query and return its node list.
+
+    lxml's ``xpath`` is typed as a union (a query can also yield a string, a
+    number or a boolean); every caller here iterates over element results, so a
+    non-list result is treated as "no matches" rather than raised.
+    """
+    result = node.xpath(expression)
+    return result if isinstance(result, list) else []
+
+
 # --- Result types for ZipArchiveReader ---
 
 @dataclass
