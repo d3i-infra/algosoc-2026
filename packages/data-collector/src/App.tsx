@@ -12,16 +12,23 @@ const devLocale = import.meta.env.DEV
   ? new URLSearchParams(window.location.search).get('locale') ?? undefined
   : undefined
 
+// Study preview builds (VITE_STANDALONE=true, the gh-pages preview) run on the
+// fake bridge, so no host supplies a locale; this Dutch-language study shows
+// them in Dutch. Dev and production are unaffected: dev keeps the ?locale=
+// injection point above, production takes the host's locale.
+const isPreviewBuild = import.meta.env.VITE_STANDALONE === "true"
+const previewLocale = isPreviewBuild ? "nl" : undefined
+
 function App() {
   return (
     <div className="App">
       <ScriptHostComponent
         workerUrl="./py_worker.js"
-        standalone={import.meta.env.DEV}
+        standalone={import.meta.env.DEV || isPreviewBuild}
         logLevel={import.meta.env.DEV ? "debug" : "info"}
         platform={import.meta.env.VITE_PLATFORM}
         defaultLocale={DEFAULT_UI_LOCALE}
-        locale={devLocale}
+        locale={devLocale ?? previewLocale}
         mapLocale={normalizeLocale}
         factories={[
           new DataSubmissionPageFactory({

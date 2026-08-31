@@ -175,11 +175,11 @@ export const RenderVisualization = memo(
 function prepareTexts (locale: string): Record<string, string> {
   const texts = {
     errorMsg: {
-      en: 'Could not create visualization',
-      nl: 'Kon visualisatie niet maken',
-      de: 'Visualisierung konnte nicht erstellt werden',
-      it: 'Impossibile creare la visualizzazione',
-      es: 'No se ha podido crear la visualización'
+      en: 'We could not create this chart. This does not affect your donation.',
+      nl: 'We konden deze grafiek niet maken. Dat heeft geen gevolgen voor uw donatie.',
+      de: 'Diese Grafik konnte nicht erstellt werden. Das hat keine Auswirkungen auf Ihre Spende.',
+      it: 'Non è stato possibile creare questo grafico. Ciò non influisce sulla sua donazione.',
+      es: 'No hemos podido crear este gráfico. Esto no afecta a su donación.'
     },
     noDataMsg: {
       en: 'No data',

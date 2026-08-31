@@ -96,6 +96,12 @@ test('can select two zip parts and submit data sourced from both', async ({ page
   // be ambiguous between the two tables. `.first()` guards strict mode
   // without changing which table is asserted against, since each exact
   // value legitimately appears in exactly one cell across the page.
+  //
+  // Study UI: the consent page shows one table at a time behind a selector
+  // (consent_form_viz.tsx / table_selector.tsx), so each table is selected by
+  // its id before its cells are asserted. The payload still carries every
+  // table regardless of which one is on screen (checked below).
+  await page.getByLabel('Select a table').selectOption('e2etest_multifile_membership');
   await expect(page.getByRole('cell', { name: 'test_file_0001.txt', exact: true }).first()).toBeVisible();
   await expect(page.getByRole('cell', { name: 'test_file_0002.csv', exact: true }).first()).toBeVisible();
 
@@ -110,6 +116,7 @@ test('can select two zip parts and submit data sourced from both', async ({ page
   // filenames/part indices (metadata ArchiveSet.part_index_of never reads
   // a byte for) would not prove that. Exact matching also rules out this
   // cell being confused with a plain 'test_file_0002.csv' filename cell.
+  await page.getByLabel('Select a table').selectOption('e2etest_multifile_content_preview');
   await expect(page.getByRole('cell', { name: 'FILE:test_file_0002.csv', exact: true }).first()).toBeVisible();
 
   const submittedData = await submitDataAndGetResult(page);
@@ -220,6 +227,8 @@ test('uploading a renamed copy of the same archive does not duplicate the donate
     // correctly-working app (one per table) — a false failure on the
     // success path that would not actually detect a broken dedupe (which
     // would show up as 2 matches WITHIN the membership table instead).
+    // Study UI: one table on screen at a time — bring the membership table up first.
+    await page.getByLabel('Select a table').selectOption('e2etest_multifile_membership');
     const membershipTable = tableWithTitle(page, 'Files across uploaded parts');
     await expect(membershipTable.getByRole('cell', { name: 'test_file_0001.txt', exact: true })).toHaveCount(1);
     await expect(membershipTable.getByRole('cell', { name: 'test_file_0002.csv', exact: true })).toHaveCount(1);

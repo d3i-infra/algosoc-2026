@@ -15,9 +15,10 @@ import {
     PropsUIPromptConsentFormTableViz,
     PropsUITableRow,
 } from "./types"
-import { useCallback, useEffect, useRef, useState, ReactElement } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, ReactElement } from "react"
 import _ from "lodash"
 import { TableContainer } from "./table_container"
+import { TableSelector } from "./table_selector"
 
 type Props = PropsUIPromptConsentFormViz & ReactFactoryContext
 
@@ -106,7 +107,8 @@ export const ConsentFormViz = (props: Props): ReactElement => {
 
   const [tables, setTables] = useState<TableWithContext[]>(() => parseTables(props.tables))
   const { locale, resolve } = props
-  const { description } = prepareCopy(props)
+  const { description, shareAllNote } = prepareCopy(props)
+  const [selectedTableId, setSelectedTableId] = useState<string>("")
   // The state initializer above already parsed props.tables; only re-parse
   // when the host actually sends new tables (issue #122 double parse).
   const parsedTables = useRef(props.tables)
@@ -117,6 +119,20 @@ export const ConsentFormViz = (props: Props): ReactElement => {
     setTables(parseTables(props.tables))
     // eslint-disable-next-line react-hooks/exhaustive-deps -- PENDING_ISSUES "lint hygiene" entry 2026-08-26: consent_form_viz re-parse effect intentionally omits `parseTables` from deps. parseTables is a plain closure re-created every render, so listing it would make the dependency "changed" on every render regardless of whether props.tables actually changed; the effect's own ref-comparison guard (not this array) is what enforces ADR-0031's parse-once contract (issue #122 double parse), and widening this dependency array is exactly the kind of edit that has previously broken that contract by accident. A real fix would hoist parseTables/parseTable out of the component (or wrap them in useCallback keyed only on props.locale) so the function identity is stable and can be listed honestly.
   }, [props.tables])
+
+  // Study UI: one table on screen at a time, in title order. Only the display
+  // is scoped — `tables` (and so the donated payload) always holds every table.
+  const sortedTables = useMemo(
+    () => [...tables].sort((a, b) => a.title.localeCompare(b.title, locale)),
+    [tables, locale]
+  )
+
+  // Falling back to the first table keeps the selection valid when the tables
+  // change (e.g. on a new donation) without needing an extra effect.
+  const selectedTable = useMemo(
+    () => sortedTables.find((table) => table.id === selectedTableId) ?? sortedTables[0],
+    [sortedTables, selectedTableId]
+  )
 
   const updateTable = useCallback((tableId: string, table: TableWithContext) => {
     setTables((tables) => {
@@ -167,13 +183,42 @@ export const ConsentFormViz = (props: Props): ReactElement => {
         ))}
       </div>
       <div className="flex flex-col gap-16 w-full">
-        <div className="grid gap-8 max-w-full">
-          {tables.map((table) => {
-            return (
-              <TableContainer key={table.id} id={table.id} table={table} updateTable={updateTable} locale={locale} />
-            )
-          })}
+        <div className="grid gap-4 max-w-full">
+          {selectedTable != null && (
+            <>
+              {/* A single table needs no selector (and its copy would read
+                  "divided over 1 tables"); the e2e specs also find that
+                  table's title by non-exact text, which an option label
+                  repeating the title would make ambiguous. */}
+              {sortedTables.length > 1 && (
+                <TableSelector
+                  tables={sortedTables}
+                  selectedId={selectedTable.id}
+                  onSelect={setSelectedTableId}
+                  locale={locale}
+                />
+              )}
+              {/* Keyed on the table id so switching unmounts the previous
+                  table: its figures, and any visualization computation they
+                  have in flight, are torn down instead of every table's
+                  figures staying mounted at once. */}
+              <TableContainer
+                key={selectedTable.id}
+                id={selectedTable.id}
+                table={selectedTable}
+                updateTable={updateTable}
+                locale={locale}
+              />
+            </>
+          )}
         </div>
+        {/* Only one table is on screen, so spell out that sharing covers all of them. */}
+        {sortedTables.length > 1 && (
+          <BodyLarge
+            margin=""
+            text={shareAllNote.replace("{n}", sortedTables.length.toLocaleString(locale, { useGrouping: true }))}
+          />
+        )}
         <DonateButtons
           onDonate={handleDonate}
           onCancel={handleCancel}
@@ -188,11 +233,13 @@ export const ConsentFormViz = (props: Props): ReactElement => {
 
 interface Copy {
   description: string
+  shareAllNote: string
 }
 
 function prepareCopy({ description, locale }: Props): Copy {
   return {
     description: resolveText(description ?? defaultDescription, locale),
+    shareAllNote: resolveText(defaultShareAllNote, locale),
   }
 }
 
@@ -216,6 +263,13 @@ const defaultDonateButtonLabel = new TextBundle()
   .add('nl', 'Ja, deel voor onderzoek')
   .add('it', 'Sì, condividi per la ricerca')
   .add('es', 'Sí, compartir para la investigación')
+
+const defaultShareAllNote = new TextBundle()
+  .add('en', 'Sharing covers all {n} tables, also the ones you have not opened.')
+  .add('nl', 'U deelt alle {n} tabellen, ook de tabellen die u niet heeft geopend.')
+  .add('de', 'Geteilt werden alle {n} Tabellen, auch die, die Sie nicht geöffnet haben.')
+  .add('it', 'La condivisione riguarda tutte le {n} tabelle, anche quelle che non ha aperto.')
+  .add('es', 'Se comparten las {n} tablas, también las que no ha abierto.')
 
 const defaultDescription = new TextBundle()
   .add('en', 'Determine whether you would like to share the data below. Carefully check the data and adjust when required. With your contribution, you help the previously described research. Thank you in advance.')
