@@ -271,3 +271,42 @@ class TestMultipleReads:
         r1 = reader.json("data/following.json")
         r2 = reader.csv("ratings.csv")
         assert r1.found and r2.found
+
+
+class TestRawAll:
+    """raw_all mirrors json_all for raw members: pattern-matched, sorted, and
+    read through the same guarded path as raw()."""
+
+    def test_matches_sorted_lexicographically(self):
+        reader = _make_reader([
+            ("x/post_comments_2.html", b"<p>two</p>"),
+            ("x/post_comments_10.html", b"<p>ten</p>"),
+            ("x/post_comments_1.html", b"<p>one</p>"),
+            ("x/post_comments.json", b"{}"),
+        ])
+        results = reader.raw_all(r"(^|/)post_comments_\d+\.html$")
+        assert [r.member_path for r in results] == [
+            "x/post_comments_1.html", "x/post_comments_10.html", "x/post_comments_2.html",
+        ]
+        assert all(r.found for r in results)
+        assert [r.data.read() for r in results] == [b"<p>one</p>", b"<p>ten</p>", b"<p>two</p>"]
+
+    def test_no_matches_returns_empty_list(self):
+        reader = _make_reader([("x/post_comments.json", b"{}")])
+        assert reader.raw_all(r"\.html$") == []
+
+    def test_oversized_member_counted_not_raised(self, monkeypatch):
+        import port.helpers.archive_set as archive_set_mod
+
+        monkeypatch.setattr(archive_set_mod, "MAX_MEMBER_UNCOMPRESSED_BYTES", 4)
+        part = _named_part("a-1.zip", [("likes_1.html", "<p>" + "x" * 40 + "</p>")])
+        archive = ArchiveSet([part])
+        errors = Counter()
+        reader = ZipArchiveReader(archive, archive.members, errors)
+
+        results = reader.raw_all(r"likes_\d+\.html$")
+
+        assert len(results) == 1
+        assert results[0].found is True
+        assert results[0].data.read() == b""
+        assert errors["MemberTooLargeError"] == 1

@@ -753,3 +753,64 @@ class ZipArchiveReader:
 
         b = self._read_member_bytes(member)
         return RawExtractionResult(found=True, data=b, member_path=member)
+
+    def raw_all(self, pattern: str) -> list[RawExtractionResult]:
+        """Extract raw bytes from all zip members matching a regex pattern.
+
+        Returns results sorted lexicographically by member path. Used for
+        paginated HTML exports (post_comments_1.html, _2.html, etc.). Every
+        member is read through ``_read_member_bytes`` so the member-size guard
+        and error counting apply exactly as for ``raw()``.
+        """
+        matches = sorted(m for m in self.archive_members if re.search(pattern, m))
+        results = []
+        for member in matches:
+            b = self._read_member_bytes(member)
+            results.append(RawExtractionResult(found=True, data=b, member_path=member))
+        return results
+
+
+# --- Study-side anonymization (algosoc-2026) ---
+#
+# Applied by a platform's ``extraction()`` after the tables are built. These
+# helpers operate on nullable string columns so a missing cell stays missing
+# instead of becoming the literal text "nan".
+
+EMAIL_PATTERN = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
+
+
+def replace_email(text: str) -> str:
+    """Replace email addresses in *text* with ``[email]``."""
+    return EMAIL_PATTERN.sub("[email]", text)
+
+
+def _username_pattern(username: str) -> re.Pattern[str]:
+    """Whole-token, case-insensitive match for *username*.
+
+    Anchored on both sides so a short username (initials, a two-letter
+    nickname) never redacts the inside of an unrelated word.
+    """
+    return re.compile(rf"(?<!\w){re.escape(username)}(?!\w)", re.IGNORECASE)
+
+
+def replace_username(text: str, username: str) -> str:
+    """Replace whole-token, case-insensitive occurrences of *username* with ``[user]``."""
+    return _username_pattern(username).sub("[user]", text)
+
+
+def anonymize_dataframe(df: pd.DataFrame, columns: list[str], username: str | None = None) -> pd.DataFrame:
+    """Anonymize text columns in a DataFrame, in place.
+
+    Replaces email addresses and, when *username* is given, the user's name
+    with placeholder tokens. Only columns that exist in *df* are touched.
+    Missing values are preserved as missing. The frame is mutated and also
+    returned for convenience.
+    """
+    for col in columns:
+        if col not in df.columns:
+            continue
+        redacted = df[col].astype("string").str.replace(EMAIL_PATTERN, "[email]", regex=True)
+        if username:
+            redacted = redacted.str.replace(_username_pattern(username), "[user]", regex=True)
+        df[col] = redacted
+    return df
