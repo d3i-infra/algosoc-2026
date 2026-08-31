@@ -35,7 +35,7 @@ Platform info::
         "name": "Google",
         "filetypes": ["json", "html", "csv", "txt"],
         "languages": ["en", "nl", "de", "es", "ar", "tr", "zh"],
-        "description": "Handles the Google Takeout archive, uploaded as one or more zip parts (a multi-zip archive-set, so the export never needs to fit in a single upload). Extracts 12 tables: four from YouTube (watch history, search history, subscriptions, comments), one each from Search, Chrome, Video Search, Ads, Discover and Google News, and two from News — the News product's My Activity stream and its own export (followed sources, topics and locations, saved articles and magazines). Each source is read as JSON, HTML, CSV or TXT, whichever format it was exported in, which may differ per source within one archive. Handles DDPs in English, Dutch, German, Spanish, Arabic, Turkish and Chinese (Simplified only); the seven locales' path tables for the core sources were verified against real Google Takeout exports in August 2026. A handful of lower-traffic sources still carry older, unverified path guesses: the News My-Activity folder in every locale, Discover outside English (its English path is real-export-verified), and subscriptions/comments outside English and Dutch. Tested against the project's synthetic/canary test suite as of the date below; a live browser run against real exports updates this note when performed. If you find anything wrong with this script, report to datadonation@uu.nl and it will be fixed!",
+        "description": "Handles the Google Takeout archive, uploaded as one or more zip parts (a multi-zip archive-set, so the export never needs to fit in a single upload). Extracts the ten tables this study asks for: four from YouTube (watch history, search history, subscriptions, comments), one each from Search, Chrome, Video Search, Ads, Discover and Google News. The general area a search or Discover card was made from is not extracted; rows of the Search, Chrome, Video Search and Ads tables that carry explicit content are dropped, and email addresses are redacted in the title and details columns of every table. Each source is read as JSON, HTML, CSV or TXT, whichever format it was exported in, which may differ per source within one archive. Handles DDPs in English, Dutch, German, Spanish, Arabic, Turkish and Chinese (Simplified only); the seven locales' path tables for the core sources were verified against real Google Takeout exports in August 2026. A handful of lower-traffic sources still carry older, unverified path guesses: the News My-Activity folder in every locale, Discover outside English (its English path is real-export-verified), and subscriptions/comments outside English and Dutch. Tested against the project's synthetic/canary test suite as of the date below; a live browser run against real exports updates this note when performed. If you find anything wrong with this script, report to datadonation@uu.nl and it will be fixed!",
         "time_last_tested": "30-08-2026"
     }
 """
@@ -55,6 +55,7 @@ from port.api.d3i_props import ExtractionResult
 from port.helpers.archive_set import ArchiveSet
 from port.helpers.extraction_helpers import ZipArchiveReader
 from port.helpers.flow_builder import FlowBuilder
+from port.helpers.study_redaction import apply_study_redaction
 from port.helpers.table_extractor import load_port_config, run_extraction
 from port.helpers.validate import BaseValidation
 
@@ -536,8 +537,10 @@ def _subtitle(line: dict) -> dict:
 
 def _parse_activity_caption(cell) -> dict:
     """Reads the lists an activity carries beside it, in the shape the json format writes
-    them: ``details`` as ``{"name": ...}`` and ``locationInfos`` as ``{"name": ..., "url":
-    ..., "source": ...}``. Returns only the lists that are there, as the json does.
+    them: ``details`` as ``{"name": ...}``. Returns only the lists that are there, as the
+    json does — except the locations, which this study drops rather than reads (see
+    ``search_history_to_df``): a section that links to Maps is recognized so that it never
+    lands in the details, and then discarded.
 
     The caption is a run of sections, each headed by a bold label and holding one entry per
     line break::
@@ -574,24 +577,11 @@ def _parse_activity_caption(cell) -> dict:
             # it was kept, neither of which says anything about the activity itself.
             continue
         if any(MAPS_LINK in line["url"] for line in section):
-            caption["locationInfos"] = [_location(line) for line in section]
-        else:
-            caption["details"] = [{"name": line["text"]} for line in section if line["text"]]
+            # Where the activity was recorded from, which is dropped rather than read.
+            continue
+        caption["details"] = [{"name": line["text"]} for line in section if line["text"]]
 
     return caption
-
-
-def _location(line: dict) -> dict:
-    """Reads a location entry, whose source of the location follows its name."""
-
-    name, separator, source = line["text"].rpartition(" - ")
-    if not separator:
-        name, source = line["text"], ""
-
-    location = {"name": name, "url": line["url"]}
-    if source:
-        location["source"] = source
-    return location
 
 
 def _strip_redirect(url: str) -> str:
@@ -628,25 +618,6 @@ def _join_details(item: dict) -> str:
         texts.append(": ".join(
             part for part in (detail.get("name", ""), detail.get("url", "")) if part
         ))
-
-    return ", ".join(texts)
-
-
-def _join_locations(item: dict) -> str:
-    """Reads the locations an activity was recorded from as one column of text, empty when
-    it carries none. Each is the area it names and the link to Maps that shows it, followed
-    by how it was arrived at behind a dash, the way the archive writes it. An activity may
-    be placed by several of them at once."""
-
-    texts = []
-    for location in item.get("locationInfos") or []:
-        if not isinstance(location, dict):
-            continue
-        area = " ".join(
-            part for part in (location.get("name", ""), location.get("url", "")) if part
-        )
-        source = location.get("source", "")
-        texts.append(f"{area} - {source}" if source else area)
 
     return ", ".join(texts)
 
@@ -1324,18 +1295,17 @@ def search_history_to_df(reader: ZipArchiveReader, errors: Counter, ddp_locale: 
     Returns
     -------
     pd.DataFrame
-        Columns: ``Title``, ``URL``, ``Locations``, ``Details``, ``Timestamp``.
+        Columns: ``Title``, ``URL``, ``Details``, ``Timestamp``.
         Empty DataFrame when no matching file is found or parsing fails.
 
     Table documentation::
 
         {
-          "summary": "Each row represents one search query in Google search history, including the general area it was made from and how the search came about where the archive says so.",
+          "summary": "Each row represents one search query in Google search history, including how the search came about where the archive says so. The area a search was made from is not extracted.",
           "source_file": "the Google search history, e.g. Search/MyActivity.json or Suche/MyActivity.html",
           "columns": {
             "Title": "Description of the search action.",
             "URL": "URL of the search query.",
-            "Locations": "The general area the search was made from, as a name, a link to Google Maps and, behind a dash, how the area was arrived at. Empty for most searches.",
             "Details": "How the search came about, such as a search that came from an ad. Empty for most searches.",
             "Timestamp": "ISO 8601 timestamp of when the search was performed."
           }
@@ -1353,7 +1323,6 @@ def search_history_to_df(reader: ZipArchiveReader, errors: Counter, ddp_locale: 
           "headers": {
             "Title": {"en": "Action", "nl": "Actie"},
             "URL": {"en": "URL", "nl": "URL"},
-            "Locations": {"en": "Locations", "nl": "Locaties"},
             "Details": {"en": "Details", "nl": "Details"},
             "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
           }
@@ -1370,13 +1339,12 @@ def search_history_to_df(reader: ZipArchiveReader, errors: Counter, ddp_locale: 
             datapoints.append((
                 item.get("title", ""),
                 item.get("titleUrl", ""),
-                _join_locations(item),
                 _join_details(item),
                 item.get("time", ""),
             ))
         out = pd.DataFrame(  # pyright: ignore
             datapoints,
-            columns=["Title", "URL", "Locations", "Details", "Timestamp"],
+            columns=["Title", "URL", "Details", "Timestamp"],
         )
     except Exception as e:
         logger.error("Exception caught: %s", e)
@@ -1628,7 +1596,7 @@ def discover_history_to_df(reader: ZipArchiveReader, errors: Counter, ddp_locale
     Returns
     -------
     pd.DataFrame
-        Columns: ``Title``, ``Locations``, ``Details``, ``Timestamp``.
+        Columns: ``Title``, ``Details``, ``Timestamp``.
         Empty DataFrame when no matching file is found or parsing fails.
 
     Table documentation::
@@ -1638,7 +1606,6 @@ def discover_history_to_df(reader: ZipArchiveReader, errors: Counter, ddp_locale
           "source_file": "the Google Discover history, e.g. Discover/MyActivity.json",
           "columns": {
             "Title": "The title of the Discover event.",
-            "Locations": "The locations associated with the Discover event.",
             "Details": "Additional details about the Discover event.",
             "Timestamp": "ISO 8601 timestamp of when the Discover event occurred."
           }
@@ -1655,7 +1622,6 @@ def discover_history_to_df(reader: ZipArchiveReader, errors: Counter, ddp_locale
           },
           "headers": {
             "Title": {"en": "Action", "nl": "Actie"},
-            "Locations": {"en": "Locations", "nl": "Locaties"},
             "Details": {"en": "Details", "nl": "Details"},
             "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
           }
@@ -1671,11 +1637,10 @@ def discover_history_to_df(reader: ZipArchiveReader, errors: Counter, ddp_locale
         for item in d:
             datapoints.append((
                 item.get("title", ""),
-                _join_locations(item),
                 _join_details(item),
                 item.get("time", "")
             ))
-        out = pd.DataFrame(datapoints, columns=["Title", "Locations", "Details", "Timestamp"])  # pyright: ignore
+        out = pd.DataFrame(datapoints, columns=["Title", "Details", "Timestamp"])  # pyright: ignore
     except Exception as e:
         logger.error("Exception caught: %s", e)
         errors[type(e).__name__] += 1
@@ -1964,6 +1929,11 @@ def _count_failed_files(reader: ZipArchiveReader) -> int:
 #: then the two News extractors this port adds after it (``news_history_to_df``
 #: for the My Activity stream, ``news_items_to_df`` for the News product's own
 #: export — researcher decision 2026-08-27: both News shapes are extracted).
+#:
+#: Study (algosoc-2026): the two News-product extractors are not part of this
+#: study's table set. They stay available above, but are not registered — the
+#: generated config, and the config the deployed selector regenerates from these
+#: docstrings, therefore offer exactly the study's ten tables.
 EXTRACTOR_REGISTRY: dict[str, Callable[..., pd.DataFrame]] = {
     "youtube_watch_history_to_df": youtube_watch_history_to_df,
     "youtube_search_history_to_df": youtube_search_history_to_df,
@@ -1975,8 +1945,8 @@ EXTRACTOR_REGISTRY: dict[str, Callable[..., pd.DataFrame]] = {
     "ads_history_to_df": ads_history_to_df,
     "discover_history_to_df": discover_history_to_df,
     "google_news_history_to_df": google_news_history_to_df,
-    "news_history_to_df": news_history_to_df,
-    "news_items_to_df": news_items_to_df,
+    # "news_history_to_df": news_history_to_df,  # not in this study's set
+    # "news_items_to_df": news_items_to_df,      # not in this study's set
 }
 
 
@@ -1988,6 +1958,11 @@ def extraction(archive_set: ArchiveSet, validation: GoogleValidation) -> Extract
     ``validate_ddp`` detected is injected into every table's ``extractor_kwargs``
     here, once, rather than duplicated in each table's config entry — every
     extractor above takes ``ddp_locale`` as its lookup key into ``TAKEOUT_PATHS``.
+
+    The study's redaction (``port.helpers.study_redaction``) is applied to the
+    result once every table is built: explicit-content rows dropped from the
+    four search/browsing tables, addresses redacted everywhere, and a table
+    left empty by that removed like any other empty table.
 
     Also runs the best-effort Failed-Files detector (``_count_failed_files``)
     over the archive-set's own ``archive_browser.html`` manifest, when the
@@ -2009,7 +1984,7 @@ def extraction(archive_set: ArchiveSet, validation: GoogleValidation) -> Extract
     if failed:
         errors["ExportReportedFailedFiles"] = failed
 
-    return run_extraction(reader, errors, config)
+    return apply_study_redaction(run_extraction(reader, errors, config))
 
 
 class GoogleFlow(FlowBuilder):

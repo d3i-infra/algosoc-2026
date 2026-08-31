@@ -81,7 +81,11 @@ def test_expects_payload_files():
     assert google.GoogleFlow("s1").expected_file_payload == "PayloadFiles"
 
 
-def test_registry_has_twelve_extractors_in_priority_order():
+def test_registry_has_the_ten_study_extractors_in_priority_order():
+    """The registry is what the generated config — and the config the deployed
+    selector regenerates from the docstrings — is built from, so it holds
+    exactly the study's ten tables. The two News-product extractors stay
+    available as functions but are not registered."""
     assert list(google.EXTRACTOR_REGISTRY) == [
         "youtube_watch_history_to_df",
         "youtube_search_history_to_df",
@@ -93,9 +97,8 @@ def test_registry_has_twelve_extractors_in_priority_order():
         "ads_history_to_df",
         "discover_history_to_df",
         "google_news_history_to_df",
-        "news_history_to_df",
-        "news_items_to_df",
     ]
+    assert callable(google.news_history_to_df) and callable(google.news_items_to_df)
 
 
 # ---------------------------------------------------------------------------

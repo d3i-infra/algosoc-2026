@@ -24,9 +24,7 @@ real or scrubbed Takeout zip parts:
   carries the browser-renamed duplicate download (``...-001 (1).zip``).
 - ``en_vid``, ``nl_vid`` — the algosoc-2026 fork's scrubbed copies of
   gmail-acct and uu-acct-nl respectively (same account, same export
-  timestamps; large media stripped). See ``EXPECT_NON_EMPTY``'s docstring
-  note below for what "scrubbed" turned out to mean for the Locations
-  column.
+  timestamps; large media stripped).
 
 Each set directory holds only the platform's own ``*.zip`` parts —
 ``open_fixture_set`` globs ``*.zip``, so any non-zip file (e.g. a fixture
@@ -40,15 +38,14 @@ rows" (``test_set_has_at_least_one_nonempty_table_when_unpinned``), so a
 fixture set added later without updating this file still gets a minimal
 tripwire.
 
-Locations content (real activity records carrying Maps captions,
-``locationInfos``/the ``Locations`` column) is present in every REAL set's
-``search_history`` table (a handful to ~12.8k rows depending on account) but
-is entirely absent — every row blank — in both fork ``*_vid`` sets, even
-though row counts otherwise match their real counterparts almost exactly.
-That is the scrub, not a bug: the fork stripped location captions along with
-large media. ``SETS_WITH_LOCATION_CONTENT`` / ``test_search_history_location_content``
-encode this as a tripwire in both directions — a real set losing its location
-content, or a *_vid set unexpectedly gaining some, both fail loudly.
+Locations: every REAL set's search-history activity carries Maps captions
+(``locationInfos`` in the export), which this study does not extract —
+``test_no_location_content_in_any_table`` pins that no table carries a
+``Locations`` column over any set. The study's redaction layer
+(``port.helpers.study_redaction``, applied by ``google.extraction()``) is
+pinned over every set by ``test_study_layer_holds_over_whole_extraction``,
+since the per-extractor canaries above call the extractors directly and
+bypass it.
 """
 import zipfile
 from collections import Counter
@@ -60,8 +57,11 @@ import pytest
 
 import extractor_integration_helpers as eih
 from extractor_integration_helpers import find_fixture_sets, open_fixture_set
+import port.helpers.extraction_helpers as eh
+from port.helpers import study_redaction
 from port.helpers.archive_set import ArchiveSet
 from port.helpers.extraction_helpers import ZipArchiveReader
+from port.helpers.table_extractor import load_port_config
 from port.platforms import google
 
 GOOGLE_SETS = find_fixture_sets("google")
@@ -98,8 +98,8 @@ _UU_ACCOUNT_TABLES = {
     "google_news_history_to_df",
 }
 
-#: All 12 extractors — the heavier gmail-acct/en_vid account (and only that
-#: account, among the local sets) exercises every one of them.
+#: All ten registered extractors (the study's set) — the heavier gmail-acct/en_vid
+#: account (and only that account, among the local sets) exercises every one of them.
 _ALL_TABLES = set(google.EXTRACTOR_REGISTRY)
 
 #: Populated from the verified run against the local sets (2026-08-30). A set
@@ -125,19 +125,6 @@ FAILED_FILES_SETS = {"google_set_gmail-acct", "google_set_en_vid"}
 #: Sets containing the browser-renamed duplicate download
 #: (``takeout-...-001 (1).zip`` alongside ``takeout-...-001.zip``).
 DUPLICATE_SETS = {"google_set_gmail-acct", "google_set_en_vid"}
-
-#: Sets whose real search-history activity carries nonblank Locations
-#: (Maps captions on an activity) — see the module docstring's Locations note.
-SETS_WITH_LOCATION_CONTENT = {
-    "google_set_gmail-acct",
-    "google_set_uu-acct",
-    "google_set_uu-acct-nl",
-    "google_set_uu-acct-es",
-    "google_set_uu-acct-ar",
-    "google_set_uu-acct-tr",
-    "google_set_uu-acct-zh",
-    "google_set_uu-acct-de",
-}
 
 #: Error-counter keys a clean run over a real (or realistically messy)
 #: export may legitimately carry. Anything else surfacing here is a real
@@ -307,12 +294,12 @@ def test_whole_extraction_error_keys(set_dir):
 
 
 # ---------------------------------------------------------------------------
-# Locations content — real exports vs. the fork's scrubbed sets
+# Study layer — locations dropped, redaction applied, over the whole extraction
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("set_dir", _SET_PARAMS, ids=_SET_IDS)
-def test_search_history_location_content(set_dir):
+def test_no_location_content_in_any_table(set_dir):
     if set_dir is None:
         pytest.skip(_NO_FIXTURES_REASON)
     ctx = _context_for(set_dir)
@@ -321,18 +308,43 @@ def test_search_history_location_content(set_dir):
 
     errors: Counter = Counter()
     reader = ZipArchiveReader(ctx.archive_set, ctx.validation.archive_members, errors)
-    df = google.search_history_to_df(reader, errors, ddp_locale=ctx.validation.ddp_locale)
-    nonblank = int((df["Locations"].astype(str).str.strip() != "").sum()) if "Locations" in df.columns else 0
+    for name, extractor in google.EXTRACTOR_REGISTRY.items():
+        df = extractor(reader, errors, ddp_locale=ctx.validation.ddp_locale)
+        assert "Locations" not in df.columns, f"{set_dir.name}: {name} carries a Locations column"
 
-    if set_dir.name in SETS_WITH_LOCATION_CONTENT:
-        assert nonblank > 0, (
-            f"{set_dir.name} expected Locations content in search_history but found none"
-        )
-    else:
-        assert nonblank == 0, (
-            f"{set_dir.name} unexpectedly carries Locations content in search_history "
-            "(scrub regression, or SETS_WITH_LOCATION_CONTENT is out of date)"
-        )
+
+@pytest.mark.parametrize("set_dir", _SET_PARAMS, ids=_SET_IDS)
+def test_study_layer_holds_over_whole_extraction(set_dir):
+    """Drives ``google.extraction()`` — the path the participant flow takes — and
+    checks the study's policy on its output: only the study's tables, no
+    locations, no addresses, no explicit-content rows in the filtered tables."""
+    if set_dir is None:
+        pytest.skip(_NO_FIXTURES_REASON)
+    ctx = _context_for(set_dir)
+    if ctx.validation.get_status_code_id() != 0:
+        pytest.skip(f"{set_dir.name} not recognized as a Google DDP")
+
+    result = google.extraction(ctx.archive_set, ctx.validation)
+    study_ids = {t.id for t in load_port_config(google.EXTRACTOR_REGISTRY, "google")}
+    for table in result.tables:
+        df = table.data_frame
+        assert table.id in study_ids, f"{set_dir.name}: {table.id} is not a study table"
+        assert "Locations" not in df.columns, f"{set_dir.name}: {table.id} carries a Locations column"
+        assert not df.empty, f"{set_dir.name}: {table.id} is empty but present"
+        if "Details" in df.columns:
+            leaked = df["Details"].astype("string").str.contains("google.com/maps", na=False, regex=False)
+            assert not leaked.any(), f"{set_dir.name}: {table.id}.Details carries a Maps location"
+        for col in study_redaction.EMAIL_COLUMNS:
+            if col in df.columns:
+                hits = df[col].astype("string").str.contains(eh.EMAIL_PATTERN, na=False, regex=True)
+                assert not hits.any(), f"{set_dir.name}: {table.id}.{col} still carries an address"
+        if table.id in study_redaction.EXPLICIT_FILTERED_TABLES:
+            for col in study_redaction.EXPLICIT_COLUMNS:
+                if col in df.columns:
+                    hits = df[col].astype("string").str.lower().str.contains(
+                        study_redaction.EXPLICIT_REGEX, na=False, regex=True
+                    )
+                    assert not hits.any(), f"{set_dir.name}: {table.id}.{col} still carries explicit content"
 
 
 # ---------------------------------------------------------------------------

@@ -155,8 +155,10 @@ def test_conversion_agrees_with_dateutil(timestamp, _):
 
 class TestCaption:
     """Some sources record lists beside an activity — the locations a Discover card was
-    picked for, the topics it covered — which the html writes into the caption cell. They
-    have to come out in the shape the json format writes them in."""
+    picked for, the topics it covered — which the html writes into the caption cell. The
+    details have to come out in the shape the json format writes them in; the locations
+    are dropped by this study, so they must never reach the record, nor leak into the
+    details."""
 
     LOCATIONS = (
         '<b>Locations:</b><br> At <a href="https://www.google.com/maps/@?api=1&amp;'
@@ -172,24 +174,14 @@ class TestCaption:
         page = activity_html(self.CARD, f'<b>Products:</b><br> Discover<br>{caption}{WHY}')
         return google._parse_activity_html(io.BytesIO(page.encode()))[0]
 
-    def test_locations_and_details_read_as_the_json_writes_them(self):
+    def test_details_read_as_the_json_writes_them_and_locations_are_dropped(self):
         record = self.record(self.LOCATIONS + self.DETAILS)
 
-        assert record["locationInfos"] == [
-            {
-                "name": "At this general area",
-                "url": "https://www.google.com/maps/@?api=1&map_action=map&center=10.000000,20.000000&zoom=12",
-                "source": "Based on your past activity",
-            },
-            {
-                "name": "At this general area",
-                "url": "https://www.google.com/maps/@?api=1&map_action=map&center=11.000000,21.000000&zoom=8",
-                "source": "From your device",
-            },
-        ]
+        assert "locationInfos" not in record
         assert record["details"] == [
             {"name": "Birdwatching"}, {"name": "Cycling - viewed"}, {"name": "Nordic cuisine"}
         ]
+        assert not any("general area" in str(v) or "google.com/maps" in str(v) for v in record.values())
 
     def test_a_detail_that_links_somewhere_keeps_the_link_in_its_text(self):
         """The html writes such a detail as one line, the name and the url it points to
@@ -205,17 +197,18 @@ class TestCaption:
         """Only a location separates its source off the end of the line."""
         assert {"name": "Cycling - viewed"} in self.record(self.DETAILS)["details"]
 
-    def test_each_list_stands_on_its_own(self):
-        assert "details" not in self.record(self.LOCATIONS)
-        assert "locationInfos" not in self.record(self.DETAILS)
+    def test_a_caption_of_only_locations_adds_nothing(self):
+        record = self.record(self.LOCATIONS)
+        assert "details" not in record
+        assert "locationInfos" not in record
 
-    def test_a_location_without_a_source_carries_none(self):
+    def test_a_location_without_a_source_is_dropped_too(self):
         caption = ('<b>Locations:</b><br> <a href="https://www.google.com/maps/@?api=1&amp;'
                    'center=10.000000,20.000000">Somewhere</a><br>')
 
-        assert self.record(caption)["locationInfos"] == [
-            {"name": "Somewhere", "url": "https://www.google.com/maps/@?api=1&center=10.000000,20.000000"}
-        ]
+        record = self.record(caption)
+        assert "locationInfos" not in record
+        assert "details" not in record
 
     def test_a_caption_with_nothing_to_add_adds_nothing(self):
         """Most captions only name the product and say why the activity was kept."""
