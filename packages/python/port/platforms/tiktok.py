@@ -269,7 +269,7 @@ def _is_empty_sentinel(line: str) -> bool:
         "dit gedeelte bevat geen gegevens",
         "er staan geen gegevens in dit gedeelte",
         "je hebt geen informatie over platforms van derden",
-        "You have no data in this section",        
+        "You have no data in this section",      
     }
     return line.strip().lower() in _EMPTY_SENTINELS
 
@@ -952,7 +952,7 @@ def following_to_df(reader: ZipArchiveReader, errors: Counter, validation) -> pd
         # this try so an unbound name is still counted, exactly as before.
         if not isinstance(items, list):
             return out
-        rows = [(_item_get(item, "Date", "Datum"), _item_get(item, "UserName", "User Name", "Gebruikersnaam")) for item in items]
+        rows = [(_item_get(item, "Date", "Datum"), _item_get(item, "UserName", "User Name", "Gebruikersnaam", "Username")) for item in items]
         out = pd.DataFrame(rows, columns=["Date", "UserName"])  # pyright: ignore
         out = out.sort_values("Date", ascending=False)
     except Exception as e:
@@ -1373,7 +1373,7 @@ def share_history_to_df(reader: ZipArchiveReader, errors: Counter, validation) -
         rows = [
             (
                 _item_get(item, "Date", "Datum"),
-                _item_get(item, "SharedContent", "SharedContent", "Gedeelde inhoud"),
+                _item_get(item, "SharedContent", "Shared Content", "Gedeelde inhoud"),
                 _item_get(item, "Link"),
                 _item_get(item, "Method", "Methode"),
             )
@@ -1495,7 +1495,7 @@ def comments_to_df(reader: ZipArchiveReader, errors: Counter, validation) -> pd.
                 _item_get(item, "Date", "Datum"),
                 _item_get(item, "Comment", "Reactie"),
                 _item_get(item, "Photo", "Foto"),
-                _item_get(item, "Url"),
+                _item_get(item, "Url", "Link", "originalPostUrl", "Original Post Link", "Originele link naar bericht") #Dutch translations are a guess for now, as I don't have a Dutch TikTok export with comments to verify against.
             )
             for item in items
         ]

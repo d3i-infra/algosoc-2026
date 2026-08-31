@@ -83,6 +83,7 @@ DDP_CATEGORIES = [
             "pending_follow_requests.json",
             "videos_watched.json",
             "ads_viewed.json",
+            "ads_clicked.json",
             "ads_interests.json",
             "account_searches.json",
             "profile_searches.json",
@@ -108,6 +109,8 @@ DDP_CATEGORIES = [
         ddp_filetype=DDPFiletype.HTML,
         language=Language.EN,
         known_files=[
+            "ads_viewed.html",
+            "ads_clicked.html",
             "followers_1.html",
             "following.html", 
             "follow_requests_you've_received.html", 
@@ -257,7 +260,7 @@ def _extract_owner_from_html(section) -> tuple[str, str]:
     name = ""
     username = ""
     for table in tables:
-        for tr in table.xpath('tr'):
+        for tr in table.xpath('.//tr'):
             tds = tr.xpath('td')
             if len(tds) == 2:
                 label = tds[0].text.strip() if tds[0].text else ""
@@ -1870,7 +1873,7 @@ def ads_viewed_to_df(
 
         {
           "summary": "Each row represents one advertisement impression shown to the participant on Instagram. Includes the advertiser identity and when the ad was displayed.",
-          "source_file": "ads_viewed.json",
+          "source_file": "ads_viewed.json / ads_viewed.html",
           "columns": {
             "Account name": "Username of the advertiser's Instagram account.",
             "Name": "Display name of the advertiser.",
@@ -1899,6 +1902,18 @@ def ads_viewed_to_df(
           }
         }
     """
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _ads_viewed_html(reader, errors)
+
+    return _ads_viewed_json(reader, errors, filename=filename)
+
+
+def _ads_viewed_json(
+    reader: ZipArchiveReader,
+    errors: Counter,
+    *,
+    filename: str = "ads_viewed.json",
+) -> pd.DataFrame:
     result = reader.json(filename)
     if not result.found:
         return pd.DataFrame()
@@ -1932,6 +1947,39 @@ def ads_viewed_to_df(
         errors[type(e).__name__] += 1
 
     return out
+
+
+def _ads_viewed_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.raw("ads_viewed.html")
+    if not result.found:
+        return pd.DataFrame()
+
+    datapoints = []
+
+    try:
+        tree = etree.HTML(result.data.read())
+
+        sections = eh.xpath_nodes(tree, "//main/div[contains(@class, '_a6-g')]")
+        for section in sections:
+            name, username = _extract_owner_from_html(section)
+
+            url_a = section.xpath(".//td[contains(@class, '_a6_q') and starts-with(text(), 'URL')]//a")
+            url = url_a[0].get("href", "") if url_a else ""
+
+            ts = section.xpath(".//div[contains(@class, '_a6-o')]")
+            timestamp = ts[0].text.strip() if ts and ts[0].text else ""
+
+            datapoints.append((username or name, name, url, timestamp))
+
+        if datapoints:
+            return pd.DataFrame(datapoints, columns=["Account name", "Name", "URL", "Date"])  # pyright: ignore
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return pd.DataFrame()
+
 
 
 def profile_searches_to_df(
@@ -2247,7 +2295,7 @@ def posts_published_to_df(
 
         {
           "summary": "Each row represents one post published by the participant on Instagram.",
-          "source_file": "posts_*.json",
+          "source_file": "posts_*.json / posts_*.html",
           "columns": {
             "Title": "Caption or title text of the post.",
             "Timestamp": "ISO 8601 timestamp of when the post was created."
@@ -2272,6 +2320,18 @@ def posts_published_to_df(
           }
         }
     """
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _posts_published_html(reader, errors)
+
+    return _posts_published_json(reader, errors, filename_pattern=filename_pattern)
+
+
+def _posts_published_json(
+    reader: ZipArchiveReader,
+    errors: Counter,
+    *,
+    filename_pattern: str = r"(^|/)posts(?:_\d+)?\.json$",
+) -> pd.DataFrame:
     out = pd.DataFrame()
     datapoints = []
 
@@ -2305,6 +2365,39 @@ def posts_published_to_df(
         errors[type(e).__name__] += 1
 
     return out
+
+
+def _posts_published_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    results = reader.raw_all(r"(^|/)posts(?:_\d+)?\.html$")
+    if not results:
+        return pd.DataFrame()
+
+    datapoints = []
+
+    try:
+        for result in results:
+            tree = etree.HTML(result.data.read())
+
+            sections = eh.xpath_nodes(tree, "//main/div[contains(@class, '_a6-g')]")
+            for section in sections:
+                # The post title (caption) is the section's own heading; media
+                # entries nested deeper carry their own headings.
+                h2 = section.xpath("h2")
+                title = h2[0].text.strip() if h2 and h2[0].text else ""
+
+                ts = section.xpath(".//div[contains(@class, '_a6-o')]")
+                timestamp = ts[0].text.strip() if ts and ts[0].text else ""
+
+                datapoints.append((title, timestamp))
+
+        if datapoints:
+            return pd.DataFrame(datapoints, columns=["Title", "Timestamp"])  # pyright: ignore
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return pd.DataFrame()
 
 
 # ---------------------------------------------------------------------------
@@ -2343,7 +2436,7 @@ def subscription_for_no_ads_to_df(
 
         {
           "summary": "Each row represents a field from the participant's ad-free subscription status on Instagram.",
-          "source_file": "subscription_for_no_ads.json",
+          "source_file": "subscription_for_no_ads.json / subscription_for_no_ads.html",
           "columns": {
             "Label": "Description label for the subscription field.",
             "Value": "Value of the subscription field."
@@ -2368,6 +2461,18 @@ def subscription_for_no_ads_to_df(
           }
         }
     """
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _subscription_for_no_ads_html(reader, errors)
+
+    return _subscription_for_no_ads_json(reader, errors, filename=filename)
+
+
+def _subscription_for_no_ads_json(
+    reader: ZipArchiveReader,
+    errors: Counter,
+    *,
+    filename: str = "subscription_for_no_ads.json",
+) -> pd.DataFrame:
     result = reader.json(filename)
     if not result.found:
         return pd.DataFrame()
@@ -2397,6 +2502,35 @@ def subscription_for_no_ads_to_df(
         errors[type(e).__name__] += 1
 
     return out
+
+
+def _subscription_for_no_ads_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.raw("subscription_for_no_ads.html")
+    if not result.found:
+        return pd.DataFrame()
+
+    datapoints = []
+
+    try:
+        tree = etree.HTML(result.data.read())
+
+        rows = eh.xpath_nodes(tree, "//tr[td[contains(@class, '_a6_q')] and td[contains(@class, '_a6_r')]]")
+        for row in rows:
+            label_td = row.xpath("td[contains(@class, '_a6_q')]")
+            value_td = row.xpath("td[contains(@class, '_a6_r')]")
+            label = label_td[0].text.strip() if label_td and label_td[0].text else ""
+            value = value_td[0].text.strip() if value_td and value_td[0].text else ""
+            if label:
+                datapoints.append((eh.fix_latin1_string(label), eh.fix_latin1_string(value)))
+
+        if datapoints:
+            return pd.DataFrame(datapoints, columns=["Label", "Value"])  # pyright: ignore
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    return pd.DataFrame()
 
 
 # ---------------------------------------------------------------------------

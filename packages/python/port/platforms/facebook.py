@@ -68,7 +68,7 @@ DDP_CATEGORIES = [
         ddp_filetype=DDPFiletype.HTML,
         language=Language.EN,
         known_files=[
-"subscription_for_no_ads.html", "other_categories_used_to_reach_you.html", "ads_feedback_activity.html", "advertisers_you've_interacted_with.html", "advertisers_using_your_activity_or_information.html", "story_views_in_past_7_days.html", "ad_preferences.html", "your_search_history.html", "primary_public_location.html", "primary_location.html", "your_privacy_jurisdiction.html", "people_and_friends.html", "ads_interests.html", "notifications.html", "contacts_sync_settings.html", "autofill_information.html", "profile_information.html", "profile_update_history.html", "your_transaction_survey_information.html", "your_recently_used_emojis.html", "pages_and_profiles_you_follow.html", "pages_you've_liked.html", "your_saved_items.html", "fundraiser_posts_you_likely_viewed.html", "your_fundraiser_donations_information.html", "your_events.html", "event_invitations.html", "your_event_invitation_links.html", "likes_and_reactions_1.html", "payment_history.html", "your_group_membership_activity.html", "your_contributions.html", "your_page_or_groups_badges.html", "who_you've_followed.html", "people_you_may_know.html", "received_friend_requests.html", "your_friends.html", "likes_and_reactions.html", "comments.html", "your_posts__check_ins__photos_and_videos_1.html", "archived_stories.html", "connected_apps_and_websites.html", "your_activity_off_meta_technologies.html", "content_that_has_been_shown_to_you_in_your_feed.html", "items_viewed.html", "profile_visits.html", "start_here.html",
+"subscription_for_no_ads.html", "other_categories_used_to_reach_you.html", "ads_feedback_activity.html", "advertisers_you've_interacted_with.html", "advertisers_using_your_activity_or_information.html", "story_views_in_past_7_days.html", "ad_preferences.html", "your_search_history.html", "primary_public_location.html", "primary_location.html", "your_privacy_jurisdiction.html", "people_and_friends.html", "ads_interests.html", "notifications.html", "contacts_sync_settings.html", "autofill_information.html", "profile_information.html", "profile_update_history.html", "your_transaction_survey_information.html", "your_recently_used_emojis.html", "pages_and_profiles_you_follow.html", "pages_you've_liked.html", "your_saved_items.html", "fundraiser_posts_you_likely_viewed.html", "your_fundraiser_donations_information.html", "your_events.html", "event_invitations.html", "your_event_invitation_links.html", "likes_and_reactions_1.html", "payment_history.html", "your_group_membership_activity.html", "your_contributions.html", "your_page_or_groups_badges.html", "who_you've_followed.html", "people_you_may_know.html", "received_friend_requests.html", "your_friends.html", "likes_and_reactions.html", "comments.html", "your_posts__check_ins__photos_and_videos_1.html", "archived_stories.html", "connected_apps_and_websites.html", "your_activity_off_meta_technologies.html", "content_that_has_been_shown_to_you_in_your_feed.html", "items_viewed.html", "profile_visits.html", "start_here.html", "your_comments_in_groups.html"
         ],
     ),
 ]
@@ -1475,6 +1475,47 @@ def _your_comments_in_groups_json(reader: ZipArchiveReader, errors: Counter) -> 
 
 
 def _your_comments_in_groups_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.raw("your_comments_in_groups.html")
+    if not result.found:
+        return pd.DataFrame()
+
+    datapoints = []
+
+    try:
+        tree = etree.HTML(result.data.read())
+        sections = eh.xpath_nodes(tree, "//section[contains(@class, '_a6-g') and not(ancestor::section)]")
+        for section in sections:
+            h2 = section.xpath(".//h2")
+            title = h2[0].text.strip() if h2 and h2[0].text else ""
+
+            # The group is the value of a labelled row, and the comment is the text that
+            # follows that row inside the same block::
+            #
+            #     <div class="_3-95"><span class="_a6_m">Group: </span>A group</div>A comment
+            group = ""
+            comment = ""
+            label_divs = section.xpath(".//div[contains(@class, '_2pin')]//div[contains(@class, '_3-95') and span]")
+            if label_divs:
+                group = (label_divs[0].xpath("span")[0].tail or "").strip()
+                comment = (label_divs[0].tail or "").strip()
+            if not comment:
+                # A comment on a post outside a group has no labelled row above it.
+                comment_divs = section.xpath(".//div[contains(@class, '_2pin')]//div[not(div) and not(span)]")
+                comment = comment_divs[0].text.strip() if comment_divs and comment_divs[0].text else ""
+
+            date_divs = section.xpath(".//div[contains(@class, '_a72d')]")
+            timestamp = date_divs[0].text.strip() if date_divs and date_divs[0].text else ""
+
+            if title or comment or group or timestamp:
+                datapoints.append((title, comment, group, timestamp))
+
+        if datapoints:
+            return pd.DataFrame(datapoints, columns=["Title", "Comment", "Group", "Timestamp"])  # pyright: ignore
+
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
     return pd.DataFrame()
 
 

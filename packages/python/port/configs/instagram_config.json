@@ -510,7 +510,7 @@
       "extractor": "ads_viewed_to_df",
       "documentation": {
         "summary": "Each row represents one advertisement impression shown to the participant on Instagram. Includes the advertiser identity and when the ad was displayed.",
-        "source_file": "ads_viewed.json",
+        "source_file": "ads_viewed.json / ads_viewed.html",
         "columns": {
           "Account name": "Username of the advertiser's Instagram account.",
           "Name": "Display name of the advertiser.",
@@ -647,7 +647,7 @@
       "extractor": "posts_published_to_df",
       "documentation": {
         "summary": "Each row represents one post published by the participant on Instagram.",
-        "source_file": "posts_*.json",
+        "source_file": "posts_*.json / posts_*.html",
         "columns": {
           "Title": "Caption or title text of the post.",
           "Timestamp": "ISO 8601 timestamp of when the post was created."
@@ -677,7 +677,7 @@
       "extractor": "subscription_for_no_ads_to_df",
       "documentation": {
         "summary": "Each row represents a field from the participant's ad-free subscription status on Instagram.",
-        "source_file": "subscription_for_no_ads.json",
+        "source_file": "subscription_for_no_ads.json / subscription_for_no_ads.html",
         "columns": {
           "Label": "Description label for the subscription field.",
           "Value": "Value of the subscription field."
