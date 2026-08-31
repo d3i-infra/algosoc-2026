@@ -68,9 +68,11 @@ class FlowBuilder:
                 "it": f"Selezioni il suo file di {self.platform_name}",
                 "es": f"Seleccione su archivo de {self.platform_name}",
             }),
+            # Study copy (algosoc-2026): en/nl are the study's own wording; the
+            # other locales keep the platform's generic text.
             "review_data_header": props.Translatable({
-                "en": f"Your {self.platform_name} data",
-                "nl": f"Uw {self.platform_name} gegevens",
+                "en": "Review your data",
+                "nl": "Bekijk uw gegevens",
                 "de": f"Ihre {self.platform_name}-Daten",
                 "it": f"I suoi dati di {self.platform_name}",
                 "es": f"Sus datos de {self.platform_name}",
@@ -84,7 +86,7 @@ class FlowBuilder:
             }),
             "review_data_description": props.Translatable({
                 "en": f"Below you will find a curated selection of {self.platform_name} data.",
-                "nl": f"Hieronder vindt u een zorgvuldig samengestelde selectie van {self.platform_name} gegevens.",
+                "nl": f"Hieronder ziet u de gegevens die uit uw {self.platform_name} datapakket gehaald worden. Op dit moment zijn er nog geen gegevens gedeeld met de onderzoekers van het Centerpanel. Voordat u deze gegevens deelt, kunt u ze bekijken en beslissen wat u wel of niet wilt delen. U kunt gegevens verwijderen door op het selectievakje ernaast te klikken en op Verwijder te klikken. Als u alles hebt gecontroleerd, klik dan op doneren onderaan de pagina.",
                 "de": f"Nachfolgend finden Sie eine sorgfältig zusammengestellte Auswahl von {self.platform_name}-Daten.",
                 "it": f"Di seguito trova una selezione curata dei dati di {self.platform_name}.",
                 "es": f"A continuación encontrará una selección cuidada de los datos de {self.platform_name}.",

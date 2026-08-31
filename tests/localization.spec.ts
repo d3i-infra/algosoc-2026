@@ -139,7 +139,7 @@ test('nl full flow: Dutch chrome and content, donation completes', async ({ page
     continueButton: 'Verder',
   });
 
-  await expect(page.getByRole('heading', { name: 'Uw example gegevens' }))
+  await expect(page.getByRole('heading', { name: 'Bekijk uw gegevens' }))
     .toBeVisible({ timeout: EXTRACTION_TIMEOUT });
   // Config content: the example config ships nl, so the table title is Dutch.
   await expect(page.getByText('Bestanden in de zip')).toBeVisible();
@@ -173,7 +173,7 @@ test('unsupported locale ro falls back to English and donates', async ({ page })
   await fileChooser.setFiles(path.join(__dirname, 'test.zip'));
   await page.getByText('Continue').click();
 
-  await expect(page.getByRole('heading', { name: 'Your example data' }))
+  await expect(page.getByRole('heading', { name: 'Review your data' }))
     .toBeVisible({ timeout: EXTRACTION_TIMEOUT });
   await expect(page.getByText('Files in the zip')).toBeVisible();
 

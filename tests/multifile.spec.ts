@@ -82,7 +82,7 @@ test('can select two zip parts and submit data sourced from both', async ({ page
 
   // Continue resolves the PayloadFiles prompt and proceeds to extraction.
   await page.getByText('Continue').click();
-  await expect(page.getByRole('heading', { name: 'Your e2etest_multifile data' })).toBeVisible({ timeout: 90000 });
+  await expect(page.getByRole('heading', { name: 'Review your data' })).toBeVisible({ timeout: 90000 });
 
   // The consent tables' rows are sourced from members of BOTH uploaded
   // parts — test-split-1.zip owns test_file_0001.txt/0003.json,
@@ -211,7 +211,7 @@ test('uploading a renamed copy of the same archive does not duplicate the donate
     await expect(page.getByText('Already added:')).not.toBeVisible();
 
     await page.getByText('Continue').click();
-    await expect(page.getByRole('heading', { name: 'Your e2etest_multifile data' })).toBeVisible({ timeout: 90000 });
+    await expect(page.getByRole('heading', { name: 'Review your data' })).toBeVisible({ timeout: 90000 });
 
     // (b) ArchiveSet dedupes by content across the 3 uploaded parts: each
     // of the 4 distinct underlying files (test-split-1.zip and its renamed
@@ -273,7 +273,7 @@ test('too many files shows the safety error page and exits upload-rejected', asy
     // validate_file + extract_data succeed) never appears, and no
     // donation request is ever made — 17 files never reach the donate
     // step at all.
-    await expect(page.getByRole('heading', { name: 'Your e2etest_multifile data' })).not.toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole('heading', { name: 'Review your data' })).not.toBeVisible({ timeout: 5000 });
     expect(submissionWatch.wasCalled()).toBe(false);
 
     // Presentation layer: these assertions pin the CURRENT safety-page
@@ -354,7 +354,7 @@ test('combined size over the limit shows the safety error page', async ({ page }
     // LAYER 1 (stable semantics — should survive any presentation
     // redesign): terminal error before validation, no consent table, no
     // donation request.
-    await expect(page.getByRole('heading', { name: 'Your e2etest_multifile data' })).not.toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole('heading', { name: 'Review your data' })).not.toBeVisible({ timeout: 5000 });
     expect(submissionWatch.wasCalled()).toBe(false);
 
     // Presentation layer: these assertions pin the CURRENT safety-page
