@@ -1,0 +1,144 @@
+name: Preview All Platforms
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: "pip"
+
+      - name: Install Poetry
+        run: |
+          python -m pip install --upgrade pip
+          pip install poetry
+
+      - name: Build Python Package
+        working-directory: packages/python
+        run: |
+          poetry install
+          poetry build --format wheel
+
+      - name: Install Node Dependencies
+        run: pnpm install
+
+      - name: Copy Python Wheel
+        run: |
+          mkdir -p packages/data-collector/public
+          cp packages/python/dist/*.whl packages/data-collector/public/
+
+      - name: Build All Platforms
+        env:
+          VITE_STANDALONE: "true"
+        run: |
+          CONFIGS_DIR="packages/python/port/configs"
+          PREVIEW_DIR="preview"
+          mkdir -p "$PREVIEW_DIR"
+
+          platforms=()
+          for config_file in "$CONFIGS_DIR"/*_config.json; do
+            [ -f "$config_file" ] || continue
+            basename="${config_file##*/}"
+            platform="${basename%_config.json}"
+            # Test-only platforms (Playwright fault injection, multi-file
+            # suite) and the non-normative example ship a tracked config
+            # but are not study platforms.
+            case "$platform" in
+              e2etest|e2etest_multifile|example) continue ;;
+            esac
+            platforms+=("$platform")
+          done
+
+          if [ ${#platforms[@]} -eq 0 ]; then
+            echo "ERROR: No platform configs found in $CONFIGS_DIR."
+            exit 1
+          fi
+
+          echo "Found ${#platforms[@]} platform(s): ${platforms[*]}"
+
+          for platform in "${platforms[@]}"; do
+            echo "::group::Building $platform"
+            export VITE_PLATFORM="$platform"
+            pnpm run build
+            mkdir -p "$PREVIEW_DIR/$platform"
+            cp -r packages/data-collector/dist/* "$PREVIEW_DIR/$platform/"
+            echo "::endgroup::"
+          done
+
+          # Generate index page
+          cat > "$PREVIEW_DIR/index.html" <<'HEADER'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>AlgoSoc Platform Previews</title>
+            <style>
+              * { margin: 0; padding: 0; box-sizing: border-box; }
+              body { font-family: system-ui, sans-serif; background: #f5f5f5; padding: 2rem; }
+              h1 { margin-bottom: 1.5rem; color: #1a1a1a; }
+              .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem; }
+              a.card {
+                display: block; padding: 1.5rem; background: #fff; border-radius: 8px;
+                text-decoration: none; color: #333; border: 1px solid #e0e0e0;
+                transition: box-shadow 0.15s, transform 0.15s;
+              }
+              a.card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); transform: translateY(-2px); }
+              .card .name { font-size: 1.25rem; font-weight: 600; text-transform: capitalize; }
+              .card .url { font-size: 0.85rem; color: #666; margin-top: 0.5rem; word-break: break-all; }
+            </style>
+          </head>
+          <body>
+            <h1>AlgoSoc Platform Previews</h1>
+            <div class="grid">
+          HEADER
+
+          for platform in "${platforms[@]}"; do
+            cat >> "$PREVIEW_DIR/index.html" <<CARD
+              <a class="card" href="./$platform/">
+                <div class="name">$platform</div>
+                <div class="url">$platform/</div>
+              </a>
+          CARD
+          done
+
+          cat >> "$PREVIEW_DIR/index.html" <<'FOOTER'
+            </div>
+          </body>
+          </html>
+          FOOTER
+
+          echo "Preview directory contents:"
+          ls -la "$PREVIEW_DIR"
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./preview
+          publish_branch: gh-pages-preview
