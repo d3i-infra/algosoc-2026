@@ -996,47 +996,76 @@ def _ads_interests_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFra
     return pd.DataFrame()
 
 
-def recently_viewed_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
-    """Extract Facebook items recently viewed.
+_CONTENT_SHOWN_COLUMNS = ["Category", "Name", "Link", "Date"]
+
+#: The split layout writes the feed section as its own file, without the
+#: section name the grouped file carries; every export seen so far names the
+#: section this way (and the file name says the same).
+_CONTENT_SHOWN_FEED_CATEGORY = "Posts that have been shown to you in your Feed"
+
+_RECENTLY_VIEWED_JSON = "logged_information/interactions/recently_viewed.json"
+_RECENTLY_VIEWED_HTML = "logged_information/interactions/recently_viewed.html"
+_CONTENT_SHOWN_SPLIT_JSON = "logged_information/interactions/content_that_has_been_shown_to_you_in_your_feed.json"
+_CONTENT_SHOWN_SPLIT_HTML = "logged_information/interactions/content_that_has_been_shown_to_you_in_your_feed.html"
+
+
+def content_shown_to_you_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
+    """Extract the content Facebook showed the participant (the exposure log).
+
+    Facebook writes this log in one of two layouts. Every local export uses
+    the *grouped* one: ``recently_viewed`` holds sections (feed posts, videos,
+    ads, Marketplace, web pages opened off Facebook), each with ``entries``
+    or with ``children`` that hold entries. A record is an entry with a
+    ``timestamp``; the section's ``name`` becomes the row's category, so
+    Meta's renamings between exports pass through unchanged. Marketplace
+    activity counters (entries that carry only a date ``value``) are not
+    rows. Marketplace records that do carry a timestamp (e.g. "Marketplace
+    Items") are included under their own category for now — a researcher
+    decision is pending. The *split* layout (not attested locally; shape
+    assumed from the extractor spreadsheet) writes the feed section as its
+    own file of label/value records; both files are read and concatenated
+    when both are present.
 
     Parameters
     ----------
     reader:
-        Archive reader used to load JSON files from the DDP zip.
+        Archive reader used to load JSON or HTML files from the DDP zip.
     errors:
         Mutable counter that accumulates error type counts encountered during
         extraction.  Updated in-place.
+    validation:
+        Validation result; its DDP category selects the JSON or HTML path.
 
     Returns
     -------
     pd.DataFrame
-        Columns: ``Category``, ``Name``, ``Link``, ``Date``.
-        Empty DataFrame when the file is absent or parsing fails.
+        Columns: ``Category``, ``Name``, ``Link``, ``Date``, newest first.
+        Empty DataFrame when the files are absent or parsing fails.
 
     Table documentation::
 
         {
-          "summary": "Each row represents a Facebook post, video, or other item the participant recently viewed, including the category, name, link, and date.",
-          "source_file": "recently_viewed.json",
+          "summary": "Each row is an item Facebook showed the participant or the participant watched in roughly the last 90 days: posts shown in the feed, videos watched, ads shown, Marketplace items viewed, web pages opened off Facebook. Read from the grouped recently_viewed file (all exports seen so far) and from the split content_that_has_been_shown_to_you_in_your_feed file when an export uses that layout. Marketplace activity counters that carry only a date are not rows.",
+          "source_file": "logged_information/interactions/recently_viewed.json (grouped) or content_that_has_been_shown_to_you_in_your_feed.json (split); .html twins",
           "columns": {
-            "Category": "Content category (e.g. Videos, Marketplace).",
-            "Name": "Name or title of the viewed item.",
-            "Link": "URL of the viewed item.",
-            "Date": "ISO 8601 timestamp of when the item was viewed."
+            "Category": "The export's section name for the item (e.g. Posts that have been shown to you in your Feed, Ads, Marketplace Items).",
+            "Name": "Name or title of the item as the export gives it.",
+            "Link": "URL of the item (the share URL for web pages opened off Facebook).",
+            "Date": "ISO 8601 timestamp of when the item was shown or watched."
           }
         }
 
     Table config::
 
         {
-          "id": "facebook_recently_viewed",
+          "id": "facebook_content_shown_to_you",
           "title": {
-            "en": "Facebook items you recently viewed",
-            "nl": "Facebook items die je recentelijk hebt bekeken"
+            "en": "Content shown to you on Facebook",
+            "nl": "Content die Facebook je heeft laten zien"
           },
           "description": {
-            "en": "This table shows the Facebook posts, videos, and other items you have recently viewed.",
-            "nl": "Deze tabel toont de Facebook-posts, video's en andere items die je recentelijk hebt bekeken."
+            "en": "This table lists the posts, videos and ads Facebook showed you and the items you viewed in roughly the last 90 days.",
+            "nl": "Deze tabel toont de berichten, video's en advertenties die Facebook je in ongeveer de laatste 90 dagen heeft laten zien, en de items die je hebt bekeken."
           },
           "headers": {
             "Category": {"en": "Category", "nl": "Categorie"},
@@ -1046,45 +1075,150 @@ def recently_viewed_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataF
           }
         }
     """
-    result = reader.json("recently_viewed.json")
-    if not result.found:
-        return pd.DataFrame()
-    d = result.data
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _sort_by_date(_content_shown_html(reader, errors), "Date")
 
-    out = pd.DataFrame()
-    datapoints = []
+    return _sort_by_date(_content_shown_json(reader, errors), "Date")
 
-    try:
-        items = d["recently_viewed"] # pyright: ignore
-        for item in items:
 
-            if "entries" in item:
-                for entry in item["entries"]:
-                    datapoints.append((
-                        eh.fix_latin1_string(item.get("name", "")),
-                        eh.fix_latin1_string(entry.get("data", {}).get("name", "")),
-                        entry.get("data", {}).get("uri", ""),
-                        eh.epoch_to_datetime_string(entry.get("timestamp", ""), errors=errors)
-                    ))
+def _content_shown_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    datapoints: list[tuple[str, str, str, str]] = []
 
-            # The nesting goes deeper
-            if "children" in item:
-                for child in item["children"]:
-                    for entry in child["entries"]:
-                        datapoints.append((
-                            eh.fix_latin1_string(child.get("name", "")),
-                            eh.fix_latin1_string(entry.get("data", {}).get("name", "")),
-                            entry.get("data", {}).get("uri", ""),
-                            eh.epoch_to_datetime_string(entry.get("timestamp", ""), errors=errors)
-                        ))
+    grouped = reader.json(_RECENTLY_VIEWED_JSON)
+    if grouped.found:
+        try:
+            datapoints.extend(_content_shown_grouped_json(grouped.data, errors))
+        except Exception as e:
+            logger.error("Exception caught: %s", e)
+            errors[type(e).__name__] += 1
 
-        out = pd.DataFrame(datapoints, columns=["Category", "Name", "Link", "Date"]) #pyright: ignore
+    split = reader.json(_CONTENT_SHOWN_SPLIT_JSON)
+    if split.found:
+        try:
+            datapoints.extend(_content_shown_split_json(split.data, errors))
+        except Exception as e:
+            logger.error("Exception caught: %s", e)
+            errors[type(e).__name__] += 1
 
-    except Exception as e:
-        logger.error("Exception caught: %s", e)
-        errors[type(e).__name__] += 1
+    if datapoints:
+        return pd.DataFrame(datapoints, columns=_CONTENT_SHOWN_COLUMNS)  # pyright: ignore
 
-    return _sort_by_date(out, "Date")
+    return pd.DataFrame()
+
+
+def _content_shown_grouped_json(d, errors: Counter) -> list[tuple[str, str, str, str]]:
+    """Rows of the grouped ``recently_viewed`` file: ``{"recently_viewed":
+    [group…]}`` where a group has ``entries`` or ``children`` (never both)."""
+    rows = []
+    for group in d.get("recently_viewed", []):
+        for section in group.get("children") or [group]:
+            category = eh.fix_latin1_string(section.get("name", ""))
+            for entry in section.get("entries", []):
+                if "timestamp" not in entry:
+                    continue  # a Marketplace activity counter: only a date value
+                data = entry.get("data", {})
+                rows.append((
+                    category,
+                    eh.fix_latin1_string(data.get("name", "")),
+                    data.get("uri") or data.get("share") or "",
+                    eh.epoch_to_datetime_string(entry["timestamp"], errors=errors),
+                ))
+    return rows
+
+
+def _content_shown_split_json(d, errors: Counter) -> list[tuple[str, str, str, str]]:
+    """Rows of the split file: a list of ``{timestamp, label_values:
+    [{label, value|href}], fbid, media, title}`` records (assumed shape)."""
+    rows = []
+    for item in d:
+        lv_map: dict[str, str] = {}
+        link = ""
+        for lv in item.get("label_values", []):
+            label = lv.get("label", "")
+            if label and label not in lv_map and "value" in lv:
+                lv_map[label] = lv["value"]
+            if not link and lv.get("href"):
+                link = lv["href"]
+        name = lv_map.get("Name") or lv_map.get("Title") or item.get("title", "")
+        rows.append((
+            _CONTENT_SHOWN_FEED_CATEGORY,
+            eh.fix_latin1_string(name),
+            link,
+            eh.epoch_to_datetime_string(item.get("timestamp", ""), errors=errors),
+        ))
+    return rows
+
+
+def _content_shown_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    datapoints: list[tuple[str, str, str, str]] = []
+
+    grouped = reader.raw(_RECENTLY_VIEWED_HTML)
+    if grouped.found:
+        try:
+            datapoints.extend(_content_shown_grouped_html(etree.HTML(grouped.data.read()), errors))
+        except Exception as e:
+            logger.error("Exception caught: %s", e)
+            errors[type(e).__name__] += 1
+
+    split = reader.raw(_CONTENT_SHOWN_SPLIT_HTML)
+    if split.found:
+        try:
+            datapoints.extend(_content_shown_split_html(etree.HTML(split.data.read()), errors))
+        except Exception as e:
+            logger.error("Exception caught: %s", e)
+            errors[type(e).__name__] += 1
+
+    if datapoints:
+        return pd.DataFrame(datapoints, columns=_CONTENT_SHOWN_COLUMNS)  # pyright: ignore
+
+    return pd.DataFrame()
+
+
+def _content_shown_grouped_html(tree, errors: Counter) -> list[tuple[str, str, str, str]]:
+    """Rows of the grouped ``recently_viewed`` page. A record is a leaf
+    ``section._a6-g`` (no section inside it): the name is the first non-empty
+    div of its ``_a6-p`` body, the link the footer's anchor, the time the
+    footer's ``_a72d``; the category is the nearest enclosing section that
+    owns an ``h2``. A Marketplace counter leaf has an empty ``_a72d``."""
+    rows = []
+    leaves = eh.xpath_nodes(tree, "//section[contains(@class, '_a6-g') and not(.//section)]")
+    for leaf in leaves:
+        date = _section_timestamp(leaf, errors)
+        if not date:
+            continue
+        headings = eh.xpath_nodes(leaf, "ancestor::section[contains(@class, '_a6-g')][h2][1]/h2")
+        category = headings[0].text.strip() if headings and headings[0].text else ""
+        name_divs = eh.xpath_nodes(leaf, ".//div[contains(@class, '_a6-p')]//div[normalize-space(text()) != '']")
+        name = name_divs[0].text.strip() if name_divs and name_divs[0].text else ""
+        hrefs = eh.xpath_nodes(leaf, ".//footer//a/@href")
+        link = str(hrefs[0]) if hrefs else ""
+        rows.append((category, name, link, date))
+    return rows
+
+
+def _content_shown_split_html(tree, errors: Counter) -> list[tuple[str, str, str, str]]:
+    """Rows of the split page (assumed shape, as ``items_viewed.html``): one
+    top-level section per record with a label/value table and a footer."""
+    rows = []
+    sections = eh.xpath_nodes(tree, "//section[contains(@class, '_a6-g') and not(ancestor::section) and .//table]")
+    for section in sections:
+        kv_rows = eh.xpath_nodes(section, ".//tr[td[contains(@class, '_a6_q') and not(@colspan)] and td[contains(@class, '_a6_r')]]")
+        lv_map: dict[str, str] = {}
+        for row in kv_rows:
+            label_td = eh.xpath_nodes(row, "td[contains(@class, '_a6_q')]")
+            value_td = eh.xpath_nodes(row, "td[contains(@class, '_a6_r')]")
+            label = label_td[0].text.strip() if label_td and label_td[0].text else ""
+            value = value_td[0].text.strip() if value_td and value_td[0].text else ""
+            if label and label not in lv_map:
+                lv_map[label] = value
+        hrefs = eh.xpath_nodes(section, ".//td[contains(@class, '_a6_r')]//a/@href")
+        rows.append((
+            _CONTENT_SHOWN_FEED_CATEGORY,
+            lv_map.get("Name") or lv_map.get("Title") or "",
+            str(hrefs[0]) if hrefs else "",
+            _section_timestamp(section, errors),
+        ))
+    return rows
 
 
 def recently_visited_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
@@ -3927,6 +4061,10 @@ def _items_viewed_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFram
 # Extractor registry & platform info
 # ---------------------------------------------------------------------------
 
+#: Free-text columns that may carry the participant's own name or an e-mail
+#: address; ``extraction()`` redacts them before the tables are shown.
+TEXT_COLUMNS = ["Title", "Comment", "Post", "Reaction", "Name"]
+
 #: Mapping from the string names used in port_config.json to actual extractor functions.
 EXTRACTOR_REGISTRY: dict[str, Callable[..., pd.DataFrame]] = {
     # --- Ordered to match the spreadsheet ---
@@ -3958,12 +4096,17 @@ EXTRACTOR_REGISTRY: dict[str, Callable[..., pd.DataFrame]] = {
     # tests/test_extractor_integration_facebook.py.
     "news_your_locations_to_df": news_your_locations_to_df,                                      # facebook_news/your_locations.json
     #"your_comment_active_days_to_df": your_comment_active_days_to_df,                            # PENDING — Days with active commenting
+    # --- Implemented and tested; held until the researcher meeting (2026-09-02) ---
+    # To activate: uncomment the line, add the table to configs/facebook_config.json
+    # (rm + `pnpm generate-config facebook`, ADR-0030), and drop the name from
+    # HELD_EXTRACTORS in tests/test_extractor_integration_facebook.py (its
+    # EXPECT_NON_EMPTY pins stay as they are).
+    # "content_shown_to_you_to_df": content_shown_to_you_to_df,      # logged_information/interactions/recently_viewed.json | content_that_has_been_shown_to_you_in_your_feed.json
     # --- Not in spreadsheet — commented out ---
     # "notifications_to_df": notifications_to_df,
     # "content_sharing_you_have_created_to_df": content_sharing_you_have_created_to_df,
     # "last_28_days_to_df": last_28_days_to_df,
     # "your_friends_to_df": your_friends_to_df,
-    # "recently_viewed_to_df": recently_viewed_to_df,
     # "recently_visited_to_df": recently_visited_to_df,
     # "profile_update_history_to_df": profile_update_history_to_df,
     # "group_posts_and_comments_to_df": group_posts_and_comments_to_df,
@@ -4025,7 +4168,6 @@ def extraction(facebook_zip: SeekableBinaryReader, validation) -> ExtractionResu
     if username:
         logger.info("Extracted Facebook username for anonymization.")
 
-    TEXT_COLUMNS = ["Title", "Comment", "Post", "Reaction"]
     for table in result.tables:
         eh.anonymize_dataframe(table.data_frame, TEXT_COLUMNS, username)
 

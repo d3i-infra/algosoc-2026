@@ -25,11 +25,23 @@ run but only checked not to raise.
 ``UNPINNED_KNOWN_GAPS`` names the extractors no local fixture can exercise,
 with the reason; ``test_every_extractor_is_pinned_somewhere`` fails in CI (no
 fixtures needed) if a registry entry is neither pinned nor listed there.
+
+``HELD_EXTRACTORS`` names the extractors that are implemented and tested but
+deliberately kept out of ``EXTRACTOR_REGISTRY`` until the researcher meeting
+(2026-09-02). They are pinned and run against the fixtures exactly like
+registry entries — the pins cover the union of both — but they cannot appear
+in ``extraction()`` output, so the whole-flow test looks only at the registry.
 """
+import importlib.util
+import io
+import json
+import zipfile
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
+import pandas as pd
 import pytest
 
 from extractor_integration_helpers import DDP_DIR, DiskPart, find_fixtures
@@ -38,6 +50,7 @@ from port.helpers.extraction_helpers import ZipArchiveReader
 from port.helpers.table_extractor import load_port_config
 from port.helpers.validate import DDPFiletype, ValidateInput, validate_zip
 
+REPO_ROOT = Path(__file__).resolve().parents[3]
 FIXTURES: list[Path] = find_fixtures("facebook")
 _NO_FIXTURES_REASON = "No facebook_*.zip fixture found in tests/ddp/"
 _PARAMS: list[Path | None] = list(FIXTURES) or [None]
@@ -67,6 +80,7 @@ EXPECT_NON_EMPTY: dict[str, set[str]] = {
         "your_search_history_to_df",
         "ads_interests_to_df",
         "facebook_reels_usage_to_df",
+        "content_shown_to_you_to_df",
     },
     # Same account and day, HTML. No logged_information/search in this export:
     # its only your_search_history.html is the Marketplace one, which the
@@ -77,8 +91,9 @@ EXPECT_NON_EMPTY: dict[str, set[str]] = {
     # delivery spells the follow / like files `who_you_ve_followed` (apostrophe
     # replaced); the reader resolves that spelling, so both are pinned. The
     # grouped interaction layout (recently_viewed / recently_visited) is still
-    # unread. The qualified JSON search path does not collide, so search is
-    # pinned here. Reels usage is absent from this export although present
+    # unread by the registered tables (the held content-shown table reads it:
+    # 79 rows here). The qualified JSON search path does not collide, so search
+    # is pinned here. Reels usage is absent from this export although present
     # eight days earlier — file presence varies between exports of one account.
     "facebook_json_self-alltime-2026-03": _ADS_TABLES | _ACTIVITY_TABLES | {
         "your_search_history_to_df",
@@ -87,6 +102,7 @@ EXPECT_NON_EMPTY: dict[str, set[str]] = {
         "pages_and_profiles_you_follow_to_df",
         "who_youve_followed_to_df",
         "pages_youve_liked_to_df",
+        "content_shown_to_you_to_df",
     },
     # Real account, HTML, all time (registered 2005), delivered via Google
     # Drive, March 2026 — 2,815 files. Carries both search-history files
@@ -102,6 +118,7 @@ EXPECT_NON_EMPTY: dict[str, set[str]] = {
         "pages_and_profiles_you_follow_to_df",
         "who_youve_followed_to_df",
         "pages_youve_liked_to_df",
+        "content_shown_to_you_to_df",
     },
     # Real account, device downloads, October 2025: a three-month JSON window
     # (57 files) and a one-year HTML window (980 files). Device downloads keep
@@ -111,11 +128,13 @@ EXPECT_NON_EMPTY: dict[str, set[str]] = {
         "your_search_history_to_df",
         "ads_interests_to_df",
         "facebook_reels_usage_to_df",
+        "content_shown_to_you_to_df",
     },
     "facebook_html_self-device-2025-10": _ADS_TABLES | {
         "your_search_history_to_df",
         "ads_interests_to_df",
         "facebook_reels_usage_to_df",
+        "content_shown_to_you_to_df",
         "your_events_to_df",
         "your_group_membership_activity_to_df",
         "comments_to_df",
@@ -131,6 +150,7 @@ EXPECT_NON_EMPTY: dict[str, set[str]] = {
     "facebook_json_other-device-2025-10": {
         "facebook_reels_usage_to_df",
         "link_history_to_df",
+        "content_shown_to_you_to_df",
     },
     # Test account, HTML, June 2026 — clicked ads, follows/likes two pages,
     # no group or post activity.
@@ -141,7 +161,34 @@ EXPECT_NON_EMPTY: dict[str, set[str]] = {
         "who_youve_followed_to_df",
         "pages_and_profiles_you_follow_to_df",
         "pages_youve_liked_to_df",
+        "content_shown_to_you_to_df",
     },
+}
+# Not pinned on facebook_html_self-2026-03: that Drive part carries no
+# logged_information/interactions folder, so the content-shown table is absent
+# there (absence, not error).
+
+# Implemented and tested, deliberately outside EXTRACTOR_REGISTRY until the
+# researcher meeting (2026-09-02). To activate one: uncomment its registry line
+# in facebook.py, add the table to configs/facebook_config.json (rm +
+# `pnpm generate-config facebook`, ADR-0030), and move the name from here to the
+# registry side — the pins in EXPECT_NON_EMPTY stay as they are.
+HELD_EXTRACTORS: dict[str, Callable[..., pd.DataFrame]] = {
+    "content_shown_to_you_to_df": facebook.content_shown_to_you_to_df,
+}
+
+_ALL_EXTRACTORS: dict[str, Callable[..., pd.DataFrame]] = {**facebook.EXTRACTOR_REGISTRY, **HELD_EXTRACTORS}
+
+# Fixture-free smoke input per held extractor: the smallest archive that makes
+# it produce a non-empty frame, so its docstring headers can be checked against
+# the columns it actually emits without a real export present.
+_HELD_SMOKE_INPUTS: dict[str, list[tuple[str, str]]] = {
+    "content_shown_to_you_to_df": [(
+        "export/logged_information/interactions/recently_viewed.json",
+        json.dumps({"recently_viewed": [{"name": "Ads", "description": "", "entries": [
+            {"timestamp": 1700000000, "data": {"name": "An ad", "uri": "https://www.facebook.com/ads/1"}},
+        ]}]}),
+    )],
 }
 
 UNPINNED_KNOWN_GAPS: dict[str, str] = {
@@ -192,20 +239,64 @@ def _expected_filetype(fixture: Path) -> DDPFiletype:
 
 
 def test_every_extractor_is_pinned_somewhere():
-    """Every registry entry is either pinned non-empty by some fixture or listed
-    as a known gap with a reason — an extractor added without either would be
-    silently unexercised by every per-fixture canary."""
+    """Every registry or held entry is either pinned non-empty by some fixture
+    or listed as a known gap with a reason — an extractor added without either
+    would be silently unexercised by every per-fixture canary."""
     pinned = set().union(*EXPECT_NON_EMPTY.values())
-    registry = set(facebook.EXTRACTOR_REGISTRY)
+    registry = set(_ALL_EXTRACTORS)
     uncovered = registry - pinned - set(UNPINNED_KNOWN_GAPS)
     assert not uncovered, (
-        f"Extractor(s) {sorted(uncovered)} are in facebook.EXTRACTOR_REGISTRY but neither "
-        "pinned in EXPECT_NON_EMPTY nor explained in UNPINNED_KNOWN_GAPS."
+        f"Extractor(s) {sorted(uncovered)} are in facebook.EXTRACTOR_REGISTRY or HELD_EXTRACTORS "
+        "but neither pinned in EXPECT_NON_EMPTY nor explained in UNPINNED_KNOWN_GAPS."
     )
     stale = set(UNPINNED_KNOWN_GAPS) & pinned
     assert not stale, f"{sorted(stale)} are pinned now — drop them from UNPINNED_KNOWN_GAPS."
     unknown = (pinned | set(UNPINNED_KNOWN_GAPS)) - registry
-    assert not unknown, f"{sorted(unknown)} are not in facebook.EXTRACTOR_REGISTRY."
+    assert not unknown, f"{sorted(unknown)} are neither in facebook.EXTRACTOR_REGISTRY nor in HELD_EXTRACTORS."
+
+
+def test_held_extractors_are_not_registered():
+    """A held extractor that reaches the registry must also leave HELD_EXTRACTORS
+    (and gain a config entry) — the two lists are disjoint by construction."""
+    registered = set(HELD_EXTRACTORS) & set(facebook.EXTRACTOR_REGISTRY)
+    assert not registered, f"{sorted(registered)} are in the registry — drop them from HELD_EXTRACTORS."
+    for name, fn in HELD_EXTRACTORS.items():
+        assert fn not in facebook.EXTRACTOR_REGISTRY.values(), f"{name} is registered under another key"
+
+
+def test_held_extractors_carry_valid_table_blocks():
+    """A held extractor's docstring must already be what activation needs: both
+    ADR-0028 blocks parse with the generator's own parsers, the table id is not
+    yet in the committed config, and the headers name exactly the columns the
+    extractor emits."""
+    scripts = REPO_ROOT / "scripts" / "generate_port_config.py"
+    spec = importlib.util.spec_from_file_location("generate_port_config", scripts)
+    assert spec is not None and spec.loader is not None
+    generator = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(generator)
+
+    committed = json.loads((REPO_ROOT / "packages" / "python" / "port" / "configs" / "facebook_config.json").read_text(encoding="utf-8"))
+    committed_ids = {table["id"] for table in committed["tables"]}
+
+    for name, fn in HELD_EXTRACTORS.items():
+        docstring = fn.__doc__ or ""
+        config = generator._parse_table_config_block(name, docstring)
+        documentation = generator._parse_table_doc_block(name, docstring)
+        assert documentation is not None, f"{name}: no 'Table documentation::' block"
+        assert config["id"] not in committed_ids, f"{name}: id {config['id']!r} is already in facebook_config.json"
+        for key in ("title", "description"):
+            assert set(config[key]) == {"en", "nl"}, f"{name}: {key} must carry en and nl"
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            for member, content in _HELD_SMOKE_INPUTS[name]:
+                zf.writestr(member, content)
+        buf.seek(0)
+        reader = ZipArchiveReader(buf, [member for member, _ in _HELD_SMOKE_INPUTS[name]], Counter())
+        df = fn(reader, Counter())
+        assert not df.empty, f"{name}: the smoke input produced no rows"
+        assert list(df.columns) == list(config["headers"]), f"{name}: headers do not match the emitted columns"
+        assert list(documentation["columns"]) == list(df.columns), f"{name}: documentation columns do not match"
 
 
 # ---------------------------------------------------------------------------
@@ -232,7 +323,7 @@ def test_fixture_is_recognized(fixture):
 
 
 @pytest.mark.parametrize("fixture", _PARAMS, ids=_IDS)
-@pytest.mark.parametrize("name", list(facebook.EXTRACTOR_REGISTRY), ids=list(facebook.EXTRACTOR_REGISTRY))
+@pytest.mark.parametrize("name", list(_ALL_EXTRACTORS), ids=list(_ALL_EXTRACTORS))
 def test_extractor_against_fixture(name, fixture):
     if fixture is None:
         pytest.skip(_NO_FIXTURES_REASON)
@@ -241,7 +332,7 @@ def test_extractor_against_fixture(name, fixture):
     # The reader keeps its own counter (ambiguous lookups, oversized or
     # unreadable members); extraction() merges the two, so check both.
     reader_errors_before = Counter(ctx.reader.errors)
-    df = facebook.EXTRACTOR_REGISTRY[name](ctx.reader, errors, validation=ctx.validation)
+    df = _ALL_EXTRACTORS[name](ctx.reader, errors, validation=ctx.validation)
     errors.update(ctx.reader.errors - reader_errors_before)
     assert not errors, f"{name} on {fixture.name}: errors {dict(errors)}"
     if name in EXPECT_NON_EMPTY.get(fixture.stem, set()):
@@ -287,9 +378,10 @@ def test_whole_extraction_keeps_pinned_tables(fixture):
         for name, fn in facebook.EXTRACTOR_REGISTRY.items()
     }
     shown = {table.id for table in result.tables}
+    # Held extractors are pinned too but cannot reach extraction() output.
     missing = {
         name for name in EXPECT_NON_EMPTY.get(fixture.stem, set())
-        if ids_by_extractor[name] not in shown
+        if name in facebook.EXTRACTOR_REGISTRY and ids_by_extractor[name] not in shown
     }
     assert not missing, f"{fixture.name}: pinned table(s) {sorted(missing)} absent from extraction() output"
 
@@ -315,7 +407,7 @@ def test_html_tables_carry_iso_timestamps_newest_first(fixture):
         pytest.skip("JSON export — epoch timestamps are covered by epoch_to_iso")
     ctx = _context(fixture)
     problems: list[str] = []
-    for name, fn in facebook.EXTRACTOR_REGISTRY.items():
+    for name, fn in _ALL_EXTRACTORS.items():
         df = fn(ctx.reader, Counter(), validation=ctx.validation)
         for column in _DATE_COLUMNS & set(df.columns):
             values = [v for v in df[column].tolist() if v]
