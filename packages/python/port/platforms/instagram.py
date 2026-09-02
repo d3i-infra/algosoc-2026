@@ -29,7 +29,13 @@ eight hours behind here too, so no daylight saving rule of its own is needed.
 
 It also belongs to Instagram rather than to the person. The Facebook export of those same
 two accounts is on a different clock again — Amsterdam for one, UTC for the other — which
-is why ``facebook.py`` cannot do the same thing and leaves its html clock alone.
+is why ``facebook.py`` reads its offset per archive instead of holding a constant.
+
+Note that ``start_here.html``, which is what ``facebook.py`` reads that offset from, must
+**not** be used here. Instagram ships the same page, but it reports the timezone the export
+was requested from rather than the clock the records were rendered on: it names the same
+zone the Facebook export of that account does, never the -8 above. Reading it here would
+undo a correct conversion.
 
 Configuration
 -------------

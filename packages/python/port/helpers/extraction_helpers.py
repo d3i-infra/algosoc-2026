@@ -273,7 +273,7 @@ def _last_sunday(year: int, month: int) -> date:
     return last - timedelta(days=(last.weekday() + 1) % 7)
 
 
-def _reference_offset(moment: datetime) -> timedelta:
+def reference_offset(moment: datetime) -> timedelta:
     """How far ``REFERENCE_TIMEZONE`` stands ahead of UTC at *moment*, a naive UTC time.
 
     The rule is applied directly rather than read from a timezone database, because this
@@ -294,7 +294,7 @@ def _to_reference(moment: datetime) -> str:
     """Write *moment*, an aware datetime, in ``REFERENCE_TIMEZONE`` and ``DATETIME_FORMAT``."""
 
     utc = moment.astimezone(timezone.utc).replace(tzinfo=None)
-    return (utc + _reference_offset(utc)).strftime(DATETIME_FORMAT)
+    return (utc + reference_offset(utc)).strftime(DATETIME_FORMAT)
 
 
 def epoch_to_datetime_string(epoch_timestamp: str | int | float, errors: Counter | None = None) -> str:

@@ -15,24 +15,33 @@ does in the TikTok, Instagram and Google tables.
 The json export records epoch seconds, which name an absolute instant, so placing them in
 that zone is exact.
 
-The html export is only half converted, and its date columns are **not** comparable with
-the json ones. It writes the time already rendered into the timezone the account is set to
-and names no zone beside it, so the shape is normalised here but the clock is left where it
-stands.
+The html export writes the time already rendered into the timezone the account is set to,
+and names no zone beside the timestamp. That offset varies by account — no constant fits —
+but the export states it once, on its own front page: ``start_here.html`` stamps the moment
+the export was made both as a UTC instant and on the clock it was requested from, and the
+difference between the two is the offset every record was rendered at. ``_export_offset``
+reads it.
 
-The offset genuinely varies by account, which is why no constant can be applied.
-``scripts/meta_html_timezone_probe.py`` matches records held in both formats and reports
-the difference; run over two donated archives it put one squarely in Europe/Amsterdam,
-daylight saving and all — +1 through 2026-03-20, +2 from 2026-04-01 — and the other flat at
-UTC across six years. Neither is where the participant lives, and the Instagram export of
-those same two accounts is on a third clock again, a fixed -8, which ``instagram.py`` does
-convert.
+There is one limit, and it is worth knowing before reading an hour of day off these tables.
+``start_here.html`` gives the offset at the moment of export, a single point, while the
+export applies the account zone's daylight saving to each record. So a single number cannot
+describe a whole archive that crosses a clock change.
 
-Nothing in the export states that offset — there is no file naming the timezone of the
-account in either format — so an html donation cannot be placed in the reference zone at
-all. Treat an hour of day taken from one as being on an unknown clock: not comparable
-across participants, and not comparable with the json export. A participant who can choose
-should donate the json format.
+What is done about it: where the offset matches what the reference timezone had at that
+moment, the account is taken to be on the reference timezone and the records are left as
+they are — which is exactly right, daylight saving included, because the export has already
+applied it. This is the common case for a study run in the Netherlands. Where the offset is
+anything else, it is applied flat, and records in the other half of the year are up to an
+hour out if that account's zone also has daylight saving. That residual is accepted: an
+hour is small beside the two to ten hours these columns were out before, and it only
+affects participants outside the study's own timezone.
+
+Where ``start_here.html`` is missing or unreadable the local time is written as it stands
+and ``ExportTimezoneUnknown`` is counted, so the rate is visible rather than assumed.
+
+Note that this page is not usable for Instagram: it reports the timezone the export was
+requested from, which for Instagram is *not* the clock its records are rendered on. See
+``instagram.HTML_EXPORT_UTC_OFFSET``.
 
 Configuration
 -------------
@@ -58,7 +67,7 @@ Platform info::
 import logging
 import re
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Callable
 
 from lxml import etree
@@ -112,42 +121,149 @@ _HTML_TIMESTAMP = re.compile(
 )
 
 
-def _html_timestamp(timestamp: str, errors: Counter | None = None) -> str:
+#: The page Meta puts at the root of an html export, describing the export itself.
+_START_HERE = "start_here.html"
+
+#: ``<time datetime="2026-08-19T14:33Z">... at 4:33 PM UTC+02:00</time>`` — how that page
+#: stamps the moment the export was made. The attribute is the instant in UTC and the text
+#: is the same instant on the clock the export was requested from, so the two together give
+#: the offset without any need to read the zone by name or the date in whatever language
+#: the account is set to.
+_TIME_ELEMENT = re.compile(r'<time datetime="(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})Z"[^>]*>(.*?)</time>', re.S)
+
+#: The clock inside that text, in either a 12- or a 24-hour locale.
+_CLOCK = re.compile(r"(\d{1,2}):(\d{2})(?:\s*([AaPp])\.?[Mm])?")
+
+
+def _read_export_offset(reader: ZipArchiveReader, errors: Counter | None = None):
+    """Read how far the html export's clock stands from UTC, and when it was made.
+
+    Returns ``(offset, instant)`` taken from ``start_here.html``, or ``(None, None)`` when
+    the page is absent or cannot be read. Several moments are stamped on that page — when
+    the export was generated, and the range it covers — and they agree with each other, so
+    the one they agree on is taken.
+    """
+    result = reader.raw(_START_HERE)
+    if not result.found:
+        return None, None
+
+    try:
+        page = result.data.read()
+        if isinstance(page, bytes):
+            page = page.decode("utf-8", "replace")
+    except Exception as e:  # a page that cannot even be read is not worth an extraction
+        logger.error("Could not read %s: %s", _START_HERE, e)
+        return None, None
+
+    if not isinstance(page, str):
+        return None, None
+
+    readings: list[tuple[timedelta, datetime]] = []
+    for attribute, text in _TIME_ELEMENT.findall(page):
+        clock = _CLOCK.search(text)
+        if not clock:
+            continue
+        try:
+            instant = datetime.strptime(attribute, "%Y-%m-%dT%H:%M")
+        except ValueError:
+            continue
+
+        hour, minute, meridiem = clock.groups()
+        hour = int(hour)
+        if meridiem:
+            hour = hour % 12 + (12 if meridiem.lower() == "p" else 0)
+
+        # The two clocks are the same moment, so their difference is the offset. It is
+        # resolved into the range real zones occupy, since the local reading may fall on
+        # the day either side of the UTC one.
+        minutes = (hour * 60 + int(minute)) - (instant.hour * 60 + instant.minute)
+        readings.append((timedelta(minutes=(minutes + 720) % 1440 - 720), instant))
+
+    if not readings:
+        logger.error("Found no readable export time in %s", _START_HERE)
+        return None, None
+
+    offsets = Counter(offset for offset, _ in readings)
+    offset = offsets.most_common(1)[0][0]
+    instant = next(when for read, when in readings if read == offset)
+    return offset, instant
+
+
+def _export_offset(reader: ZipArchiveReader, errors: Counter | None = None) -> timedelta | None:
+    """The offset an html timestamp has to be converted *from*, or ``None`` for none.
+
+    ``None`` covers the two cases that both mean "write the local time as it stands". The
+    export may be on the reference timezone already, in which case its clock is the wanted
+    clock and its own daylight saving is already right; or ``start_here.html`` may be
+    missing or unreadable, in which case there is nothing to convert from and the value is
+    left alone and counted.
+
+    The answer is read once per archive and remembered, because it is the same for every
+    row of every table and the page would otherwise be parsed hundreds of thousands of
+    times.
+    """
+    global _EXPORT_OFFSET
+    if _EXPORT_OFFSET is not None and _EXPORT_OFFSET[0] is reader:
+        return _EXPORT_OFFSET[1]
+
+    offset, instant = _read_export_offset(reader, errors)
+
+    if offset is None:
+        if errors is not None:
+            errors["ExportTimezoneUnknown"] += 1
+        logger.info("No export timezone found; html timestamps are left on an unknown clock")
+    elif offset == eh.reference_offset(instant):
+        # The export was requested from the reference timezone, so every record is already
+        # on the wanted clock — including its daylight saving, which the export applies per
+        # record and a single offset could not have reproduced.
+        logger.info("Export is on the reference timezone; html timestamps need no shift")
+        offset = None
+    else:
+        logger.info("Export clock is %s from UTC; converting html timestamps", offset)
+
+    _EXPORT_OFFSET = (reader, offset)
+    return offset
+
+
+#: The last archive an offset was read for, and what it was. One archive is read per
+#: extraction, so a single slot is enough; holding the reader keeps the identity check safe.
+_EXPORT_OFFSET: tuple[object, timedelta | None] | None = None
+
+
+def _html_timestamp(
+    timestamp: str, utc_offset: timedelta | None = None, errors: Counter | None = None
+) -> str:
     """Write a timestamp read out of the html export in the shared datetime format.
 
-    Only the shape is changed here; the clock is left where the export put it, which means
-    this column is *not* comparable with the json one. The html names no timezone, and
-    there is no single offset to supply in its place: Facebook renders each export in the
-    timezone that account is set to, and that differs from one archive to the next.
+    The html names no timezone beside the timestamp, so the offset to convert *from* is
+    read once per archive off ``start_here.html`` and passed in. See ``_export_offset``,
+    which also explains when that offset is ``None``.
 
-    ``scripts/meta_html_timezone_probe.py`` is what establishes this. It matches records
-    held in both export formats and reports the difference per source, and run over two
-    donated archives it found two different clocks — one Europe/Amsterdam, following the
-    daylight saving of that zone across four years, and one flat at UTC across six. Every
-    source within an archive agreed with the others, so the offset belongs to the archive
-    rather than to any one table.
+    A ``None`` offset writes the local time as it stands. That is the right answer when the
+    export is already on the reference timezone — its clock is the wanted clock, daylight
+    saving and all — and it is the safe answer when the export's own timezone could not be
+    read at all.
 
-    Neither clock is where the participant lives, and neither is a Meta-wide default. The
-    Instagram exports of those *same two accounts* are a fixed eight hours behind UTC — see
-    ``instagram.HTML_EXPORT_UTC_OFFSET``, which is why that platform can convert and this
-    one cannot. What varies is the account, not the person.
-
-    Nor does the export say which clock it used. No file in either format names the
-    timezone of the account, so the offset cannot be recovered from the archive the way
-    the Google html export's can be — it writes its zone beside each timestamp. An hour of
-    day taken from a Facebook html donation is therefore on an unknown clock, and should
-    not be compared across participants or against the json export.
-
-    Only a timestamp that cannot be read at all is counted: the absent zone is a property
-    of every row here, so counting it would mark them all and say nothing.
+    Any other offset is applied flat, which is exact for an account whose zone has no
+    daylight saving and up to an hour out for one that does, on records falling in the other
+    half of the year. The module docstring says why that residual is accepted.
 
     Args:
         timestamp: Text of the date element, e.g. ``Jun 26, 2026 9:05:20 am``.
+        utc_offset: How far the export's clock stands from UTC, or ``None`` to write the
+            local time unchanged.
         errors: Optional counter that aggregates error types.
 
     Returns:
         str: The formatted timestamp, ``""`` for an absent one, or the input unchanged
         when it cannot be read.
+
+    Examples::
+
+        >>> _html_timestamp("Jun 26, 2026 9:05:20 am", timedelta(0))  # export on UTC
+        "2026-06-26 11:05:20"
+        >>> _html_timestamp("Jun 26, 2026 9:05:20 am")                # already reference
+        "2026-06-26 09:05:20"
     """
     if not timestamp or not isinstance(timestamp, str):
         return ""
@@ -163,11 +279,14 @@ def _html_timestamp(timestamp: str, errors: Counter | None = None) -> str:
                 # A 12-hour clock counts noon as 12 pm and midnight as 12 am.
                 hour = hour % 12 + (12 if meridiem.lower() == "p" else 0)
             try:
-                return datetime(
-                    int(year), number, int(day), hour, int(minute), int(second or 0)
-                ).strftime(eh.DATETIME_FORMAT)
+                moment = datetime(int(year), number, int(day), hour, int(minute), int(second or 0))
             except ValueError:
-                pass
+                moment = None
+
+            if moment is not None:
+                if utc_offset is None:
+                    return moment.strftime(eh.DATETIME_FORMAT)
+                return eh.local_time_to_datetime_string(moment, utc_offset, errors=errors)
 
     logger.error("Could not read an html timestamp: %s", timestamp)
     if errors is not None:
@@ -321,7 +440,7 @@ def _who_youve_followed_html(reader: ZipArchiveReader, errors: Counter) -> pd.Da
             name = h2[0].text.strip() if h2 and h2[0].text else ""
 
             date_divs = section.xpath(".//div[contains(@class, '_a72d')]")
-            timestamp = _html_timestamp(date_divs[0].text.strip() if date_divs and date_divs[0].text else "", errors)
+            timestamp = _html_timestamp(date_divs[0].text.strip() if date_divs and date_divs[0].text else "", _export_offset(reader, errors), errors)
 
             datapoints.append((name, timestamp))
 
@@ -839,7 +958,7 @@ def _your_search_history_html(reader: ZipArchiveReader, errors: Counter) -> pd.D
             term_divs = section.xpath(".//div[contains(@class, '_2pin')]//div[not(div)]")
             term = term_divs[0].text.strip().strip('"') if term_divs and term_divs[0].text else ""
             date_divs = section.xpath(".//div[contains(@class, '_a72d')]")
-            date = _html_timestamp(date_divs[0].text.strip() if date_divs and date_divs[0].text else "", errors)
+            date = _html_timestamp(date_divs[0].text.strip() if date_divs and date_divs[0].text else "", _export_offset(reader, errors), errors)
             datapoints.append((term, date))
 
         if datapoints:
@@ -1626,7 +1745,7 @@ def _your_comments_in_groups_html(reader: ZipArchiveReader, errors: Counter) -> 
                 comment = comment_divs[0].text.strip() if comment_divs and comment_divs[0].text else ""
 
             date_divs = section.xpath(".//div[contains(@class, '_a72d')]")
-            timestamp = _html_timestamp(date_divs[0].text.strip() if date_divs and date_divs[0].text else "", errors)
+            timestamp = _html_timestamp(date_divs[0].text.strip() if date_divs and date_divs[0].text else "", _export_offset(reader, errors), errors)
 
             if title or comment or group or timestamp:
                 datapoints.append((title, comment, group, timestamp))
@@ -1752,7 +1871,7 @@ def _your_group_membership_activity_html(reader: ZipArchiveReader, errors: Count
             h2 = section.xpath(".//h2")
             title = h2[0].text.strip() if h2 and h2[0].text else ""
             date_divs = section.xpath(".//div[contains(@class, '_a72d')]")
-            date = _html_timestamp(date_divs[0].text.strip() if date_divs and date_divs[0].text else "", errors)
+            date = _html_timestamp(date_divs[0].text.strip() if date_divs and date_divs[0].text else "", _export_offset(reader, errors), errors)
             if title or date:
                 datapoints.append((title, "See first column", date))
 
@@ -1860,7 +1979,7 @@ def _pages_and_profiles_you_follow_html(reader: ZipArchiveReader, errors: Counte
             title = h2[0].text.strip() if h2 and h2[0].text else ""
 
             date_divs = section.xpath(".//div[contains(@class, '_a72d')]")
-            timestamp = _html_timestamp(date_divs[0].text.strip() if date_divs and date_divs[0].text else "", errors)
+            timestamp = _html_timestamp(date_divs[0].text.strip() if date_divs and date_divs[0].text else "", _export_offset(reader, errors), errors)
 
             datapoints.append((title, timestamp))
 
@@ -1974,7 +2093,7 @@ def _pages_youve_liked_html(reader: ZipArchiveReader, errors: Counter) -> pd.Dat
             url = url_anchors[0] if url_anchors else ""
 
             date_divs = section.xpath(".//div[contains(@class, '_a72d')]")
-            timestamp = _html_timestamp(date_divs[0].text.strip() if date_divs and date_divs[0].text else "", errors)
+            timestamp = _html_timestamp(date_divs[0].text.strip() if date_divs and date_divs[0].text else "", _export_offset(reader, errors), errors)
 
             datapoints.append((name, url, timestamp))
 
@@ -2161,7 +2280,7 @@ def _comments_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
             comment = comment_divs[0].text.strip() if comment_divs and comment_divs[0].text else ""
 
             date_divs = section.xpath(".//div[contains(@class, '_a72d')]")
-            timestamp = _html_timestamp(date_divs[0].text.strip() if date_divs and date_divs[0].text else "", errors)
+            timestamp = _html_timestamp(date_divs[0].text.strip() if date_divs and date_divs[0].text else "", _export_offset(reader, errors), errors)
 
             datapoints.append((title, comment, timestamp))
 
@@ -2286,7 +2405,9 @@ def _likes_and_reactions_html(reader: ZipArchiveReader, errors: Counter) -> pd.D
 
                 date_divs = section.xpath(".//div[contains(@class, '_a72d')]")
                 timestamp = _html_timestamp(
-                    date_divs[0].text.strip() if date_divs and date_divs[0].text else "", errors
+                    date_divs[0].text.strip() if date_divs and date_divs[0].text else "",
+                    _export_offset(reader, errors),
+                    errors,
                 )
 
                 datapoints.append((title, reaction, timestamp))
@@ -2634,7 +2755,9 @@ def _your_posts_check_ins_html(reader: ZipArchiveReader, errors: Counter) -> pd.
 
                 date_divs = section.xpath(".//div[contains(@class, '_a72d')]")
                 timestamp = _html_timestamp(
-                    date_divs[0].text.strip() if date_divs and date_divs[0].text else "", errors
+                    date_divs[0].text.strip() if date_divs and date_divs[0].text else "",
+                    _export_offset(reader, errors),
+                    errors,
                 )
 
                 datapoints.append((title, post, url, timestamp))
@@ -2912,7 +3035,7 @@ def _profile_visits_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFr
             name_td = section.xpath(".//td[contains(@class, '_a6_r')]")
             name = name_td[0].text.strip() if name_td and name_td[0].text else ""
             date_divs = section.xpath(".//div[contains(@class, '_a72d')]")
-            date = _html_timestamp(date_divs[0].text.strip() if date_divs and date_divs[0].text else "", errors)
+            date = _html_timestamp(date_divs[0].text.strip() if date_divs and date_divs[0].text else "", _export_offset(reader, errors), errors)
             if name or date:
                 datapoints.append((name, date))
 
@@ -3135,7 +3258,7 @@ def _link_history_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFram
             title_tds = section.xpath(".//tr[td[contains(@class, '_a6_q') and contains(text(), 'Title of website page you visited')]]/td[contains(@class, '_a6_r')]")
             title = title_tds[0].text.strip() if title_tds and title_tds[0].text else ""
             date_divs = section.xpath(".//div[contains(@class, '_a72d')]")
-            date = _html_timestamp(date_divs[0].text.strip() if date_divs and date_divs[0].text else "", errors)
+            date = _html_timestamp(date_divs[0].text.strip() if date_divs and date_divs[0].text else "", _export_offset(reader, errors), errors)
             if url or title or date:
                 datapoints.append((url, title, date))
 
@@ -3673,7 +3796,7 @@ def _advertisers_youve_interacted_with_html(reader: ZipArchiveReader, errors: Co
 
             # Timestamp from footer
             footer_div = section.xpath(".//footer//div[contains(@class, '_a72d')]")
-            timestamp = _html_timestamp(footer_div[0].text.strip() if footer_div and footer_div[0].text else "", errors)
+            timestamp = _html_timestamp(footer_div[0].text.strip() if footer_div and footer_div[0].text else "", _export_offset(reader, errors), errors)
 
             datapoints.append((
                 lv_map.get("Action", ""),
@@ -3799,7 +3922,7 @@ def _your_contributions_html(reader: ZipArchiveReader, errors: Counter) -> pd.Da
             value = ", ".join(values) if values else ""
 
             date_divs = section.xpath(".//footer//div[contains(@class, '_a72d')]")
-            date = _html_timestamp(date_divs[0].text.strip() if date_divs and date_divs[0].text else "", errors)
+            date = _html_timestamp(date_divs[0].text.strip() if date_divs and date_divs[0].text else "", _export_offset(reader, errors), errors)
 
             url_anchors = section.xpath(".//footer//a/@href")
             url = url_anchors[0] if url_anchors else ""
@@ -3930,7 +4053,7 @@ def _items_viewed_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFram
                     lv_map[label] = value
 
             date_divs = section.xpath(".//footer//div[contains(@class, '_a72d')]")
-            date = _html_timestamp(date_divs[0].text.strip() if date_divs and date_divs[0].text else "", errors)
+            date = _html_timestamp(date_divs[0].text.strip() if date_divs and date_divs[0].text else "", _export_offset(reader, errors), errors)
 
             datapoints.append((
                 lv_map.get("Title", ""),
