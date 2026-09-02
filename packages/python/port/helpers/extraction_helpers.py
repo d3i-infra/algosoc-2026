@@ -273,6 +273,60 @@ def epoch_to_iso(epoch_timestamp: str | int | float, errors: Counter | None = No
     return out
 
 
+#: ``Mar 02, 2026 4:57:45 pm`` — the one shape Meta's HTML exports write for a
+#: timestamp (every ``_a72d`` cell in the local Facebook fixtures matches it).
+#: No zone is given: the exporter renders the account's local time.
+META_HTML_TIMESTAMP = re.compile(
+    r"^([A-Za-z]{3}) (\d{1,2}), (\d{4}) (\d{1,2}):(\d{2}):(\d{2}) ([AaPp])[Mm]$"
+)
+_META_HTML_MONTHS = {
+    "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
+    "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
+}
+
+
+def meta_html_timestamp_to_iso(text: str, errors: Counter | None = None) -> str:
+    """
+    Convert a Meta HTML display timestamp to a naive ISO 8601 string.
+
+    The HTML export carries no timezone, so the result has no offset; JSON
+    exports go through ``epoch_to_iso`` instead. Same contract as that helper:
+    an empty cell is an expected absence and returns ``""`` without counting;
+    text of any other shape is returned unchanged and counted as
+    ``TimestampParseError``. A regex rather than ``strptime`` — an order of
+    magnitude faster, and Pyodide is slow.
+
+    Examples::
+
+        >>> meta_html_timestamp_to_iso("Mar 02, 2026 4:57:45 pm")
+        "2026-03-02T16:57:45"
+    """
+    if not text:
+        return ""
+
+    match = META_HTML_TIMESTAMP.match(text.strip())
+    if match:
+        month = _META_HTML_MONTHS.get(match.group(1).lower())
+        if month:
+            # A 12-hour clock counts noon as 12 PM and midnight as 12 AM.
+            hour = int(match.group(4)) % 12 + (12 if match.group(7) in "Pp" else 0)
+            try:
+                return datetime(
+                    int(match.group(3)), month, int(match.group(2)),
+                    hour, int(match.group(5)), int(match.group(6)),
+                ).isoformat()
+            except ValueError:
+                pass  # e.g. day out of range for the month — counted below
+
+    # The value itself is not logged: a cell that failed to parse is still
+    # participant data.
+    logger.error("Could not convert Meta HTML timestamp")
+    if errors is not None:
+        errors["TimestampParseError"] += 1
+
+    return text
+
+
 def sort_isotimestamp_empty_timestamp_last(timestamp_series: pd.Series) -> pd.Series:
     """
     Creates a key for sorting a pandas Series of ISO timestamps, placing empty timestamps last.

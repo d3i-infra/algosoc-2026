@@ -106,6 +106,19 @@ def _sort_by_date(out: pd.DataFrame, date_column: str) -> pd.DataFrame:
     ).reset_index(drop=True)
 
 
+def _section_timestamp(section, errors: Counter) -> str:
+    """ISO 8601 timestamp of one record in an HTML export.
+
+    Meta writes a record's time as a display string (``Jun 04, 2025 6:46:10
+    pm``) in a ``_a72d`` div inside the record's footer. Converted here so the
+    HTML and JSON paths donate the same shape and ``_sort_by_date`` can rank
+    the rows; an empty footer yields ``""``.
+    """
+    divs = section.xpath(".//footer//div[contains(@class, '_a72d')]")
+    text = divs[0].text.strip() if divs and divs[0].text else ""
+    return eh.meta_html_timestamp_to_iso(text, errors=errors)
+
+
 def who_youve_followed_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
     """Extract the list of profiles and pages you follow on Facebook.
 
@@ -197,9 +210,7 @@ def _who_youve_followed_html(reader: ZipArchiveReader, errors: Counter) -> pd.Da
         for section in sections:
             h2 = section.xpath(".//h2")
             name = h2[0].text.strip() if h2 and h2[0].text else ""
-
-            date_divs = section.xpath(".//div[contains(@class, '_a72d')]")
-            timestamp = date_divs[0].text.strip() if date_divs and date_divs[0].text else ""
+            timestamp = _section_timestamp(section, errors)
 
             datapoints.append((name, timestamp))
 
@@ -716,8 +727,7 @@ def _your_search_history_html(reader: ZipArchiveReader, errors: Counter) -> pd.D
         for section in sections:
             term_divs = section.xpath(".//div[contains(@class, '_2pin')]//div[not(div)]")
             term = term_divs[0].text.strip().strip('"') if term_divs and term_divs[0].text else ""
-            date_divs = section.xpath(".//div[contains(@class, '_a72d')]")
-            date = date_divs[0].text.strip() if date_divs and date_divs[0].text else ""
+            date = _section_timestamp(section, errors)
             datapoints.append((term, date))
 
         if datapoints:
@@ -1226,8 +1236,7 @@ def _your_events_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame
         for section in sections:
             h2 = section.xpath(".//h2")
             name = h2[0].text.strip() if h2 and h2[0].text else ""
-            date_divs = section.xpath(".//div[contains(@class, '_a72d')]")
-            created = date_divs[0].text.strip() if date_divs and date_divs[0].text else ""
+            created = _section_timestamp(section, errors)
             if name or created:
                 datapoints.append((name, created))
 
@@ -1502,9 +1511,7 @@ def _your_comments_in_groups_html(reader: ZipArchiveReader, errors: Counter) -> 
                 # A comment on a post outside a group has no labelled row above it.
                 comment_divs = section.xpath(".//div[contains(@class, '_2pin')]//div[not(div) and not(span)]")
                 comment = comment_divs[0].text.strip() if comment_divs and comment_divs[0].text else ""
-
-            date_divs = section.xpath(".//div[contains(@class, '_a72d')]")
-            timestamp = date_divs[0].text.strip() if date_divs and date_divs[0].text else ""
+            timestamp = _section_timestamp(section, errors)
 
             if title or comment or group or timestamp:
                 datapoints.append((title, comment, group, timestamp))
@@ -1629,8 +1636,7 @@ def _your_group_membership_activity_html(reader: ZipArchiveReader, errors: Count
         for section in sections:
             h2 = section.xpath(".//h2")
             title = h2[0].text.strip() if h2 and h2[0].text else ""
-            date_divs = section.xpath(".//div[contains(@class, '_a72d')]")
-            date = date_divs[0].text.strip() if date_divs and date_divs[0].text else ""
+            date = _section_timestamp(section, errors)
             if title or date:
                 datapoints.append((title, "See first column", date))
 
@@ -1736,9 +1742,7 @@ def _pages_and_profiles_you_follow_html(reader: ZipArchiveReader, errors: Counte
         for section in sections:
             h2 = section.xpath(".//h2")
             title = h2[0].text.strip() if h2 and h2[0].text else ""
-
-            date_divs = section.xpath(".//div[contains(@class, '_a72d')]")
-            timestamp = date_divs[0].text.strip() if date_divs and date_divs[0].text else ""
+            timestamp = _section_timestamp(section, errors)
 
             datapoints.append((title, timestamp))
 
@@ -1850,9 +1854,7 @@ def _pages_youve_liked_html(reader: ZipArchiveReader, errors: Counter) -> pd.Dat
 
             url_anchors = section.xpath(".//footer//a/@href")
             url = url_anchors[0] if url_anchors else ""
-
-            date_divs = section.xpath(".//div[contains(@class, '_a72d')]")
-            timestamp = date_divs[0].text.strip() if date_divs and date_divs[0].text else ""
+            timestamp = _section_timestamp(section, errors)
 
             datapoints.append((name, url, timestamp))
 
@@ -2037,9 +2039,7 @@ def _comments_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
 
             comment_divs = section.xpath(".//div[contains(@class, '_2pin')]/div[not(div)]")
             comment = comment_divs[0].text.strip() if comment_divs and comment_divs[0].text else ""
-
-            date_divs = section.xpath(".//div[contains(@class, '_a72d')]")
-            timestamp = date_divs[0].text.strip() if date_divs and date_divs[0].text else ""
+            timestamp = _section_timestamp(section, errors)
 
             datapoints.append((title, comment, timestamp))
 
@@ -2161,9 +2161,7 @@ def _likes_and_reactions_html(reader: ZipArchiveReader, errors: Counter) -> pd.D
                     fname = img[0].rsplit("/", 1)[-1] if "/" in img[0] else img[0]
                     reaction = fname.rsplit(".", 1)[0] if "." in fname else fname
                     reaction = reaction.capitalize()
-
-                date_divs = section.xpath(".//div[contains(@class, '_a72d')]")
-                timestamp = date_divs[0].text.strip() if date_divs and date_divs[0].text else ""
+                timestamp = _section_timestamp(section, errors)
 
                 datapoints.append((title, reaction, timestamp))
 
@@ -2507,9 +2505,7 @@ def _your_posts_check_ins_html(reader: ZipArchiveReader, errors: Counter) -> pd.
                 # URL from a link in the content area (not footer)
                 content_links = section.xpath(".//div[contains(@class, '_2pin')]//a/@href")
                 url = content_links[0] if content_links else ""
-
-                date_divs = section.xpath(".//div[contains(@class, '_a72d')]")
-                timestamp = date_divs[0].text.strip() if date_divs and date_divs[0].text else ""
+                timestamp = _section_timestamp(section, errors)
 
                 datapoints.append((title, post, url, timestamp))
 
@@ -2785,8 +2781,7 @@ def _profile_visits_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFr
         for section in sections:
             name_td = section.xpath(".//td[contains(@class, '_a6_r')]")
             name = name_td[0].text.strip() if name_td and name_td[0].text else ""
-            date_divs = section.xpath(".//div[contains(@class, '_a72d')]")
-            date = date_divs[0].text.strip() if date_divs and date_divs[0].text else ""
+            date = _section_timestamp(section, errors)
             if name or date:
                 datapoints.append((name, date))
 
@@ -3008,8 +3003,7 @@ def _link_history_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFram
             url = a_tags[0].get("href", "") if a_tags else ""
             title_tds = section.xpath(".//tr[td[contains(@class, '_a6_q') and contains(text(), 'Title of website page you visited')]]/td[contains(@class, '_a6_r')]")
             title = title_tds[0].text.strip() if title_tds and title_tds[0].text else ""
-            date_divs = section.xpath(".//div[contains(@class, '_a72d')]")
-            date = date_divs[0].text.strip() if date_divs and date_divs[0].text else ""
+            date = _section_timestamp(section, errors)
             if url or title or date:
                 datapoints.append((url, title, date))
 
@@ -3546,8 +3540,7 @@ def _advertisers_youve_interacted_with_html(reader: ZipArchiveReader, errors: Co
                     break
 
             # Timestamp from footer
-            footer_div = section.xpath(".//footer//div[contains(@class, '_a72d')]")
-            timestamp = footer_div[0].text.strip() if footer_div and footer_div[0].text else ""
+            timestamp = _section_timestamp(section, errors)
 
             datapoints.append((
                 lv_map.get("Action", ""),
@@ -3671,9 +3664,7 @@ def _your_contributions_html(reader: ZipArchiveReader, errors: Counter) -> pd.Da
                 if text:
                     values.append(text)
             value = ", ".join(values) if values else ""
-
-            date_divs = section.xpath(".//footer//div[contains(@class, '_a72d')]")
-            date = date_divs[0].text.strip() if date_divs and date_divs[0].text else ""
+            date = _section_timestamp(section, errors)
 
             url_anchors = section.xpath(".//footer//a/@href")
             url = url_anchors[0] if url_anchors else ""
@@ -3802,9 +3793,7 @@ def _items_viewed_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFram
                 value = value_td[0].text.strip() if value_td and value_td[0].text else ""
                 if label and label not in lv_map:
                     lv_map[label] = value
-
-            date_divs = section.xpath(".//footer//div[contains(@class, '_a72d')]")
-            date = date_divs[0].text.strip() if date_divs and date_divs[0].text else ""
+            date = _section_timestamp(section, errors)
 
             datapoints.append((
                 lv_map.get("Title", ""),

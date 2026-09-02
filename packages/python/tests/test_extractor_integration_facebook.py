@@ -285,3 +285,41 @@ def test_whole_extraction_keeps_pinned_tables(fixture):
         if ids_by_extractor[name] not in shown
     }
     assert not missing, f"{fixture.name}: pinned table(s) {sorted(missing)} absent from extraction() output"
+
+
+# ---------------------------------------------------------------------------
+# Content canary: HTML tables carry ISO timestamps and come out newest first
+# ---------------------------------------------------------------------------
+
+_DATE_COLUMNS = {"Timestamp", "Date", "Created"}
+
+
+@pytest.mark.parametrize("fixture", _PARAMS, ids=_IDS)
+def test_html_tables_carry_iso_timestamps_newest_first(fixture):
+    """The HTML export writes display timestamps (``Jun 04, 2025 6:46:10 pm``);
+    every HTML table must convert them so the two formats donate the same shape
+    and ``_sort_by_date`` can rank them (audit 2026-09-01: HTML tables came out
+    in file order because the ISO sort saw nothing parsable)."""
+    from datetime import datetime
+
+    if fixture is None:
+        pytest.skip(_NO_FIXTURES_REASON)
+    if _expected_filetype(fixture) is not DDPFiletype.HTML:
+        pytest.skip("JSON export — epoch timestamps are covered by epoch_to_iso")
+    ctx = _context(fixture)
+    problems: list[str] = []
+    for name, fn in facebook.EXTRACTOR_REGISTRY.items():
+        df = fn(ctx.reader, Counter(), validation=ctx.validation)
+        for column in _DATE_COLUMNS & set(df.columns):
+            values = [v for v in df[column].tolist() if v]
+            parsed = []
+            for v in values:
+                try:
+                    parsed.append(datetime.fromisoformat(v))
+                except ValueError:
+                    problems.append(f"{name}.{column}: {v!r} is not ISO 8601")
+                    break
+            else:
+                if parsed != sorted(parsed, reverse=True):
+                    problems.append(f"{name}.{column}: not newest first")
+    assert not problems, f"{fixture.name}: " + "; ".join(problems)
