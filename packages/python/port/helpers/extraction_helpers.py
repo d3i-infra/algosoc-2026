@@ -5,13 +5,15 @@ import math
 import re
 import logging
 from collections import Counter
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Callable
+from typing import Any, Callable, IO, Iterator
 from pathlib import Path
 import zipfile
 
 from port.api.file_utils import SeekableBinaryReader
+from port.helpers.archive_set import ArchiveSource, SingleArchiveSource
 import csv
 import io
 import json
@@ -570,6 +572,17 @@ def read_csv_from_bytes_to_df(json_bytes: io.BytesIO) -> pd.DataFrame:
     return pd.DataFrame(read_csv_from_bytes(json_bytes))
 
 
+def xpath_nodes(node: Any, expression: str) -> list[Any]:
+    """Run an XPath query and return its node list.
+
+    lxml's ``xpath`` is typed as a union (a query can also yield a string, a
+    number or a boolean); every caller here iterates over element results, so a
+    non-list result is treated as "no matches" rather than raised.
+    """
+    result = node.xpath(expression)
+    return result if isinstance(result, list) else []
+
+
 # --- Result types for ZipArchiveReader ---
 
 @dataclass
@@ -586,34 +599,6 @@ class CsvExtractionResult:
     found: bool
     data: pd.DataFrame  # empty DataFrame when not found
     member_path: str | None = None
-
-
-EMAIL_PATTERN = re.compile(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}')
-
-
-def replace_email(text: str) -> str:
-    """Replace email addresses in *text* with ``[email]``."""
-    return EMAIL_PATTERN.sub("[email]", text)
-
-
-def replace_username(text: str, username: str) -> str:
-    """Case-insensitive replacement of *username* in *text* with ``[user]``."""
-    return re.sub(re.escape(username), "[user]", text, flags=re.IGNORECASE)
-
-
-def anonymize_dataframe(df: pd.DataFrame, columns: list[str], username: str | None = None) -> pd.DataFrame:
-    """Anonymize text columns in a DataFrame.
-
-    Replaces email addresses and, when *username* is given, the user's name
-    with placeholder tokens.  Only columns that exist in *df* are touched.
-    """
-    for col in columns:
-        if col not in df.columns:
-            continue
-        df[col] = df[col].astype(str).apply(replace_email)
-        if username:
-            df[col] = df[col].apply(lambda v, u=username: replace_username(v, u))
-    return df
 
 
 @dataclass
@@ -646,13 +631,19 @@ class ZipArchiveReader:
 
     def __init__(
         self,
-        archive: SeekableBinaryReader,
+        archive: SeekableBinaryReader | ArchiveSource,
         archive_members: list[str],
         errors: Counter,
     ):
         self.archive = archive
         self.archive_members = archive_members
         self.errors = errors
+        self._source: ArchiveSource = (
+            archive if isinstance(archive, ArchiveSource) else SingleArchiveSource(archive, archive_members)
+        )
+        duplicates = getattr(archive, "duplicates", None)
+        if duplicates is not None:
+            errors.update(duplicates)
 
     def resolve_member(self, filename: str) -> str | None:
         """Resolve a filename to an archive member path.
@@ -684,11 +675,22 @@ class ZipArchiveReader:
             self.errors["AmbiguousMemberMatch"] += 1
             return None
 
+    @contextmanager
+    def open_member(self, filename: str) -> Iterator[IO[bytes] | None]:
+        """Yields a binary stream for the resolved member, or None when the lookup
+        fails — resolution and error counting mirror the buffered read paths."""
+        member_path = self.resolve_member(filename)
+        if member_path is None:
+            yield None
+            return
+        with self._source.open_member(member_path) as stream:
+            yield stream
+
     def _read_member_bytes(self, member_path: str) -> io.BytesIO:
-        """Read a specific member from the zip by exact path."""
+        """Read a specific member via the archive source (single archive or
+        ArchiveSet), by exact path."""
         try:
-            with zipfile.ZipFile(self.archive, "r") as zf:
-                return io.BytesIO(zf.read(member_path))
+            return io.BytesIO(self._source.read_member(member_path))
         except Exception as e:
             logger.error("Error reading zip member: %s", type(e).__name__)
             self.errors[type(e).__name__] += 1
@@ -766,8 +768,10 @@ class ZipArchiveReader:
     def raw_all(self, pattern: str) -> list[RawExtractionResult]:
         """Extract raw bytes from all zip members matching a regex pattern.
 
-        Returns results sorted lexicographically by member path.
-        Used for paginated HTML exports (post_comments_1.html, _2.html, etc.).
+        Returns results sorted lexicographically by member path. Used for
+        paginated HTML exports (post_comments_1.html, _2.html, etc.). Every
+        member is read through ``_read_member_bytes`` so the member-size guard
+        and error counting apply exactly as for ``raw()``.
         """
         matches = sorted(m for m in self.archive_members if re.search(pattern, m))
         results = []
@@ -775,3 +779,49 @@ class ZipArchiveReader:
             b = self._read_member_bytes(member)
             results.append(RawExtractionResult(found=True, data=b, member_path=member))
         return results
+
+
+# --- Study-side anonymization (algosoc-2026) ---
+#
+# Applied by a platform's ``extraction()`` after the tables are built. These
+# helpers operate on nullable string columns so a missing cell stays missing
+# instead of becoming the literal text "nan".
+
+EMAIL_PATTERN = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
+
+
+def replace_email(text: str) -> str:
+    """Replace email addresses in *text* with ``[email]``."""
+    return EMAIL_PATTERN.sub("[email]", text)
+
+
+def _username_pattern(username: str) -> re.Pattern[str]:
+    """Whole-token, case-insensitive match for *username*.
+
+    Anchored on both sides so a short username (initials, a two-letter
+    nickname) never redacts the inside of an unrelated word.
+    """
+    return re.compile(rf"(?<!\w){re.escape(username)}(?!\w)", re.IGNORECASE)
+
+
+def replace_username(text: str, username: str) -> str:
+    """Replace whole-token, case-insensitive occurrences of *username* with ``[user]``."""
+    return _username_pattern(username).sub("[user]", text)
+
+
+def anonymize_dataframe(df: pd.DataFrame, columns: list[str], username: str | None = None) -> pd.DataFrame:
+    """Anonymize text columns in a DataFrame, in place.
+
+    Replaces email addresses and, when *username* is given, the user's name
+    with placeholder tokens. Only columns that exist in *df* are touched.
+    Missing values are preserved as missing. The frame is mutated and also
+    returned for convenience.
+    """
+    for col in columns:
+        if col not in df.columns:
+            continue
+        redacted = df[col].astype("string").str.replace(EMAIL_PATTERN, "[email]", regex=True)
+        if username:
+            redacted = redacted.str.replace(_username_pattern(username), "[user]", regex=True)
+        df[col] = redacted
+    return df

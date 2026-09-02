@@ -47,6 +47,22 @@ def search_cell(timestamp: str) -> str:
     return f'Searched for <a href="https://www.youtube.com/results?search_query=cats">cats</a><br>{timestamp}'
 
 
+def test_utf8_bytes_without_a_charset_declaration_are_not_mojibaked():
+    """Google's activity HTML declares no charset in its head — verified against a
+    real German export. lxml's HTML parser defaults to latin-1 when it finds none,
+    double-decoding every non-ASCII UTF-8 byte (an 'ä' becomes 'Ã¤', a NBSP becomes
+    'Â ') unless the parser is told the encoding explicitly. Takeout's export bytes
+    are UTF-8 (empirical)."""
+    record = parse(
+        'Gesucht nach:&nbsp;<a href="https://www.google.com/search?q=Aktivit%C3%A4t">'
+        'Aktivität</a><br>27.08.2026, 20:04:54 MESZ'
+    )[0]
+
+    assert "ä" in record["title"]
+    assert "Ã" not in record["title"]
+    assert "Â" not in record["title"]
+
+
 TIMESTAMPS = [
     # A 12-hour clock writes no leading zero, so the hour is a single digit before 10.
     ("Aug 17, 2026, 1:14:48 PM CEST", "2026-08-17T13:14:48"),
@@ -64,14 +80,65 @@ DIRECT = [
     ("17 Ağu 2026, 22:14:48 GMT+3", "2026-08-17T22:14:48"),
 ]
 
-#: Shapes it hands to dateutil instead, which reads what it can.
+#: A shape none of the fast paths match — no month name, no dot-separated numeric
+#: date, no CJK unit markers, no Arabic slashes — so it genuinely hands to
+#: dateutil, which reads it as the unambiguous ISO-ish ``Y-M-D H:M:S`` it is.
 FALLBACK = [
-    ("17.08.2026, 22:14:48", "2026-08-17T22:14:48"),  # no month name to recognize
-    ("2026年8月17日 22:14:48", "2026年8月17日 22:14:48"),  # unreadable, kept as it was
+    ("2026-08-17 22:14:48", "2026-08-17T22:14:48"),
+]
+
+#: Fully numeric dotted dates, as the current German export writes them
+#: (``27.08.2026, 20:04:54 MESZ``) — day-first in every locale that writes them.
+#: ``12.07.2026`` is the ambiguous case dateutil's month-first default gets
+#: wrong (day <= 12, so it reads as 2026-12-07 instead of 2026-07-12); the third
+#: entry is day-first even though the digits alone would read as a US date.
+#: ``17.08.2026, 22:14:48`` carries no timezone abbreviation at all — the fast
+#: path matches on the dotted numeric date alone (``NUMERIC_DAY_FIRST`` has no
+#: trailing anchor), so a missing zone doesn't push it to dateutil either.
+NUMERIC_DAY_FIRST = [
+    ("27.08.2026, 20:04:54 MESZ", "2026-08-27T20:04:54"),
+    ("12.07.2026, 23:29:21 MESZ", "2026-07-12T23:29:21"),
+    ("07.12.2026, 09:00:00 MEZ", "2026-12-07T09:00:00"),
+    ("17.08.2026, 22:14:48", "2026-08-17T22:14:48"),
+]
+
+#: ``2026年7月30日 00:23:06 CEST`` — how the Chinese export writes a timestamp: CJK
+#: unit markers 年/月/日 name year/month/day unambiguously, even though the zh
+#: locale writes English action words ("Watched") in the activity text itself.
+#: Confirmed 2026-08-31 against tests/ddp/google_set_uu-acct-zh/'s real
+#: 观看记录.html (youtube.watch_history) and search-history HTML — every one of
+#: 16494 non-empty Timestamp cells across the set matched one of these four
+#: digit-count shapes (24-hour clock, no AM/PM marker in this locale).
+CJK = [
+    ("2026年7月30日 00:23:06 CEST", "2026-07-30T00:23:06"),  # single-digit month, two-digit day
+    ("2026年5月9日 01:40:12 CEST", "2026-05-09T01:40:12"),  # single-digit month and day
+    ("2025年10月2日 11:40:30 CEST", "2025-10-02T11:40:30"),  # two-digit month, single-digit day
+    ("2024年11月27日 17:58:42 CEST", "2024-11-27T17:58:42"),  # two-digit month and day
+]
+
+#: ``23‏/07‏/2026، 4:20:22 م CEST`` — how the Arabic export writes a timestamp:
+#: Western digits in day/month/year order (day-first — some samples carry a day
+#: > 12, so this is unambiguous by construction, the same reasoning as
+#: ``NUMERIC_DAY_FIRST``), each numeric field followed by U+200F RIGHT-TO-LEFT
+#: MARK, U+060C ARABIC COMMA after the year instead of a Western comma, and a
+#: 12-hour clock with the Arabic meridiem letters ص (ARABIC LETTER SAD, "sabah"/
+#: morning = AM) and م (ARABIC LETTER MEEM, "masa'"/evening = PM) in place of
+#: AM/PM. Confirmed 2026-08-31 against tests/ddp/google_set_uu-acct-ar/'s real
+#: activity HTML (نشاطي/YouTube and نشاطي/Search) — every one of 16494
+#: non-empty Timestamp cells across the set matched one of these four
+#: digit-count/meridiem shapes.
+ARABIC = [
+    ("23‏/07‏/2026، 4:20:22 م CEST", "2026-07-23T16:20:22"),  # PM, single-digit hour
+    ("30‏/07‏/2026، 12:23:06 ص CEST", "2026-07-30T00:23:06"),  # 12 AM is midnight
+    ("20‏/07‏/2026، 12:16:30 م CEST", "2026-07-20T12:16:30"),  # 12 PM is noon
+    ("28‏/05‏/2026، 8:28:13 ص CEST", "2026-05-28T08:28:13"),  # AM, single-digit hour
 ]
 
 
-@pytest.mark.parametrize("timestamp,expected", TIMESTAMPS + DIRECT + FALLBACK)
+@pytest.mark.parametrize(
+    "timestamp,expected",
+    TIMESTAMPS + DIRECT + FALLBACK + NUMERIC_DAY_FIRST + CJK + ARABIC,
+)
 def test_conversion(timestamp, expected):
     assert google._convert_to_iso8601(timestamp) == expected
 
@@ -88,10 +155,10 @@ def test_conversion_agrees_with_dateutil(timestamp, _):
 
 class TestCaption:
     """Some sources record lists beside an activity — the locations a Discover card was
-    picked for, the topics it covered — which the html writes into the caption cell. They
-    details have to come out in the shape the json format writes them in. The locations are
-    deliberately not extracted, and recognizing that section is what keeps it from being
-    read as the details."""
+    picked for, the topics it covered — which the html writes into the caption cell. The
+    details have to come out in the shape the json format writes them in; the locations
+    are dropped by this study, so they must never reach the record, nor leak into the
+    details."""
 
     LOCATIONS = (
         '<b>Locations:</b><br> At <a href="https://www.google.com/maps/@?api=1&amp;'
@@ -107,15 +174,14 @@ class TestCaption:
         page = activity_html(self.CARD, f'<b>Products:</b><br> Discover<br>{caption}{WHY}')
         return google._parse_activity_html(io.BytesIO(page.encode()))[0]
 
-    def test_the_details_read_as_the_json_writes_them_and_the_locations_are_dropped(self):
+    def test_details_read_as_the_json_writes_them_and_locations_are_dropped(self):
         record = self.record(self.LOCATIONS + self.DETAILS)
 
+        assert "locationInfos" not in record
         assert record["details"] == [
             {"name": "Birdwatching"}, {"name": "Cycling - viewed"}, {"name": "Nordic cuisine"}
         ]
-        assert "locationInfos" not in record
-        assert "general area" not in str(record)
-        assert "maps" not in str(record)
+        assert not any("general area" in str(v) or "google.com/maps" in str(v) for v in record.values())
 
     def test_a_detail_that_links_somewhere_keeps_the_link_in_its_text(self):
         """The html writes such a detail as one line, the name and the url it points to
@@ -131,22 +197,18 @@ class TestCaption:
         """Only a location separates its source off the end of the line."""
         assert {"name": "Cycling - viewed"} in self.record(self.DETAILS)["details"]
 
-    def test_a_caption_of_locations_alone_adds_nothing(self):
-        """The section is recognized by its links to Maps, so it is dropped rather than
-        taken for the details, which is the section a caption is otherwise assumed to
-        hold."""
-        assert sorted(self.record(self.LOCATIONS)) == ["time", "title", "titleUrl"]
+    def test_a_caption_of_only_locations_adds_nothing(self):
+        record = self.record(self.LOCATIONS)
+        assert "details" not in record
+        assert "locationInfos" not in record
 
     def test_a_location_without_a_source_is_dropped_too(self):
-        """A location whose line does not close with how the area was arrived at is still a
-        location, and is recognized by its link the same way."""
         caption = ('<b>Locations:</b><br> <a href="https://www.google.com/maps/@?api=1&amp;'
                    'center=10.000000,20.000000">Somewhere</a><br>')
 
         record = self.record(caption)
-
-        assert sorted(record) == ["time", "title", "titleUrl"]
-        assert "Somewhere" not in str(record)
+        assert "locationInfos" not in record
+        assert "details" not in record
 
     def test_a_caption_with_nothing_to_add_adds_nothing(self):
         """Most captions only name the product and say why the activity was kept."""

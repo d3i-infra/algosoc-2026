@@ -41,7 +41,6 @@ jobs:
       - name: Build Python Package
         working-directory: packages/python
         run: |
-          poetry lock
           poetry install
           poetry build --format wheel
 
@@ -66,6 +65,12 @@ jobs:
             [ -f "$config_file" ] || continue
             basename="${config_file##*/}"
             platform="${basename%_config.json}"
+            # Test-only platforms (Playwright fault injection, multi-file
+            # suite) and the non-normative example ship a tracked config
+            # but are not study platforms.
+            case "$platform" in
+              e2etest|e2etest_multifile|example) continue ;;
+            esac
             platforms+=("$platform")
           done
 

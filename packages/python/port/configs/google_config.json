@@ -4,7 +4,8 @@
     "filetypes": [
       "json",
       "html",
-      "csv"
+      "csv",
+      "txt"
     ],
     "languages": [
       "en",
@@ -15,8 +16,8 @@
       "tr",
       "zh"
     ],
-    "description": "Handles the Google Takeout archive in English, Dutch, German, Arabic, Turkish and Chinese. Currently extracts the YouTube sources of the archive: watch history, search history, subscriptions and comments. Both JSON and HTML formats are supported for watch and search histories, and may differ per source within one archive. Comments and subscriptions are always extracted in CSV format. Tested for Dutch DDPs with both JSON and HTML formats. DDPs in the other languages have not yet been tested, and the Arabic, Turkish and Chinese paths are unverified translations. If you find anything wrong with this script, report to datadonation@uu.nl and it will be fixed!",
-    "time_last_tested": "22-06-2026"
+    "description": "Handles the Google Takeout archive, uploaded as one or more zip parts (a multi-zip archive-set, so the export never needs to fit in a single upload). Extracts the ten tables this study asks for: four from YouTube (watch history, search history, subscriptions, comments), one each from Search, Chrome, Video Search, Ads, Discover and Google News. The general area a search or Discover card was made from is not extracted; rows of the Search, Chrome, Video Search and Ads tables that carry explicit content are dropped, and email addresses are redacted in the title and details columns of every table. Each source is read as JSON, HTML, CSV or TXT, whichever format it was exported in, which may differ per source within one archive. Handles DDPs in English, Dutch, German, Spanish, Arabic, Turkish and Chinese (Simplified only); the seven locales' path tables for the core sources were verified against real Google Takeout exports in August 2026. A handful of lower-traffic sources still carry older, unverified path guesses: the News My-Activity folder in every locale, Discover outside English (its English path is real-export-verified), and subscriptions/comments outside English and Dutch. Tested against the project's synthetic/canary test suite as of the date below; a live browser run against real exports updates this note when performed. If you find anything wrong with this script, report to datadonation@uu.nl and it will be fixed!",
+    "time_last_tested": "30-08-2026"
   },
   "tables": [
     {
@@ -304,7 +305,7 @@
       },
       "extractor": "search_history_to_df",
       "documentation": {
-        "summary": "Each row represents one search query in Google search history, including how the search came about where the archive says so.",
+        "summary": "Each row represents one search query in Google search history, including how the search came about where the archive says so. The area a search was made from is not extracted.",
         "source_file": "the Google search history, e.g. Search/MyActivity.json or Suche/MyActivity.html",
         "columns": {
           "Title": "Description of the search action.",

@@ -1,6 +1,6 @@
-import { useMemo } from "react"
-import { Translator } from "@eyra/feldspar"
+import { ReactElement, useMemo } from "react"
 import TextBundle from "@eyra/feldspar"
+import { resolveAll } from "../../locale/text"
 import { TableWithContext } from "./types"
 
 interface Props {
@@ -16,8 +16,8 @@ interface Props {
  * tells them how much data there is in total. That is why it repeats the count
  * in the heading, in the option labels and in the position indicator.
  */
-export const TableSelector = ({ tables, selectedId, onSelect, locale }: Props): JSX.Element => {
-  const text = useMemo(() => getTranslations(locale), [locale])
+export const TableSelector = ({ tables, selectedId, onSelect, locale }: Props): ReactElement => {
+  const text = useMemo(() => resolveAll(translations, locale), [locale])
 
   const index = Math.max(
     0,
@@ -95,11 +95,11 @@ function StepButton({
   disabled,
   onClick,
 }: {
-  icon: JSX.Element
+  icon: ReactElement
   label: string
   disabled: boolean
   onClick: () => void
-}): JSX.Element {
+}): ReactElement {
   return (
     <button
       type="button"
@@ -141,42 +141,58 @@ const chevronRightIcon = (
   </svg>
 )
 
-function getTranslations(locale: string): Record<string, string> {
-  const translated: Record<string, string> = {}
-  for (const [key, value] of Object.entries(translations)) {
-    translated[key] = Translator.translate(value, locale)
-  }
-  return translated
-}
-
 const translations = {
   heading: new TextBundle()
     .add("en", "Your data is divided over {n} tables")
+    .add("nl", "Uw gegevens zijn verdeeld over {n} tabellen")
     .add("de", "Ihre Daten sind auf {n} Tabellen verteilt")
-    .add("nl", "Uw gegevens zijn verdeeld over {n} tabellen"),
+    .add("it", "I suoi dati sono suddivisi in {n} tabelle")
+    .add("es", "Sus datos están repartidos en {n} tablas"),
   explanation: new TextBundle()
     .add(
       "en",
       "Only one table is shown at a time. Use the menu below to view the others. Please check them all before sharing."
     )
     .add(
+      "nl",
+      "Er wordt steeds één tabel getoond. Gebruik het menu hieronder om de andere tabellen te bekijken. Bekijk ze alstublieft allemaal voordat u deelt."
+    )
+    .add(
       "de",
       "Es wird jeweils nur eine Tabelle angezeigt. Über das Menü unten sehen Sie die übrigen. Bitte prüfen Sie alle, bevor Sie teilen."
     )
     .add(
-      "nl",
-      "Er wordt steeds één tabel getoond. Gebruik het menu hieronder om de andere tabellen te bekijken. Bekijk ze alstublieft allemaal voordat u deelt."
+      "it",
+      "Viene mostrata una sola tabella alla volta. Usi il menu qui sotto per vedere le altre. La preghiamo di controllarle tutte prima di condividere."
+    )
+    .add(
+      "es",
+      "Solo se muestra una tabla a la vez. Use el menú de abajo para ver las demás. Por favor, revíselas todas antes de compartir."
     ),
   label: new TextBundle()
     .add("en", "Select a table")
+    .add("nl", "Kies een tabel")
     .add("de", "Tabelle auswählen")
-    .add("nl", "Kies een tabel"),
+    .add("it", "Selezioni una tabella")
+    .add("es", "Seleccione una tabla"),
   position: new TextBundle()
     .add("en", "{i} of {n}")
+    .add("nl", "{i} van {n}")
     .add("de", "{i} von {n}")
-    .add("nl", "{i} van {n}"),
-  previous: new TextBundle().add("en", "Previous table").add("de", "Vorherige Tabelle").add("nl", "Vorige tabel"),
-  next: new TextBundle().add("en", "Next table").add("de", "Nächste Tabelle").add("nl", "Volgende tabel"),
-  row: new TextBundle().add("en", "row").add("de", "Zeile").add("nl", "rij"),
-  rows: new TextBundle().add("en", "rows").add("de", "Zeilen").add("nl", "rijen"),
+    .add("it", "{i} di {n}")
+    .add("es", "{i} de {n}"),
+  previous: new TextBundle()
+    .add("en", "Previous table")
+    .add("nl", "Vorige tabel")
+    .add("de", "Vorherige Tabelle")
+    .add("it", "Tabella precedente")
+    .add("es", "Tabla anterior"),
+  next: new TextBundle()
+    .add("en", "Next table")
+    .add("nl", "Volgende tabel")
+    .add("de", "Nächste Tabelle")
+    .add("it", "Tabella successiva")
+    .add("es", "Tabla siguiente"),
+  row: new TextBundle().add("en", "row").add("nl", "rij").add("de", "Zeile").add("it", "riga").add("es", "fila"),
+  rows: new TextBundle().add("en", "rows").add("nl", "rijen").add("de", "Zeilen").add("it", "righe").add("es", "filas"),
 }

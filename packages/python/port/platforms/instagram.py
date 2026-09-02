@@ -47,6 +47,7 @@ from port.helpers.validate import (
     Language,
 )
 from port.api.d3i_props import ExtractionResult
+from port.api.file_utils import SeekableBinaryReader
 from port.helpers.table_extractor import (
     load_port_config,
     run_extraction,
@@ -371,7 +372,7 @@ def _following_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
     try:
         tree = etree.HTML(result.data.read())
 
-        sections = tree.xpath("//main/div[contains(@class, '_a6-g')]")
+        sections = eh.xpath_nodes(tree, "//main/div[contains(@class, '_a6-g')]")
         for section in sections:
             h2 = section.xpath(".//h2")
             account = h2[0].text.strip() if h2 and h2[0].text else ""
@@ -528,7 +529,7 @@ def _posts_viewed_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFram
     try:
         tree = etree.HTML(result.data.read())
 
-        sections = tree.xpath("//main/div[contains(@class, '_a6-g')]")
+        sections = eh.xpath_nodes(tree, "//main/div[contains(@class, '_a6-g')]")
         for section in sections:
             name, username = _extract_owner_from_html(section)
             author = username or name
@@ -675,7 +676,7 @@ def _videos_watched_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFr
     try:
         tree = etree.HTML(result.data.read())
 
-        sections = tree.xpath("//main/div[contains(@class, '_a6-g')]")
+        sections = eh.xpath_nodes(tree, "//main/div[contains(@class, '_a6-g')]")
         for section in sections:
             name, username = _extract_owner_from_html(section)
             author = username or name
@@ -806,7 +807,7 @@ def _post_comments_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFra
         for result in results:
             tree = etree.HTML(result.data.read())
 
-            sections = tree.xpath("//main/div[contains(@class, '_a6-g')]")
+            sections = eh.xpath_nodes(tree, "//main/div[contains(@class, '_a6-g')]")
             for section in sections:
                 comment = ""
                 media_owner = ""
@@ -948,7 +949,7 @@ def _liked_comments_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFr
     try:
         tree = etree.HTML(result.data.read())
 
-        sections = tree.xpath("//main/div[contains(@class, '_a6-g')]")
+        sections = eh.xpath_nodes(tree, "//main/div[contains(@class, '_a6-g')]")
         for section in sections:
             h2 = section.xpath(".//h2")
             account_name = h2[0].text.strip() if h2 and h2[0].text else ""
@@ -1092,7 +1093,7 @@ def _liked_posts_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame
     try:
         tree = etree.HTML(result.data.read())
 
-        sections = tree.xpath("//main/div[contains(@class, '_a6-g')]")
+        sections = eh.xpath_nodes(tree, "//main/div[contains(@class, '_a6-g')]")
         for section in sections:
             name, username = _extract_owner_from_html(section)
             account_name = username or name
@@ -1215,7 +1216,7 @@ def _story_likes_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame
     try:
         tree = etree.HTML(result.data.read())
 
-        sections = tree.xpath("//main/div[contains(@class, '_a6-g')]")
+        sections = eh.xpath_nodes(tree, "//main/div[contains(@class, '_a6-g')]")
         for section in sections:
             name, username = _extract_owner_from_html(section)
             account_name = username or name
@@ -1374,7 +1375,7 @@ def _saved_posts_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame
     try:
         tree = etree.HTML(result.data.read())
 
-        sections = tree.xpath("//main/div[contains(@class, '_a6-g')]")
+        sections = eh.xpath_nodes(tree, "//main/div[contains(@class, '_a6-g')]")
         for section in sections:
             # URL
             url_a = section.xpath(".//td[contains(@class, '_a6_q') and starts-with(text(), 'URL')]//a")
@@ -1539,7 +1540,7 @@ def _word_or_phrase_searches_html(reader: ZipArchiveReader, errors: Counter) -> 
     try:
         tree = etree.HTML(result.data.read())
 
-        sections = tree.xpath("//main/div[contains(@class, '_a6-g')]")
+        sections = eh.xpath_nodes(tree, "//main/div[contains(@class, '_a6-g')]")
         for section in sections:
             search_term = ""
             timestamp = ""
@@ -1675,7 +1676,7 @@ def _stories_published_html(reader: ZipArchiveReader, errors: Counter) -> pd.Dat
     try:
         tree = etree.HTML(result.data.read())
 
-        sections = tree.xpath("//main/div[contains(@class, '_a6-g')]")
+        sections = eh.xpath_nodes(tree, "//main/div[contains(@class, '_a6-g')]")
         for section in sections:
             # URI from media link
             a = section.xpath(".//a[@href]")
@@ -1817,7 +1818,7 @@ def _advertisers_using_activity_html(reader: ZipArchiveReader, errors: Counter) 
     try:
         tree = etree.HTML(result.data.read())
 
-        headed_tds = tree.xpath("//td[contains(@class, '_a6_q') and @colspan]")
+        headed_tds = eh.xpath_nodes(tree, "//td[contains(@class, '_a6_q') and @colspan]")
         for td in headed_tds:
             category = td.text.strip() if td.text else ""
             if not category:
@@ -1958,7 +1959,7 @@ def _ads_viewed_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
     try:
         tree = etree.HTML(result.data.read())
 
-        sections = tree.xpath("//main/div[contains(@class, '_a6-g')]")
+        sections = eh.xpath_nodes(tree, "//main/div[contains(@class, '_a6-g')]")
         for section in sections:
             name, username = _extract_owner_from_html(section)
 
@@ -2377,7 +2378,7 @@ def _posts_published_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataF
         for result in results:
             tree = etree.HTML(result.data.read())
 
-            sections = tree.xpath("//main/div[contains(@class, '_a6-g')]")
+            sections = eh.xpath_nodes(tree, "//main/div[contains(@class, '_a6-g')]")
             for section in sections:
                 # The post title (caption) is the section's own heading; media
                 # entries nested deeper carry their own headings.
@@ -2513,7 +2514,7 @@ def _subscription_for_no_ads_html(reader: ZipArchiveReader, errors: Counter) -> 
     try:
         tree = etree.HTML(result.data.read())
 
-        rows = tree.xpath("//tr[td[contains(@class, '_a6_q')] and td[contains(@class, '_a6_r')]]")
+        rows = eh.xpath_nodes(tree, "//tr[td[contains(@class, '_a6_q')] and td[contains(@class, '_a6_r')]]")
         for row in rows:
             label_td = row.xpath("td[contains(@class, '_a6_q')]")
             value_td = row.xpath("td[contains(@class, '_a6_r')]")
@@ -2675,7 +2676,7 @@ def _extract_username(reader: ZipArchiveReader) -> str | None:
 
 
 def extraction(
-    instagram_zip: str,
+    instagram_zip: SeekableBinaryReader,
     validation,
 ) -> ExtractionResult:
     """Extract data from an Instagram DDP zip and return consent-form tables.
@@ -2683,7 +2684,8 @@ def extraction(
     Parameters
     ----------
     instagram_zip:
-        Path to the Instagram DDP zip archive on disk.
+        Seekable binary reader over the Instagram DDP zip — the upload
+        adapter itself, never a path (ADR-0026).
     validation:
         Validation result object whose ``archive_members`` attribute is passed
         to ``ZipArchiveReader``.
