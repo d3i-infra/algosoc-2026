@@ -20,6 +20,7 @@ import json
 
 import pandas as pd
 import numpy as np
+import pytz
 
 
 logger = logging.getLogger(__name__)
@@ -258,6 +259,7 @@ DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 #: a trip abroad still comes out in the account's home zone. That information is not in the
 #: data and no conversion can recover it.
 REFERENCE_TIMEZONE = "Europe/Amsterdam"
+_REFERENCE_ZONE = pytz.timezone(REFERENCE_TIMEZONE)
 
 #: A zone spelled out at the end of a timestamp rather than as an offset, as the TikTok
 #: txt export writes it: ``2026-05-02 10:09:50 UTC``. Only the zero-offset names are
@@ -266,37 +268,48 @@ REFERENCE_TIMEZONE = "Europe/Amsterdam"
 NAMED_UTC = re.compile(r"[\s_]+(?:UTC|GMT)$", re.IGNORECASE)
 
 
-def _last_sunday(year: int, month: int) -> date:
-    """The date of the last Sunday in *month*, which is when the European clocks change."""
-
-    # The first of the next month less a day is the last of this one. Only March and
-    # October are ever asked for, so the next month is always within the same year.
-    last = date(year, month + 1, 1) - timedelta(days=1)
-    return last - timedelta(days=(last.weekday() + 1) % 7)
-
-
-def _reference_offset(moment: datetime) -> timedelta:
-    """How far ``REFERENCE_TIMEZONE`` stands ahead of UTC at *moment*, a naive UTC time.
-
-    The rule is applied directly rather than read from a timezone database, because this
-    code runs under Pyodide in the browser, where the IANA database is not on disk:
-    ``zoneinfo`` finds no tzdata package and ``dateutil.tz.gettz`` finds no
-    ``/usr/share/zoneinfo``. The rule itself is small and fixed — the EU has changed the
-    clocks on the last Sunday of March and of October, at 01:00 UTC, since 1996, and
-    Amsterdam stands one hour ahead of UTC in winter and two in summer. Donated data does
-    not reach back before that, so the two are equivalent here.
-    """
-
-    start = datetime.combine(_last_sunday(moment.year, 3), datetime.min.time()) + timedelta(hours=1)
-    end = datetime.combine(_last_sunday(moment.year, 10), datetime.min.time()) + timedelta(hours=1)
-    return timedelta(hours=2) if start <= moment < end else timedelta(hours=1)
-
-
 def _to_reference(moment: datetime) -> str:
-    """Write *moment*, an aware datetime, in ``REFERENCE_TIMEZONE`` and ``DATETIME_FORMAT``."""
+    """Write *moment*, an aware datetime, in ``REFERENCE_TIMEZONE`` and ``DATETIME_FORMAT``.
 
-    utc = moment.astimezone(timezone.utc).replace(tzinfo=None)
-    return (utc + _reference_offset(utc)).strftime(DATETIME_FORMAT)
+    The zone's rules come from pytz, the IANA database pandas depends on — Pyodide
+    ships it beside pandas, so the browser runtime has the same rules as the desktop
+    (``zoneinfo`` does not resolve there: no tzdata package is installed).
+    """
+    return moment.astimezone(_REFERENCE_ZONE).strftime(DATETIME_FORMAT)
+
+
+def resolve_timezone(name: str | None) -> "pytz.BaseTzInfo | None":
+    """The IANA zone *name* names (``Europe/London``), or ``None`` when it names nothing
+    the database knows — the caller decides whether that is worth counting."""
+    if not name:
+        return None
+    try:
+        return pytz.timezone(name.strip())
+    except pytz.UnknownTimeZoneError:
+        return None
+
+
+def zone_time_to_datetime_string(moment: datetime, zone: "str | pytz.BaseTzInfo", errors: Counter | None = None) -> str:
+    """Convert a local wall-clock time in an IANA zone to ``DATETIME_FORMAT`` in
+    ``REFERENCE_TIMEZONE``.
+
+    Used where an export names the zone its clock stands in rather than an offset —
+    the Facebook html export names the account's zone in one file and renders every
+    record in it. The zone's own daylight-saving rules apply for the record's date; an
+    ambiguous hour at the autumn changeover is read as standard time.
+
+    Args:
+        moment: A naive datetime holding the local wall-clock time.
+        zone: The zone's IANA name, or a zone already resolved by ``resolve_timezone``.
+        errors: Optional counter; a zone the database does not know is counted as
+            ``TimezoneUnknown`` and the wall time written as it stands.
+    """
+    tz = resolve_timezone(zone) if isinstance(zone, str) else zone
+    if tz is None:
+        if errors is not None:
+            errors["TimezoneUnknown"] += 1
+        return moment.strftime(DATETIME_FORMAT)
+    return _to_reference(tz.localize(moment, is_dst=False))
 
 
 def epoch_to_datetime_string(epoch_timestamp: str | int | float, errors: Counter | None = None) -> str:

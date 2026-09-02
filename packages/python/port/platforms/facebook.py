@@ -15,24 +15,16 @@ does in the TikTok, Instagram and Google tables.
 The json export records epoch seconds, which name an absolute instant, so placing them in
 that zone is exact.
 
-The html export is only half converted, and its date columns are **not** comparable with
-the json ones. It writes the time already rendered into the timezone the account is set to
-and names no zone beside it, so the shape is normalised here but the clock is left where it
-stands.
-
-The offset genuinely varies by account, which is why no constant can be applied.
-``scripts/meta_html_timezone_probe.py`` matches records held in both formats and reports
-the difference; run over two donated archives it put one squarely in Europe/Amsterdam,
-daylight saving and all — +1 through 2026-03-20, +2 from 2026-04-01 — and the other flat at
-UTC across six years. Neither is where the participant lives, and the Instagram export of
-those same two accounts is on a third clock again, a fixed -8, which ``instagram.py`` does
-convert.
-
-Nothing in the export states that offset — there is no file naming the timezone of the
-account in either format — so an html donation cannot be placed in the reference zone at
-all. Treat an hour of day taken from one as being on an unknown clock: not comparable
-across participants, and not comparable with the json export. A participant who can choose
-should donate the json format.
+The html export renders every record in the timezone the account is set to, and names no
+zone beside the timestamp — but it does name the account's zone once, in
+``logged_information/location/timezone.html`` (``timezone.json`` in the json export).
+``scripts/meta_html_timezone_probe.py`` matched records held in both formats of one
+account and found the html clock following exactly the zone that file names, daylight
+saving included. So the extractors read each html timestamp as it stands, and
+``extraction()`` places every date column in the reference zone through that file
+(``_place_html_clock``). An export without the file — a Drive part that lacks
+``logged_information``, say — keeps its local clock, counted once as
+``HtmlTimezoneUnknown``.
 
 Configuration
 -------------
@@ -57,6 +49,7 @@ Platform info::
 
 import logging
 from collections import Counter
+from datetime import datetime
 from typing import Callable
 
 from lxml import etree
@@ -147,6 +140,71 @@ def _section_timestamp(section, errors: Counter) -> str:
     divs = section.xpath(".//footer//div[contains(@class, '_a72d')]")
     text = divs[0].text.strip() if divs and divs[0].text else ""
     return eh.meta_html_timestamp_to_datetime_string(text, errors=errors)
+
+
+_DATE_COLUMNS = ("Timestamp", "Date", "Created")
+
+
+def _account_timezone(reader: ZipArchiveReader) -> str | None:
+    """The IANA zone the account is set to, as the export names it, or ``None``.
+
+    ``logged_information/location/timezone.json`` writes it as a label/value record;
+    the html twin as a two-cell table row whose label reads "Timezone" or "Time zone".
+    Absence is an expected shape (a Drive part without ``logged_information``), not an
+    error.
+    """
+    result = reader.json("logged_information/location/timezone.json")
+    if result.found:
+        try:
+            for item in result.data.get("label_values", []):  # pyright: ignore
+                value = item.get("value", "")
+                if value:
+                    return str(value).strip()
+        except Exception as e:
+            logger.error("Exception caught: %s", e)
+            reader.errors[type(e).__name__] += 1
+        return None
+
+    raw = reader.raw("logged_information/location/timezone.html")
+    if not raw.found:
+        return None
+    try:
+        tree = etree.HTML(raw.data.read())
+        cells = eh.xpath_nodes(tree, "//td[contains(@class, '_a6_q')]/following-sibling::td[contains(@class, '_a6_r')]")
+        for cell in cells:
+            value = cell.text.strip() if cell.text else ""
+            if "/" in value:
+                return value
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        reader.errors[type(e).__name__] += 1
+    return None
+
+
+def _place_html_clock(tables, zone_name: str | None, errors: Counter) -> None:
+    """Move every date column of an html export from the account's clock into the
+    reference zone, in place.
+
+    The html extractors write each timestamp as the export rendered it (see the module
+    docstring); this is the one step that knows the account's zone. A zone the database
+    does not know, or none at all, leaves the columns as they are and is counted once —
+    per export, not per row, since it is a property of the whole archive.
+    """
+    zone = eh.resolve_timezone(zone_name)
+    if zone is None:
+        errors["HtmlTimezoneUnknown"] += 1
+        return
+    for table in tables:
+        df = table.data_frame
+        for column in _DATE_COLUMNS:
+            if column not in df.columns:
+                continue
+            df[column] = [
+                eh.zone_time_to_datetime_string(datetime.strptime(value, eh.DATETIME_FORMAT), zone, errors=errors)
+                if isinstance(value, str) and len(value) == 19 and value[4] == "-" and value[10] == " "
+                else value
+                for value in df[column]
+            ]
 
 
 def who_youve_followed_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
@@ -3932,6 +3990,9 @@ def extraction(facebook_zip: SeekableBinaryReader, validation) -> ExtractionResu
     reader = ZipArchiveReader(facebook_zip, validation.archive_members, errors)
 
     result = run_extraction(reader, errors, config)
+
+    if validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        _place_html_clock(result.tables, _account_timezone(reader), errors)
 
     username = _extract_username(reader)
     if username:

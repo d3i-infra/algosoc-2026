@@ -18,9 +18,9 @@ AMSTERDAM = ZoneInfo("Europe/Amsterdam")
 
 
 class TestTheReferenceZone:
-    """The offset is worked out from the EU rule rather than read from a timezone
-    database, because Pyodide ships none — see ``_reference_offset``. That makes it worth
-    checking against the database directly, where one is available."""
+    """The reference zone's rules come from pytz, which the browser runtime carries
+    beside pandas; ``zoneinfo`` is the other database on the desktop, so the two are
+    checked against each other."""
 
     @pytest.mark.parametrize("year", range(2005, 2031))
     def test_the_clocks_change_when_the_database_says_they_do(self, year):
@@ -172,3 +172,21 @@ class TestOneFormatAcrossThePlatforms:
         ]
 
         assert sorted(moments) == sorted(moments, key=lambda m: datetime.strptime(m, eh.DATETIME_FORMAT))
+
+
+class TestZoneTimes:
+    """A local time whose zone is named the IANA way is converted through the zone's own
+    rules — daylight saving included — which Pyodide can do because pandas brings pytz."""
+
+    def test_an_account_in_london_moves_an_hour_forward_in_summer(self):
+        assert eh.zone_time_to_datetime_string(datetime(2025, 6, 4, 18, 46, 10), "Europe/London") == "2025-06-04 19:46:10"
+
+    def test_and_in_winter_too(self):
+        assert eh.zone_time_to_datetime_string(datetime(2025, 1, 4, 18, 46, 10), "Europe/London") == "2025-01-04 19:46:10"
+
+    def test_the_reference_zone_itself_is_unchanged(self):
+        assert eh.zone_time_to_datetime_string(datetime(2025, 6, 4, 18, 46, 10), "Europe/Amsterdam") == "2025-06-04 18:46:10"
+
+    def test_a_zone_that_is_not_in_the_database_is_none(self):
+        assert eh.resolve_timezone("Mars/Olympus_Mons") is None
+        assert eh.resolve_timezone("") is None

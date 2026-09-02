@@ -15,16 +15,19 @@ import pytest
 import port.helpers.extraction_helpers as eh
 import port.platforms.facebook as facebook
 from port.helpers.extraction_helpers import ZipArchiveReader
+import port.helpers.validate as validate
 from port.helpers.validate import DDPFiletype
 
 
-def _reader(*entries: tuple[str, str]) -> ZipArchiveReader:
+def _reader(*entries: tuple[str, str], errors: Counter | None = None) -> ZipArchiveReader:
+    """In-memory archive reader. Pass the same ``errors`` Counter you hand the
+    extractor: ``extraction()`` shares one counter between reader and extractors."""
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         for name, content in entries:
             zf.writestr(name, content)
     buf.seek(0)
-    return ZipArchiveReader(buf, [name for name, _ in entries], Counter())
+    return ZipArchiveReader(buf, [name for name, _ in entries], errors if errors is not None else Counter())
 
 
 _HTML_VALIDATION = SimpleNamespace(current_ddp_category=SimpleNamespace(ddp_filetype=DDPFiletype.HTML))
@@ -74,3 +77,70 @@ class TestHtmlTimestampsAreIsoAndSorted:
         assert not errors
         assert list(df["Name"]) == ["Newest Page", "Middle Page", "Oldest Page"]
         assert list(df["Timestamp"]) == ["2025-06-04 18:46:10", "2024-11-14 10:21:53", "2024-01-05 13:00:00"]
+
+
+# ---------------------------------------------------------------------------
+# The HTML export's clock: the account's timezone, named in a file of the export
+# ---------------------------------------------------------------------------
+
+
+_TIMEZONE_JSON = '{"media": [], "label_values": [{"label": "Timezone", "value": "Europe/Amsterdam"}], "fbid": "1"}'
+_TIMEZONE_HTML = (
+    '<html><body><main><section class="_a6-g"><table><tr>'
+    '<td class="_a6_q">Time zone</td><td class="_2piu _a6_r">Europe/London</td>'
+    '</tr></table></section></main></body></html>'
+)
+
+
+class TestAccountTimezone:
+    def test_read_from_the_json_export(self):
+        reader = _reader(("export/logged_information/location/timezone.json", _TIMEZONE_JSON))
+        assert facebook._account_timezone(reader) == "Europe/Amsterdam"
+
+    def test_read_from_the_html_export(self):
+        reader = _reader(("export/logged_information/location/timezone.html", _TIMEZONE_HTML))
+        assert facebook._account_timezone(reader) == "Europe/London"
+
+    def test_absent_is_none_and_not_an_error(self):
+        errors: Counter = Counter()
+        reader = _reader(("export/nothing.html", "<html/>"), errors=errors)
+        assert facebook._account_timezone(reader) is None
+        assert not errors
+
+
+# An HTML export small enough to build by hand but recognised by validate_zip
+# (three of the category's known file names is enough), with one dated record.
+def _html_export(*extra: tuple[str, str]) -> io.BytesIO:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("export/connections/followers/who_you've_followed.html", _FOLLOWED_PAGE)
+        zf.writestr("export/logged_information/search/your_search_history.html", "<html/>")
+        zf.writestr("export/ads_information/ad_preferences.html", "<html/>")
+        for name, content in extra:
+            zf.writestr(name, content)
+    buf.seek(0)
+    return buf
+
+
+def _extract(buf: io.BytesIO):
+    validation = validate.validate_zip(facebook.DDP_CATEGORIES, buf)
+    assert validation.current_ddp_category.ddp_filetype is DDPFiletype.HTML
+    result = facebook.extraction(buf, validation)
+    return {t.id: t.data_frame for t in result.tables}, result.errors
+
+
+class TestHtmlClockIsPlacedInTheReferenceZone:
+    def test_an_account_in_london_moves_an_hour_forward(self):
+        tables, errors = _extract(_html_export(("export/logged_information/location/timezone.html", _TIMEZONE_HTML)))
+        # 6:46:10 pm British Summer Time is 7:46:10 pm in Amsterdam.
+        assert list(tables["facebook_who_youve_followed"]["Timestamp"]) == [
+            "2025-06-04 19:46:10", "2024-11-14 11:21:53", "2024-01-05 14:00:00",
+        ]
+        assert "HtmlTimezoneUnknown" not in errors
+
+    def test_without_the_file_the_clock_is_left_and_counted_once(self):
+        tables, errors = _extract(_html_export())
+        assert list(tables["facebook_who_youve_followed"]["Timestamp"]) == [
+            "2025-06-04 18:46:10", "2024-11-14 10:21:53", "2024-01-05 13:00:00",
+        ]
+        assert errors["HtmlTimezoneUnknown"] == 1

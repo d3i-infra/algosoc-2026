@@ -32,7 +32,7 @@ from pathlib import Path
 
 import pytest
 
-from extractor_integration_helpers import DiskPart, find_fixtures
+from extractor_integration_helpers import DDP_DIR, DiskPart, find_fixtures
 import port.platforms.facebook as facebook
 from port.helpers.extraction_helpers import ZipArchiveReader
 from port.helpers.table_extractor import load_port_config
@@ -323,3 +323,31 @@ def test_html_tables_carry_iso_timestamps_newest_first(fixture):
                 if parsed != sorted(parsed, reverse=True):
                     problems.append(f"{name}.{column}: not newest first")
     assert not problems, f"{fixture.name}: " + "; ".join(problems)
+
+
+# ---------------------------------------------------------------------------
+# Cross-format pin: the HTML clock, placed in the reference zone, agrees with JSON
+# ---------------------------------------------------------------------------
+
+
+def test_html_clock_agrees_with_json_for_the_same_account():
+    """Likes matched by their sentence between the all-time JSON and HTML exports of one
+    account must carry the same timestamp once the HTML clock is read from the export's
+    timezone file. A one-hour drift across a season means the zone was not honoured."""
+    pair = {stem: DDP_DIR / f"{stem}.zip" for stem in ("facebook_json_self-alltime-2026-03", "facebook_html_self-alltime-2026-03")}
+    if not all(path.exists() for path in pair.values()):
+        pytest.skip("needs both all-time exports of the same account")
+    frames = {}
+    for stem, path in pair.items():
+        ctx = _context(path)
+        frames[stem] = facebook.likes_and_reactions_to_df(ctx.reader, Counter(), validation=ctx.validation)
+    if pair["facebook_html_self-alltime-2026-03"].exists():
+        html_ctx = _context(pair["facebook_html_self-alltime-2026-03"])
+        # The whole-extraction path is where the HTML clock is placed.
+        result = facebook.extraction(html_ctx.part, html_ctx.validation)
+        html = next(t.data_frame for t in result.tables if t.id == "facebook_likes_and_reactions")
+    json_times = frames["facebook_json_self-alltime-2026-03"].groupby("Title")["Timestamp"].agg(set)
+    matched = [(t, ts) for t, ts in zip(html["Title"], html["Timestamp"]) if t in json_times.index and ts]
+    agree = sum(ts in json_times[t] for t, ts in matched)
+    assert matched, "no like sentence occurs in both exports"
+    assert agree / len(matched) > 0.97, f"{agree} of {len(matched)} HTML timestamps found in the JSON export"
