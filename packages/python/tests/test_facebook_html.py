@@ -33,6 +33,15 @@ def _reader(*entries: tuple[str, str], errors: Counter | None = None) -> ZipArch
 _HTML_VALIDATION = SimpleNamespace(current_ddp_category=SimpleNamespace(ddp_filetype=DDPFiletype.HTML))
 
 
+def _search_page(*entries: tuple[str, str]) -> str:
+    sections = "".join(
+        f'<section class="_a6-g"><div class="_2pin"><div>"{term}"</div></div>'
+        f'<footer><div class="_a72d">{date}</div></footer></section>'
+        for term, date in entries
+    )
+    return f"<html><body><main>{sections}</main></body></html>"
+
+
 # ---------------------------------------------------------------------------
 # Meta HTML display timestamps → ISO 8601
 # ---------------------------------------------------------------------------
@@ -53,6 +62,36 @@ class TestMetaHtmlTimestampToDatetimeString:
         errors: Counter = Counter()
         assert eh.meta_html_timestamp_to_datetime_string("gisteren", errors=errors) == "gisteren"
         assert errors["TimestampParseError"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Search history: the qualified path, not the bare basename
+# ---------------------------------------------------------------------------
+
+
+class TestSearchHistoryHtml:
+    def test_reads_logged_information_search_when_marketplace_file_also_present(self):
+        reader = _reader(
+            ("export/logged_information/search/your_search_history.html",
+             _search_page(("older term", "Jan 01, 2026 9:00:00 am"), ("newer term", "Feb 01, 2026 9:00:00 am"))),
+            ("export/your_facebook_activity/facebook_marketplace/your_search_history.html",
+             _search_page(("a bicycle", "Mar 01, 2026 9:00:00 am"))),
+        )
+        errors: Counter = Counter()
+        df = facebook.your_search_history_to_df(reader, errors, validation=_HTML_VALIDATION)
+        assert not errors
+        assert list(df["Search term"]) == ["newer term", "older term"]
+        assert list(df["Date"]) == ["2026-02-01T09:00:00", "2026-01-01T09:00:00"]
+
+    def test_marketplace_only_export_yields_no_searches_table(self):
+        reader = _reader(
+            ("export/your_facebook_activity/facebook_marketplace/your_search_history.html",
+             _search_page(("a bicycle", "Mar 01, 2026 9:00:00 am"))),
+        )
+        errors: Counter = Counter()
+        df = facebook.your_search_history_to_df(reader, errors, validation=_HTML_VALIDATION)
+        assert df.empty
+        assert not errors
 
 
 # ---------------------------------------------------------------------------

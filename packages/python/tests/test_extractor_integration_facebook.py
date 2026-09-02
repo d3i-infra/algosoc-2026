@@ -69,8 +69,8 @@ EXPECT_NON_EMPTY: dict[str, set[str]] = {
         "facebook_reels_usage_to_df",
     },
     # Same account and day, HTML. No logged_information/search in this export:
-    # its only your_search_history.html is the Marketplace one, which the HTML
-    # extractor currently picks up by bare basename — deliberately not pinned.
+    # its only your_search_history.html is the Marketplace one, which the
+    # Searches table deliberately does not read — search stays unpinned.
     "facebook_html_self-2026-03": _ADS_TABLES | _ACTIVITY_TABLES,
     # Real account, JSON, all time, delivered via Google Drive, March 2026 —
     # 2,209 files, the format participants are instructed to request. Drive
@@ -89,12 +89,13 @@ EXPECT_NON_EMPTY: dict[str, set[str]] = {
         "pages_youve_liked_to_df",
     },
     # Real account, HTML, all time (registered 2005), delivered via Google
-    # Drive, March 2026 — 2,815 files. Search history is absent because the
-    # bare-basename lookup collides with the Marketplace file — a defect to
-    # fix, not a pin to add. The follow / like files are spelled
+    # Drive, March 2026 — 2,815 files. Carries both search-history files
+    # (logged_information/search and Marketplace); the extractor reads the
+    # qualified path, so search is pinned. The follow / like files are spelled
     # `who_you_ve_followed` here (Drive delivery replaces the apostrophe) and
     # the reader resolves that spelling.
     "facebook_html_self-alltime-2026-03": _ADS_TABLES | _ACTIVITY_TABLES | {
+        "your_search_history_to_df",
         "ads_interests_to_df",
         "facebook_reels_usage_to_df",
         "comments_to_df",
@@ -105,13 +106,14 @@ EXPECT_NON_EMPTY: dict[str, set[str]] = {
     # Real account, device downloads, October 2025: a three-month JSON window
     # (57 files) and a one-year HTML window (980 files). Device downloads keep
     # the apostrophe in file names; both use the grouped interaction layout.
-    # The HTML one carries the Marketplace search file, so search is unpinned.
+    # The HTML one carries both search-history files; the qualified path wins.
     "facebook_json_self-device-2025-10": _ADS_TABLES | {
         "your_search_history_to_df",
         "ads_interests_to_df",
         "facebook_reels_usage_to_df",
     },
     "facebook_html_self-device-2025-10": _ADS_TABLES | {
+        "your_search_history_to_df",
         "ads_interests_to_df",
         "facebook_reels_usage_to_df",
         "your_events_to_df",

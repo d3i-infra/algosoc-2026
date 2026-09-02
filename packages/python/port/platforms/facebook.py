@@ -735,7 +735,7 @@ def your_search_history_to_df(reader: ZipArchiveReader, errors: Counter, validat
 
         {
           "summary": "Each row represents a search query the participant made on Facebook, including the search term and date.",
-          "source_file": "logged_information/search/your_search_history.json / your_search_history.html",
+          "source_file": "logged_information/search/your_search_history.json / logged_information/search/your_search_history.html",
           "columns": {
             "Search term": "The search query entered by the participant.",
             "Date": "ISO 8601 timestamp of when the search was made."
@@ -803,7 +803,10 @@ def _your_search_history_json(reader: ZipArchiveReader, errors: Counter) -> pd.D
 
 
 def _your_search_history_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
-    result = reader.raw("your_search_history.html")
+    # Qualified like the JSON twin: exports also carry a Marketplace
+    # your_facebook_activity/facebook_marketplace/your_search_history.html,
+    # which is a different log (and a different markup).
+    result = reader.raw("logged_information/search/your_search_history.html")
     if not result.found:
         return pd.DataFrame()
 
