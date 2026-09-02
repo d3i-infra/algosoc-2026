@@ -3226,8 +3226,13 @@ def _ad_preferences_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFr
             if label:
                 datapoints.append((label, value))
 
-        # 2. Headed subsections: <h2> is the label, values depend on content type
-        headed_sections = eh.xpath_nodes(tree, "//section[contains(@class, '_a6-g') and .//h2]")
+        # 2. Headed subsections: <h2> is the label, values depend on content type.
+        # The page nests three `_a6-g` wrappers around one <h2>, so anchor on
+        # the section that directly owns each heading — matching every section
+        # with an <h2> somewhere below it appends the same interests once per
+        # wrapper, and the outermost wrapper also holds a colspan-labelled
+        # block whose values are not interests.
+        headed_sections = eh.xpath_nodes(tree, "//h2/ancestor::section[contains(@class, '_a6-g')][1]")
         for section in headed_sections:
             h2 = section.xpath(".//h2")
             heading = h2[0].text.strip() if h2 and h2[0].text else ""

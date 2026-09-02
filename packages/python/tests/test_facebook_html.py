@@ -95,6 +95,48 @@ class TestSearchHistoryHtml:
 
 
 # ---------------------------------------------------------------------------
+# Ad preferences: a heading is counted once, for the section that owns it
+# ---------------------------------------------------------------------------
+
+
+_AD_PREFERENCES_PAGE = """<html><body><main>
+<section class="_3-95 _a6-g"><div class="_2pi8 _2pic _a6-p">
+  <section class="_3-95 _a6-g"><div class="_2pi8 _2pic _a6-p">
+    <table>
+      <tr><td class="_a6_q">Is opted out of using interests to target ads</td><td class="_2piu _a6_r">True</td></tr>
+      <tr><td class="_a6_q" colspan="2">Other categories used to reach you
+        <div><section class="_a6-g"><div class="_2ph_ _a6-p">Engaged Shoppers</div></section></div>
+      </td></tr>
+      <tr><td class="_a6_q" colspan="2"><div>
+        <section class="_3-95 _a6-g">
+          <h2>Ads interests</h2>
+          <div><section class="_a6-g"><div class="_2ph_ _a6-p">Portrait photography</div></section></div>
+          <div><section class="_a6-g"><div class="_2ph_ _a6-p">Shopping</div></section></div>
+        </section>
+      </div></td></tr>
+    </table>
+  </div></section>
+</div><footer class="_3-94 _a6-o"><div class="_a72d"/></footer></section>
+</main></body></html>"""
+
+
+class TestAdPreferencesHtml:
+    def test_each_interest_appears_once(self):
+        reader = _reader(("export/ads_information/ad_preferences.html", _AD_PREFERENCES_PAGE))
+        errors: Counter = Counter()
+        df = facebook.ad_preferences_to_df(reader, errors, validation=_HTML_VALIDATION)
+        assert not errors
+        interests = df[df["Label"] == "Ads interests"]["Value"].tolist()
+        assert sorted(interests) == ["Portrait photography", "Shopping"]
+
+    def test_values_outside_the_headed_section_are_not_given_its_label(self):
+        reader = _reader(("export/ads_information/ad_preferences.html", _AD_PREFERENCES_PAGE))
+        df = facebook.ad_preferences_to_df(reader, Counter(), validation=_HTML_VALIDATION)
+        assert "Engaged Shoppers" not in df[df["Label"] == "Ads interests"]["Value"].tolist()
+        assert ("Is opted out of using interests to target ads", "True") in list(df.itertuples(index=False, name=None))
+
+
+# ---------------------------------------------------------------------------
 # Every HTML table carries ISO timestamps and comes out newest first
 # ---------------------------------------------------------------------------
 
