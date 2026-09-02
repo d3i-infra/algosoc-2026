@@ -21,7 +21,9 @@ from port.helpers.validate import DDPFiletype
 
 def _reader(*entries: tuple[str, str], errors: Counter | None = None) -> ZipArchiveReader:
     """In-memory archive reader. Pass the same ``errors`` Counter you hand the
-    extractor: ``extraction()`` shares one counter between reader and extractors."""
+    extractor: ``extraction()`` shares one counter between reader and
+    extractors, so reader-side counts (ambiguous lookups, oversized members)
+    are only visible to a test that does the same."""
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         for name, content in entries:
@@ -81,7 +83,7 @@ class TestSearchHistoryHtml:
         df = facebook.your_search_history_to_df(reader, errors, validation=_HTML_VALIDATION)
         assert not errors
         assert list(df["Search term"]) == ["newer term", "older term"]
-        assert list(df["Date"]) == ["2026-02-01T09:00:00", "2026-01-01T09:00:00"]
+        assert list(df["Date"]) == ["2026-02-01 09:00:00", "2026-01-01 09:00:00"]
 
     def test_marketplace_only_export_yields_no_searches_table(self):
         reader = _reader(
@@ -144,6 +146,33 @@ class TestAdPreferencesHtml:
         df = facebook.ad_preferences_to_df(reader, Counter(), validation=_HTML_VALIDATION)
         removed = df[df["Label"] == "Removed categories"]["Value"].tolist()
         assert removed == ["Engaged Shoppers", "Frequent Travelers"]
+
+
+# ---------------------------------------------------------------------------
+# Generic names are looked up by folder, so a same-named file elsewhere in the
+# export cannot make the lookup ambiguous (and therefore empty)
+# ---------------------------------------------------------------------------
+
+
+_EMPTY_PAGE = "<html><body><main></main></body></html>"
+
+
+class TestGenericLookupsAreFolderQualified:
+    @pytest.mark.parametrize(
+        "extractor, member",
+        [
+            (facebook.comments_to_df, "your_facebook_activity/comments_and_reactions/comments.html"),
+            (facebook.your_contributions_to_df, "your_facebook_activity/groups/your_contributions.html"),
+            (facebook.your_events_to_df, "your_facebook_activity/events/your_events.html"),
+        ],
+        ids=["comments", "contributions", "events"],
+    )
+    def test_decoy_with_the_same_basename_does_not_collide(self, extractor, member):
+        decoy = "export/decoy/" + member.rsplit("/", 1)[-1]
+        errors: Counter = Counter()
+        reader = _reader(("export/" + member, _EMPTY_PAGE), (decoy, _EMPTY_PAGE), errors=errors)
+        extractor(reader, errors, validation=_HTML_VALIDATION)
+        assert not any(key.startswith("AmbiguousMemberMatch") for key in errors), dict(errors)
 
 
 # ---------------------------------------------------------------------------

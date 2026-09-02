@@ -1257,7 +1257,7 @@ def your_events_to_df(reader: ZipArchiveReader, errors: Counter, validation=None
 
         {
           "summary": "Each row represents a Facebook event the participant created or was invited to, including the event name and creation timestamp.",
-          "source_file": "your_facebook_activity/events/your_events.json / your_events.html",
+          "source_file": "your_facebook_activity/events/your_events.json / your_facebook_activity/events/your_events.html",
           "columns": {
             "Name": "Name of the Facebook event.",
             "Created": "ISO 8601 timestamp of when the event was created."
@@ -1315,7 +1315,7 @@ def _your_events_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame
 
 
 def _your_events_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
-    result = reader.raw("your_events.html")
+    result = reader.raw("your_facebook_activity/events/your_events.html")
     if not result.found:
         return pd.DataFrame()
 
@@ -2051,7 +2051,7 @@ def comments_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -
 
         {
           "summary": "Each row represents a comment the participant made on a Facebook post or other content, including the title, comment text, and timestamp.",
-          "source_file": "comments_and_reactions/comments.json / comments.html",
+          "source_file": "your_facebook_activity/comments_and_reactions/comments.json / your_facebook_activity/comments_and_reactions/comments.html",
           "columns": {
             "Title": "Title of the post the comment was made on.",
             "Comment": "Text content of the comment.",
@@ -2114,7 +2114,7 @@ def _comments_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
 
 
 def _comments_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
-    result = reader.raw("comments.html")
+    result = reader.raw("your_facebook_activity/comments_and_reactions/comments.html")
     if not result.found:
         return pd.DataFrame()
 
@@ -3690,7 +3690,7 @@ def your_contributions_to_df(reader: ZipArchiveReader, errors: Counter, validati
 
         {
           "summary": "Each row represents a post or comment the participant contributed to a Facebook group, including the content, date, and URL.",
-          "source_file": "your_facebook_activity/groups/your_contributions.json / your_contributions.html",
+          "source_file": "your_facebook_activity/groups/your_contributions.json / your_facebook_activity/groups/your_contributions.html",
           "columns": {
             "Value": "Concatenated text content of the contribution.",
             "Date": "ISO 8601 timestamp of when the contribution was made.",
@@ -3754,7 +3754,7 @@ def _your_contributions_json(reader: ZipArchiveReader, errors: Counter) -> pd.Da
 
 
 def _your_contributions_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
-    result = reader.raw("your_contributions.html")
+    result = reader.raw("your_facebook_activity/groups/your_contributions.html")
     if not result.found:
         return pd.DataFrame()
 

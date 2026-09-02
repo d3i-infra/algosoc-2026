@@ -237,7 +237,11 @@ def test_extractor_against_fixture(name, fixture):
         pytest.skip(_NO_FIXTURES_REASON)
     ctx = _context(fixture)
     errors: Counter = Counter()
+    # The reader keeps its own counter (ambiguous lookups, oversized or
+    # unreadable members); extraction() merges the two, so check both.
+    reader_errors_before = Counter(ctx.reader.errors)
     df = facebook.EXTRACTOR_REGISTRY[name](ctx.reader, errors, validation=ctx.validation)
+    errors.update(ctx.reader.errors - reader_errors_before)
     assert not errors, f"{name} on {fixture.name}: errors {dict(errors)}"
     if name in EXPECT_NON_EMPTY.get(fixture.stem, set()):
         assert not df.empty, (
