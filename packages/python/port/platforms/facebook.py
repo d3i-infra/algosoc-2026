@@ -6,6 +6,34 @@ This module contains an example flow of a Facebook data donation study
 Assumptions:
 It handles DDPs in the english language with filetype JSON.
 
+Timestamps
+----------
+Every date column is written as ``YYYY-MM-DD HH:MM:SS`` in the reference timezone named by
+``extraction_helpers.REFERENCE_TIMEZONE``, so that a date means the same thing here as it
+does in the TikTok, Instagram and Google tables.
+
+The json export records epoch seconds, which name an absolute instant, so placing them in
+that zone is exact.
+
+The html export is only half converted, and its date columns are **not** comparable with
+the json ones. It writes the time already rendered into the timezone the account is set to
+and names no zone beside it, so the shape is normalised here but the clock is left where it
+stands.
+
+The offset genuinely varies by account, which is why no constant can be applied.
+``scripts/meta_html_timezone_probe.py`` matches records held in both formats and reports
+the difference; run over two donated archives it put one squarely in Europe/Amsterdam,
+daylight saving and all — +1 through 2026-03-20, +2 from 2026-04-01 — and the other flat at
+UTC across six years. Neither is where the participant lives, and the Instagram export of
+those same two accounts is on a third clock again, a fixed -8, which ``instagram.py`` does
+convert.
+
+Nothing in the export states that offset — there is no file naming the timezone of the
+account in either format — so an html donation cannot be placed in the reference zone at
+all. Treat an hour of day taken from one as being on an unknown clock: not comparable
+across participants, and not comparable with the json export. A participant who can choose
+should donate the json format.
+
 Configuration
 -------------
 The ``extraction`` function is driven by ``port_config.json``.  Generate one with::
@@ -53,6 +81,7 @@ from port.helpers.table_extractor import (
 )
 
 logger = logging.getLogger(__name__)
+
 
 DDP_CATEGORIES = [
     DDPCategory(
@@ -107,16 +136,17 @@ def _sort_by_date(out: pd.DataFrame, date_column: str) -> pd.DataFrame:
 
 
 def _section_timestamp(section, errors: Counter) -> str:
-    """ISO 8601 timestamp of one record in an HTML export.
+    """Timestamp of one record in an HTML export, in the shared datetime format.
 
     Meta writes a record's time as a display string (``Jun 04, 2025 6:46:10
     pm``) in a ``_a72d`` div inside the record's footer. Converted here so the
     HTML and JSON paths donate the same shape and ``_sort_by_date`` can rank
-    the rows; an empty footer yields ``""``.
+    the rows; an empty footer yields ``""``. The clock is left where the export
+    put it — see the module docstring.
     """
     divs = section.xpath(".//footer//div[contains(@class, '_a72d')]")
     text = divs[0].text.strip() if divs and divs[0].text else ""
-    return eh.meta_html_timestamp_to_iso(text, errors=errors)
+    return eh.meta_html_timestamp_to_datetime_string(text, errors=errors)
 
 
 def who_youve_followed_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
@@ -185,7 +215,7 @@ def _who_youve_followed_json(reader: ZipArchiveReader, errors: Counter) -> pd.Da
         for item in items:
             datapoints.append((
                 eh.fix_latin1_string(item.get("name", "")),
-                eh.epoch_to_iso(item.get("timestamp", {}), errors=errors)
+                eh.epoch_to_datetime_string(item.get("timestamp", {}), errors=errors)
             ))
         out = pd.DataFrame(datapoints, columns=["Name", "Timestamp"]) #pyright: ignore
 
@@ -368,7 +398,7 @@ def notifications_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFra
                 eh.find_item(denested_dict, "text"),
                 eh.find_item(denested_dict, "href"),
                 eh.find_item(denested_dict, "unread"),
-                eh.epoch_to_iso(eh.find_item(denested_dict, "timestamp"), errors=errors),
+                eh.epoch_to_datetime_string(eh.find_item(denested_dict, "timestamp"), errors=errors),
             ))
 
         out = pd.DataFrame(datapoints, columns=["Text", "Link", "Read", "Date"]) #pyright: ignore
@@ -439,7 +469,7 @@ def content_sharing_you_have_created_to_df(reader: ZipArchiveReader, errors: Cou
             denested_dict = eh.dict_denester(item)
             datapoints.append((
                 eh.find_item(denested_dict, "href"),
-                eh.epoch_to_iso(eh.find_item(denested_dict, "timestamp"), errors=errors),
+                eh.epoch_to_datetime_string(eh.find_item(denested_dict, "timestamp"), errors=errors),
             ))
 
         out = pd.DataFrame(datapoints, columns=["Link", "Date"]) #pyright: ignore
@@ -702,7 +732,7 @@ def _your_search_history_json(reader: ZipArchiveReader, errors: Counter) -> pd.D
 
             datapoints.append((
                 eh.fix_latin1_string(eh.find_item(denested_dict, "text")),
-                eh.epoch_to_iso(eh.find_item(denested_dict, "timestamp"), errors=errors),
+                eh.epoch_to_datetime_string(eh.find_item(denested_dict, "timestamp"), errors=errors),
             ))
 
         out = pd.DataFrame(datapoints, columns=["Search term", "Date"]) #pyright: ignore
@@ -973,7 +1003,7 @@ def recently_viewed_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataF
                         eh.fix_latin1_string(item.get("name", "")),
                         eh.fix_latin1_string(entry.get("data", {}).get("name", "")),
                         entry.get("data", {}).get("uri", ""),
-                        eh.epoch_to_iso(entry.get("timestamp", ""), errors=errors)
+                        eh.epoch_to_datetime_string(entry.get("timestamp", ""), errors=errors)
                     ))
 
             # The nesting goes deeper
@@ -984,7 +1014,7 @@ def recently_viewed_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataF
                             eh.fix_latin1_string(child.get("name", "")),
                             eh.fix_latin1_string(entry.get("data", {}).get("name", "")),
                             entry.get("data", {}).get("uri", ""),
-                            eh.epoch_to_iso(entry.get("timestamp", ""), errors=errors)
+                            eh.epoch_to_datetime_string(entry.get("timestamp", ""), errors=errors)
                         ))
 
         out = pd.DataFrame(datapoints, columns=["Category", "Name", "Link", "Date"]) #pyright: ignore
@@ -1063,7 +1093,7 @@ def recently_visited_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.Data
                         item.get("name", ""),
                         eh.fix_latin1_string(entry.get("data", {}).get("name", "")),
                         entry.get("data", {}).get("uri", ""),
-                        eh.epoch_to_iso(entry.get("timestamp", ""), errors=errors)
+                        eh.epoch_to_datetime_string(entry.get("timestamp", ""), errors=errors)
                     ))
 
         out = pd.DataFrame(datapoints, columns=["Category", "Name", "Link", "Date"]) #pyright: ignore
@@ -1134,7 +1164,7 @@ def profile_update_history_to_df(reader: ZipArchiveReader, errors: Counter) -> p
         for item in items:
             datapoints.append((
                 eh.fix_latin1_string(item.get("title", "")),
-                eh.epoch_to_iso(item.get("timestamp", ""), errors=errors)
+                eh.epoch_to_datetime_string(item.get("timestamp", ""), errors=errors)
             ))
 
         out = pd.DataFrame(datapoints, columns=["Title", "Timestamp"]) #pyright: ignore
@@ -1211,7 +1241,7 @@ def _your_events_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame
         for item in items:
             datapoints.append((
                 eh.fix_latin1_string(item.get("name", "")),
-                eh.epoch_to_iso(item.get("create_timestamp", ""), errors=errors),
+                eh.epoch_to_datetime_string(item.get("create_timestamp", ""), errors=errors),
             ))
 
         out = pd.DataFrame(datapoints, columns=["Name", "Created"]) #pyright: ignore
@@ -1316,7 +1346,7 @@ def group_posts_and_comments_to_df(reader: ZipArchiveReader, errors: Counter) ->
             datapoints.append((
                 eh.fix_latin1_string(eh.find_item(denested_dict, "title")),
                 eh.fix_latin1_string(eh.find_item(denested_dict, "post")),
-                eh.epoch_to_iso(eh.find_item(denested_dict, "timestamp"), errors=errors),
+                eh.epoch_to_datetime_string(eh.find_item(denested_dict, "timestamp"), errors=errors),
                 eh.find_item(denested_dict, "url"),
             ))
 
@@ -1471,7 +1501,7 @@ def _your_comments_in_groups_json(reader: ZipArchiveReader, errors: Counter) -> 
                 eh.fix_latin1_string(eh.find_item(denested_dict, "title")),
                 eh.fix_latin1_string(eh.find_item(denested_dict, "comment-comment")),
                 eh.fix_latin1_string(eh.find_item(denested_dict, "group")),
-                eh.epoch_to_iso(eh.find_item(denested_dict, "timestamp"), errors=errors),
+                eh.epoch_to_datetime_string(eh.find_item(denested_dict, "timestamp"), errors=errors),
             ))
 
         out = pd.DataFrame(datapoints, columns=["Title", "Comment", "Group", "Timestamp"]) #pyright: ignore
@@ -1597,7 +1627,7 @@ def _your_group_membership_activity_json(reader: ZipArchiveReader, errors: Count
             datapoints.append((
                 eh.fix_latin1_string(eh.find_item(denested_dict, "title")),
                 eh.fix_latin1_string(eh.find_item(denested_dict, "name")),
-                eh.epoch_to_iso(eh.find_item(denested_dict, "timestamp"), errors=errors),
+                eh.epoch_to_datetime_string(eh.find_item(denested_dict, "timestamp"), errors=errors),
             ))
 
         out = pd.DataFrame(datapoints, columns=["Title", "Group name", "Timestamp"]) #pyright: ignore
@@ -1716,7 +1746,7 @@ def _pages_and_profiles_you_follow_json(reader: ZipArchiveReader, errors: Counte
         for item in items:
             datapoints.append((
                 eh.fix_latin1_string(item.get("title", "")),
-                eh.epoch_to_iso(item.get("timestamp", ""), errors=errors)
+                eh.epoch_to_datetime_string(item.get("timestamp", ""), errors=errors)
             ))
 
         out = pd.DataFrame(datapoints, columns=["Title", "Timestamp"]) #pyright: ignore
@@ -1825,7 +1855,7 @@ def _pages_youve_liked_json(reader: ZipArchiveReader, errors: Counter) -> pd.Dat
             datapoints.append((
                 eh.fix_latin1_string(item.get("name", "")),
                 item.get("url", ""),
-                eh.epoch_to_iso(item.get("timestamp", ""), errors=errors)
+                eh.epoch_to_datetime_string(item.get("timestamp", ""), errors=errors)
             ))
 
         out = pd.DataFrame(datapoints, columns=["Name", "URL", "Timestamp"]) # pyright: ignore
@@ -1927,7 +1957,7 @@ def your_saved_items_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.Data
         for item in items:
             datapoints.append((
                 eh.fix_latin1_string(item.get("title", "")),
-                eh.epoch_to_iso(item.get("timestamp", ""), errors=errors)
+                eh.epoch_to_datetime_string(item.get("timestamp", ""), errors=errors)
             ))
 
         out = pd.DataFrame(datapoints, columns=["Title", "Timestamp"]) #pyright: ignore
@@ -2010,7 +2040,7 @@ def _comments_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
             datapoints.append((
                 eh.fix_latin1_string(eh.find_item(denested_dict, "title")),
                 eh.fix_latin1_string(eh.find_item(denested_dict, "comment-comment")),
-                eh.epoch_to_iso(eh.find_item(denested_dict, "timestamp"), errors=errors),
+                eh.epoch_to_datetime_string(eh.find_item(denested_dict, "timestamp"), errors=errors),
             ))
 
         out = pd.DataFrame(datapoints, columns=["Title", "Comment", "Timestamp"]) #pyright: ignore
@@ -2125,7 +2155,7 @@ def _likes_and_reactions_json(reader: ZipArchiveReader, errors: Counter) -> pd.D
                 datapoints.append((
                     eh.fix_latin1_string(eh.find_item(denested_dict, "title")),
                     eh.fix_latin1_string(eh.find_item(denested_dict, "reaction-reaction")),
-                    eh.epoch_to_iso(eh.find_item(denested_dict, "timestamp"), errors=errors),
+                    eh.epoch_to_datetime_string(eh.find_item(denested_dict, "timestamp"), errors=errors),
                 ))
 
     except Exception as e:
@@ -2319,7 +2349,7 @@ def your_pages_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
             datapoints.append((
                 eh.fix_latin1_string(item.get("name", "")),
                 item.get("url", ""),
-                eh.epoch_to_iso(item.get("timestamp", ""), errors=errors),
+                eh.epoch_to_datetime_string(item.get("timestamp", ""), errors=errors),
             ))
 
         out = pd.DataFrame(datapoints, columns=["Name", "URL", "Timestamp"]) #pyright: ignore
@@ -2465,7 +2495,7 @@ def _your_posts_check_ins_json(reader: ZipArchiveReader, errors: Counter) -> pd.
                 eh.fix_latin1_string(item.get("title", "")),
                 eh.fix_latin1_string(eh.find_item(denested_dict, "post")),
                 eh.find_item(denested_dict, "url"),
-                eh.epoch_to_iso(item.get("timestamp", ""), errors=errors),
+                eh.epoch_to_datetime_string(item.get("timestamp", ""), errors=errors),
             ))
 
     try:
@@ -2583,7 +2613,7 @@ def likes_and_reactions_base_to_df(reader: ZipArchiveReader, errors: Counter) ->
                 lv.get("Reaction", ""),
                 eh.fix_latin1_string(lv.get("Name", "")),
                 lv.get("URL", ""),
-                eh.epoch_to_iso(item.get("timestamp", ""), errors=errors),
+                eh.epoch_to_datetime_string(item.get("timestamp", ""), errors=errors),
             ))
 
     try:
@@ -2673,7 +2703,7 @@ def controls_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
                 datapoints.append((
                     action,
                     eh.fix_latin1_string(eh.find_item(denested, "value")),
-                    eh.epoch_to_iso(eh.find_item(denested, "timestamp"), errors=errors),
+                    eh.epoch_to_datetime_string(eh.find_item(denested, "timestamp"), errors=errors),
                 ))
 
         out = pd.DataFrame(datapoints, columns=["Action", "Content", "Date"])  # pyright: ignore
@@ -2756,7 +2786,7 @@ def _profile_visits_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFr
             denested_dict = eh.dict_denester(item)
             datapoints.append((
                 eh.fix_latin1_string(eh.find_item(denested_dict, "-value")),
-                eh.epoch_to_iso(item.get("timestamp", ""), errors=errors),
+                eh.epoch_to_datetime_string(item.get("timestamp", ""), errors=errors),
             ))
 
         out = pd.DataFrame(datapoints, columns=["Name", "Timestamp"]) #pyright: ignore
@@ -2976,7 +3006,7 @@ def _link_history_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFram
             datapoints.append((
                 eh.find_item(denested_dict, "href"),
                 title,
-                eh.epoch_to_iso(eh.find_item(denested_dict, "timestamp"), errors=errors),
+                eh.epoch_to_datetime_string(eh.find_item(denested_dict, "timestamp"), errors=errors),
             ))
 
         out = pd.DataFrame(datapoints, columns=["URL", "Title", "Timestamp"])
@@ -3496,7 +3526,7 @@ def _advertisers_youve_interacted_with_json(reader: ZipArchiveReader, errors: Co
                 eh.fix_latin1_string(lv_map.get("Action", "")),
                 eh.fix_latin1_string(lv_map.get("Title", "")),
                 lv_map.get("URL", ""),
-                eh.epoch_to_iso(item.get("timestamp", ""), errors=errors),
+                eh.epoch_to_datetime_string(item.get("timestamp", ""), errors=errors),
             ))
 
         out = pd.DataFrame(datapoints, columns=["Action", "Title", "URL", "Timestamp"]) #pyright: ignore
@@ -3630,7 +3660,7 @@ def _your_contributions_json(reader: ZipArchiveReader, errors: Counter) -> pd.Da
             value = eh.fix_latin1_string(", ".join(str(v) for v in values if v))
             datapoints.append((
                 value,
-                eh.epoch_to_iso(eh.find_item(denested_dict, "timestamp"), errors=errors),
+                eh.epoch_to_datetime_string(eh.find_item(denested_dict, "timestamp"), errors=errors),
                 eh.find_item(denested_dict, "url"),
             ))
 
@@ -3759,7 +3789,7 @@ def _items_viewed_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFram
                 eh.fix_latin1_string(lv_map.get("Title", "")),
                 eh.fix_latin1_string(lv_map.get("Product name", "")),
                 eh.fix_latin1_string(lv_map.get("Description", "")),
-                eh.epoch_to_iso(item.get("timestamp", ""), errors=errors),
+                eh.epoch_to_datetime_string(item.get("timestamp", ""), errors=errors),
             ))
 
         out = pd.DataFrame(datapoints, columns=["Title", "Product Name", "Description", "Date"])  # pyright: ignore

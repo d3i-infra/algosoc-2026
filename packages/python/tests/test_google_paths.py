@@ -585,7 +585,9 @@ class TestReadActivity:
             "title": "Watched A video",
             "titleUrl": "https://www.youtube.com/watch?v=abc",
             "subtitles": [{"name": "A channel", "url": "https://www.youtube.com/channel/UC1"}],
-            "time": "2026-06-15T20:30:41Z",
+            # Normalised on read: the instant Takeout names in UTC, written in the
+            # reference zone (two hours ahead in June).
+            "time": "2026-06-15 22:30:41",
         }]
 
     def test_html_is_streamed_through_open_member(self):
@@ -765,7 +767,9 @@ class TestChromeHistory:
         df = google.chrome_history_to_df(reader, errors, ddp_locale)
 
         assert df.iloc[0]["Title"] == "Visited a page"
-        assert df.iloc[0]["Timestamp"] == "2026-06-15T20:30:41Z"
+        # The json export names the instant in UTC; the column holds it in the
+        # reference zone, two hours ahead of UTC in June.
+        assert df.iloc[0]["Timestamp"] == "2026-06-15 22:30:41"
 
     def test_no_matching_file_yields_an_empty_dataframe(self):
         reader, errors, ddp_locale = _reader_for({

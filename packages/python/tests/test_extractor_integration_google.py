@@ -133,6 +133,10 @@ ALLOWED_ERROR_KEYS = {
     "ExportReportedFailedFiles",
     "DuplicateMemberAcrossParts",
     "DuplicateMemberWithinPart",
+    # The voice-search audio cells read as their own one-line activity (see
+    # TIMESTAMP_ALLOWLIST_SETS): their "timestamp" is the audio caption, which the
+    # converter now counts rather than passing through silently.
+    "TimestampParseError",
 }
 
 

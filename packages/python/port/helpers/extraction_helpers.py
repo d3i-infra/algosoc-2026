@@ -7,7 +7,7 @@ import logging
 from collections import Counter
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Callable, IO, Iterator
 from pathlib import Path
 import zipfile
@@ -239,9 +239,189 @@ def replace_months(input_string: str) -> str:
     return input_string
 
 
+#: The shape every extracted timestamp is written in: ``2026-06-15 20:30:41``. Numbers
+#: throughout, no month abbreviations, so the column reads the same whatever language the
+#: donated export was written in. ``as.POSIXct`` in R and ``pandas.to_datetime`` both read
+#: it without being told a format, and it sorts correctly as plain text.
+DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
+
+#: The reference frame those timestamps are expressed in.
+#:
+#: The platforms disagree on what their clocks mean: Facebook, Instagram and the Google
+#: json export record an absolute instant, TikTok writes UTC without saying so, and the
+#: Google html export writes the local time of the account. Expressing all of them in one
+#: named zone is what makes the column comparable across platforms.
+#:
+#: What this frame is *not* is the time the participant's own watch showed. None of these
+#: exports record where someone was: an epoch timestamp carries no location, and Takeout
+#: renders every record in the account's timezone setting at export time, so activity from
+#: a trip abroad still comes out in the account's home zone. That information is not in the
+#: data and no conversion can recover it.
+REFERENCE_TIMEZONE = "Europe/Amsterdam"
+
+#: A zone spelled out at the end of a timestamp rather than as an offset, as the TikTok
+#: txt export writes it: ``2026-05-02 10:09:50 UTC``. Only the zero-offset names are
+#: listed, so anything else falls through to the parser and is counted rather than guessed
+#: at.
+NAMED_UTC = re.compile(r"[\s_]+(?:UTC|GMT)$", re.IGNORECASE)
+
+
+def _last_sunday(year: int, month: int) -> date:
+    """The date of the last Sunday in *month*, which is when the European clocks change."""
+
+    # The first of the next month less a day is the last of this one. Only March and
+    # October are ever asked for, so the next month is always within the same year.
+    last = date(year, month + 1, 1) - timedelta(days=1)
+    return last - timedelta(days=(last.weekday() + 1) % 7)
+
+
+def _reference_offset(moment: datetime) -> timedelta:
+    """How far ``REFERENCE_TIMEZONE`` stands ahead of UTC at *moment*, a naive UTC time.
+
+    The rule is applied directly rather than read from a timezone database, because this
+    code runs under Pyodide in the browser, where the IANA database is not on disk:
+    ``zoneinfo`` finds no tzdata package and ``dateutil.tz.gettz`` finds no
+    ``/usr/share/zoneinfo``. The rule itself is small and fixed — the EU has changed the
+    clocks on the last Sunday of March and of October, at 01:00 UTC, since 1996, and
+    Amsterdam stands one hour ahead of UTC in winter and two in summer. Donated data does
+    not reach back before that, so the two are equivalent here.
+    """
+
+    start = datetime.combine(_last_sunday(moment.year, 3), datetime.min.time()) + timedelta(hours=1)
+    end = datetime.combine(_last_sunday(moment.year, 10), datetime.min.time()) + timedelta(hours=1)
+    return timedelta(hours=2) if start <= moment < end else timedelta(hours=1)
+
+
+def _to_reference(moment: datetime) -> str:
+    """Write *moment*, an aware datetime, in ``REFERENCE_TIMEZONE`` and ``DATETIME_FORMAT``."""
+
+    utc = moment.astimezone(timezone.utc).replace(tzinfo=None)
+    return (utc + _reference_offset(utc)).strftime(DATETIME_FORMAT)
+
+
+def epoch_to_datetime_string(epoch_timestamp: str | int | float, errors: Counter | None = None) -> str:
+    """Convert epoch seconds to ``DATETIME_FORMAT`` in ``REFERENCE_TIMEZONE``.
+
+    Epoch seconds name an absolute instant, so this conversion is exact — nothing about
+    the participant has to be assumed. Used for the Facebook and Instagram exports.
+
+    Args:
+        epoch_timestamp: Seconds since the epoch, as a number or a string holding one.
+        errors: Optional counter that aggregates error types.
+
+    Returns:
+        str: The formatted timestamp, ``""`` for an absent one, or the input unchanged
+        when it cannot be read as a number.
+
+    Examples::
+
+        >>> epoch_to_datetime_string(1632139200)
+        "2021-09-20 14:00:00"
+    """
+    # Empty/falsy timestamps are expected absences, not errors
+    if not epoch_timestamp and epoch_timestamp != 0:
+        return ""
+
+    out = str(epoch_timestamp)
+    try:
+        moment = datetime.fromtimestamp(int(float(epoch_timestamp)), tz=timezone.utc)
+        out = _to_reference(moment)
+    except (OverflowError, OSError, ValueError, TypeError) as e:
+        logger.error("Could not convert epoch timestamp, %s", e)
+        if errors is not None:
+            errors["TimestampParseError"] += 1
+
+    return out
+
+
+def utc_timestamp_to_datetime_string(timestamp: str, errors: Counter | None = None) -> str:
+    """Convert a timestamp string to ``DATETIME_FORMAT`` in ``REFERENCE_TIMEZONE``.
+
+    Reads what the platform wrote about the zone and honours it: a trailing ``Z`` or an
+    offset names the instant exactly, as the Google json export writes it, and so does a
+    zone spelled out in full, as the TikTok txt export writes it (``... 10:09:50 UTC``).
+
+    A timestamp carrying no zone at all is taken for UTC. That is what the TikTok json
+    export writes, and it is the one reading here that the file itself does not state —
+    though the txt export of the same data says ``UTC`` outright, which is good evidence
+    for what the bare json values mean.
+
+    Note that a naive timestamp is *always* read as UTC, so this must not be called on a
+    value it has already converted. Callers that mix converted and unconverted records,
+    as the Google extractor does, convert at the point the raw records are read instead.
+
+    Args:
+        timestamp: An ISO 8601 timestamp, with or without a zone.
+        errors: Optional counter that aggregates error types.
+
+    Returns:
+        str: The formatted timestamp, ``""`` for an absent one, or the input unchanged
+        when it cannot be read.
+
+    Examples::
+
+        >>> utc_timestamp_to_datetime_string("2021-09-20T12:00:00.123Z")
+        "2021-09-20 14:00:00"
+        >>> utc_timestamp_to_datetime_string("2021-09-20 12:00:00 UTC")
+        "2021-09-20 14:00:00"
+        >>> utc_timestamp_to_datetime_string("2021-09-20 12:00:00")
+        "2021-09-20 14:00:00"
+    """
+    if not timestamp or not isinstance(timestamp, str):
+        return ""
+
+    # A zone written as a name carries no offset for the parser to read, so it is dropped
+    # here; the zero-offset names it matches mean the same as the UTC default below.
+    text = NAMED_UTC.sub("", timestamp.strip())
+
+    try:
+        # Python reads the trailing Z itself from 3.11 on, but the exports are not
+        # consistent about upper case and this keeps the parse independent of that.
+        moment = datetime.fromisoformat(text.replace("Z", "+00:00").replace("z", "+00:00"))
+    except (ValueError, TypeError) as e:
+        logger.error("Could not convert timestamp, %s", e)
+        if errors is not None:
+            errors["TimestampParseError"] += 1
+        return timestamp
+
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+
+    return _to_reference(moment)
+
+
+def local_time_to_datetime_string(
+    moment: datetime, utc_offset: timedelta, errors: Counter | None = None
+) -> str:
+    """Convert a local wall-clock time to ``DATETIME_FORMAT`` in ``REFERENCE_TIMEZONE``.
+
+    Used for the Google html export, which writes the local time of the account together
+    with the zone it stands in. Knowing that offset is what makes the record comparable
+    with the platforms that write an absolute instant.
+
+    Args:
+        moment: A naive datetime holding the local wall-clock time.
+        utc_offset: How far that local time stands ahead of UTC.
+        errors: Optional counter that aggregates error types.
+
+    Returns:
+        str: The formatted timestamp.
+    """
+    try:
+        return _to_reference(moment.replace(tzinfo=timezone(utc_offset)))
+    except (OverflowError, ValueError, TypeError) as e:
+        logger.error("Could not convert local timestamp, %s", e)
+        if errors is not None:
+            errors["TimestampParseError"] += 1
+        return moment.strftime(DATETIME_FORMAT)
+
+
 def epoch_to_iso(epoch_timestamp: str | int | float, errors: Counter | None = None) -> str:
     """
     Convert epoch timestamp to an ISO 8601 string, assuming UTC.
+
+    Used by the platforms that have not been moved onto ``DATETIME_FORMAT``; the Facebook,
+    Instagram, TikTok and Google extractors call ``epoch_to_datetime_string`` instead.
 
     Args:
         epoch_timestamp (str | int): The epoch timestamp to convert.
@@ -273,57 +453,82 @@ def epoch_to_iso(epoch_timestamp: str | int | float, errors: Counter | None = No
     return out
 
 
-#: ``Mar 02, 2026 4:57:45 pm`` — the one shape Meta's HTML exports write for a
-#: timestamp (every ``_a72d`` cell in the local Facebook fixtures matches it).
-#: No zone is given: the exporter renders the account's local time.
-META_HTML_TIMESTAMP = re.compile(
-    r"^([A-Za-z]{3}) (\d{1,2}), (\d{4}) (\d{1,2}):(\d{2}):(\d{2}) ([AaPp])[Mm]$"
-)
-_META_HTML_MONTHS = {
-    "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
-    "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
+#: Months by the first three letters of how the Meta html exports abbreviate them,
+#: lowercased, across the languages they are written in that use Latin script. An
+#: account writes its export in whatever language it is set to, which is not always the
+#: language of the study.
+META_HTML_MONTHS = {
+    "jan": 1, "oca": 1, "ene": 1,
+    "feb": 2, "şub": 2, "sub": 2,
+    "mar": 3, "mrt": 3, "mär": 3, "mrz": 3,
+    "apr": 4, "nis": 4, "abr": 4,
+    "may": 5, "mei": 5, "mai": 5,
+    "jun": 6, "haz": 6,
+    "jul": 7, "tem": 7,
+    "aug": 8, "ağu": 8, "agu": 8, "ago": 8,
+    "sep": 9, "eyl": 9, "set": 9,
+    "oct": 10, "okt": 10, "eki": 10,
+    "nov": 11, "kas": 11,
+    "dec": 12, "dez": 12, "ara": 12, "dic": 12,
 }
 
+#: ``Jun 26, 2026 9:05:20 am`` — how the Facebook and Instagram html exports write a
+#: timestamp: the month as a word, a 12-hour clock in lower case, the seconds usually
+#: included. The meridiem and the seconds are optional so that a 24-hour locale and
+#: Instagram's minute-precision stamps read too. No zone is written beside it.
+META_HTML_TIMESTAMP = re.compile(
+    r"^([^\s\d]+)\.?\s+(\d{1,2}),?\s+(\d{4})[\s,]+(\d{1,2}):(\d{2})(?::(\d{2}))?"
+    r"(?:\s*([AaPp])\.?[Mm]\.?)?\s*$"
+)
 
-def meta_html_timestamp_to_iso(text: str, errors: Counter | None = None) -> str:
-    """
-    Convert a Meta HTML display timestamp to a naive ISO 8601 string.
 
-    The HTML export carries no timezone, so the result has no offset; JSON
-    exports go through ``epoch_to_iso`` instead. Same contract as that helper:
-    an empty cell is an expected absence and returns ``""`` without counting;
-    text of any other shape is returned unchanged and counted as
-    ``TimestampParseError``. A regex rather than ``strptime`` — an order of
-    magnitude faster, and Pyodide is slow.
+def parse_meta_html_timestamp(text: str) -> datetime | None:
+    """Read a Meta html display timestamp into a naive ``datetime``, or ``None``.
+
+    The clock it stands on is the caller's business: Instagram renders at a fixed
+    offset, Facebook in the timezone of the account. A regex rather than
+    ``strptime`` — an order of magnitude faster, and Pyodide is slow."""
+    if not text or not isinstance(text, str):
+        return None
+    match = META_HTML_TIMESTAMP.match(text.strip())
+    if not match:
+        return None
+    month, day, year, hour, minute, second, meridiem = match.groups()
+    number = META_HTML_MONTHS.get(month[:3].lower())
+    if number is None:
+        return None
+    hour = int(hour)
+    if meridiem:
+        # A 12-hour clock counts noon as 12 pm and midnight as 12 am.
+        hour = hour % 12 + (12 if meridiem.lower() == "p" else 0)
+    try:
+        return datetime(int(year), number, int(day), hour, int(minute), int(second or 0))
+    except ValueError:
+        return None
+
+
+def meta_html_timestamp_to_datetime_string(text: str, errors: Counter | None = None) -> str:
+    """Write a Meta html display timestamp in ``DATETIME_FORMAT``, the clock left as is.
+
+    Same contract as ``epoch_to_iso``: an empty cell is an expected absence and returns
+    ``""`` without counting; text of any other shape is returned unchanged and counted as
+    ``TimestampParseError``. Only the shape changes here — the export names no zone, so a
+    caller that knows the clock converts the parsed ``datetime`` itself.
 
     Examples::
 
-        >>> meta_html_timestamp_to_iso("Mar 02, 2026 4:57:45 pm")
-        "2026-03-02T16:57:45"
+        >>> meta_html_timestamp_to_datetime_string("Mar 02, 2026 4:57:45 pm")
+        "2026-03-02 16:57:45"
     """
     if not text:
         return ""
-
-    match = META_HTML_TIMESTAMP.match(text.strip())
-    if match:
-        month = _META_HTML_MONTHS.get(match.group(1).lower())
-        if month:
-            # A 12-hour clock counts noon as 12 PM and midnight as 12 AM.
-            hour = int(match.group(4)) % 12 + (12 if match.group(7) in "Pp" else 0)
-            try:
-                return datetime(
-                    int(match.group(3)), month, int(match.group(2)),
-                    hour, int(match.group(5)), int(match.group(6)),
-                ).isoformat()
-            except ValueError:
-                pass  # e.g. day out of range for the month — counted below
-
-    # The value itself is not logged: a cell that failed to parse is still
-    # participant data.
-    logger.error("Could not convert Meta HTML timestamp")
+    moment = parse_meta_html_timestamp(text)
+    if moment is not None:
+        return moment.strftime(DATETIME_FORMAT)
+    # The value itself is not logged: a cell that failed to parse is still participant data.
+    logger.error("Could not read a Meta html timestamp")
     if errors is not None:
         errors["TimestampParseError"] += 1
-
     return text
 
 

@@ -35,20 +35,20 @@ _HTML_VALIDATION = SimpleNamespace(current_ddp_category=SimpleNamespace(ddp_file
 # ---------------------------------------------------------------------------
 
 
-class TestMetaHtmlTimestampToIso:
-    def test_display_format_becomes_naive_iso(self):
-        assert eh.meta_html_timestamp_to_iso("Mar 02, 2026 4:57:45 pm") == "2026-03-02T16:57:45"
-        assert eh.meta_html_timestamp_to_iso("Jun 04, 2025 6:46:10 am") == "2025-06-04T06:46:10"
-        assert eh.meta_html_timestamp_to_iso("Nov 14, 2025 12:07:06 pm") == "2025-11-14T12:07:06"
+class TestMetaHtmlTimestampToDatetimeString:
+    def test_display_format_becomes_the_shared_datetime_string(self):
+        assert eh.meta_html_timestamp_to_datetime_string("Mar 02, 2026 4:57:45 pm") == "2026-03-02 16:57:45"
+        assert eh.meta_html_timestamp_to_datetime_string("Jun 04, 2025 6:46:10 am") == "2025-06-04 06:46:10"
+        assert eh.meta_html_timestamp_to_datetime_string("Nov 14, 2025 12:07:06 pm") == "2025-11-14 12:07:06"
 
     def test_empty_is_an_expected_absence(self):
         errors: Counter = Counter()
-        assert eh.meta_html_timestamp_to_iso("", errors=errors) == ""
+        assert eh.meta_html_timestamp_to_datetime_string("", errors=errors) == ""
         assert not errors
 
     def test_unparsable_text_is_returned_and_counted(self):
         errors: Counter = Counter()
-        assert eh.meta_html_timestamp_to_iso("gisteren", errors=errors) == "gisteren"
+        assert eh.meta_html_timestamp_to_datetime_string("gisteren", errors=errors) == "gisteren"
         assert errors["TimestampParseError"] == 1
 
 
@@ -73,4 +73,4 @@ class TestHtmlTimestampsAreIsoAndSorted:
         df = facebook.who_youve_followed_to_df(reader, errors, validation=_HTML_VALIDATION)
         assert not errors
         assert list(df["Name"]) == ["Newest Page", "Middle Page", "Oldest Page"]
-        assert list(df["Timestamp"]) == ["2025-06-04T18:46:10", "2024-11-14T10:21:53", "2024-01-05T13:00:00"]
+        assert list(df["Timestamp"]) == ["2025-06-04 18:46:10", "2024-11-14 10:21:53", "2024-01-05 13:00:00"]
