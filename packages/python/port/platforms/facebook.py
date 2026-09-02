@@ -3226,7 +3226,21 @@ def _ad_preferences_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFr
             if label:
                 datapoints.append((label, value))
 
-        # 2. Headed subsections: <h2> is the label, values depend on content type.
+        # 2. Labelled lists: a colspan cell whose own text is the label and whose
+        # nested sections hold one value each ("Removed categories") — the HTML
+        # form of the JSON `vec` entries, one row per value. The Ads-interests
+        # block also sits in a colspan cell, but under an <h2> (step 3).
+        list_cells = eh.xpath_nodes(tree, "//td[contains(@class, '_a6_q') and @colspan and not(.//h2)]")
+        for cell in list_cells:
+            label = cell.text.strip() if cell.text else ""
+            if not label:
+                continue
+            for div in cell.xpath(".//section[contains(@class, '_a6-g')]/div[contains(@class, '_a6-p')]"):
+                value = div.text.strip() if div.text else ""
+                if value:
+                    datapoints.append((label, value))
+
+        # 3. Headed subsections: <h2> is the label, values depend on content type.
         # The page nests three `_a6-g` wrappers around one <h2>, so anchor on
         # the section that directly owns each heading — matching every section
         # with an <h2> somewhere below it appends the same interests once per

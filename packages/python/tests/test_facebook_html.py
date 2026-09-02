@@ -104,8 +104,9 @@ _AD_PREFERENCES_PAGE = """<html><body><main>
   <section class="_3-95 _a6-g"><div class="_2pi8 _2pic _a6-p">
     <table>
       <tr><td class="_a6_q">Is opted out of using interests to target ads</td><td class="_2piu _a6_r">True</td></tr>
-      <tr><td class="_a6_q" colspan="2">Other categories used to reach you
+      <tr><td class="_a6_q" colspan="2">Removed categories
         <div><section class="_a6-g"><div class="_2ph_ _a6-p">Engaged Shoppers</div></section></div>
+        <div><section class="_a6-g"><div class="_2ph_ _a6-p">Frequent Travelers</div></section></div>
       </td></tr>
       <tr><td class="_a6_q" colspan="2"><div>
         <section class="_3-95 _a6-g">
@@ -134,6 +135,15 @@ class TestAdPreferencesHtml:
         df = facebook.ad_preferences_to_df(reader, Counter(), validation=_HTML_VALIDATION)
         assert "Engaged Shoppers" not in df[df["Label"] == "Ads interests"]["Value"].tolist()
         assert ("Is opted out of using interests to target ads", "True") in list(df.itertuples(index=False, name=None))
+
+    def test_colspan_labelled_lists_become_rows_like_the_json_vec_entries(self):
+        """The JSON path emits one row per value of a list entry such as
+        "Removed categories"; the HTML renders that list as a colspan-labelled
+        cell, which must yield the same rows."""
+        reader = _reader(("export/ads_information/ad_preferences.html", _AD_PREFERENCES_PAGE))
+        df = facebook.ad_preferences_to_df(reader, Counter(), validation=_HTML_VALIDATION)
+        removed = df[df["Label"] == "Removed categories"]["Value"].tolist()
+        assert removed == ["Engaged Shoppers", "Frequent Travelers"]
 
 
 # ---------------------------------------------------------------------------
