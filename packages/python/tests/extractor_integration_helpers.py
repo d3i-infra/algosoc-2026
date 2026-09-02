@@ -63,6 +63,19 @@ def find_fixture(platform: str) -> Path | None:
     return matches[0] if matches else None
 
 
+def find_fixtures(platform: str) -> list[Path]:
+    """Every ``<platform>_*.zip`` in ``tests/ddp/``, sorted. Empty when none are
+    present — callers skip, mirroring ``find_fixture``.
+
+    For a platform whose export comes in more than one format (Facebook: JSON
+    or HTML, chosen by the account holder at request time) one fixture per
+    format is needed to exercise both code paths, and a test pins its
+    expectations per fixture rather than taking the first match."""
+    if not DDP_DIR.is_dir():
+        return []
+    return sorted(DDP_DIR.glob(f"{platform}_*.zip"))
+
+
 def find_fixture_sets(platform: str) -> list[Path]:
     """All ``<platform>_set_*/`` fixture directories in ``tests/ddp/`` (multi-part
     DDPs), sorted. Empty when none are present — callers skip, mirroring
