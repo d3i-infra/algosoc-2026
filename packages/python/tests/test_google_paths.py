@@ -225,7 +225,9 @@ class TestSearchLocations:
 
         assert row["Title"] == "Searched for cats"
         assert row["URL"] == "https://www.google.com/search?q=cats"
-        assert row["Timestamp"] == "2026-06-15T20:30:41Z"
+        # The json export names the instant in UTC; the column holds it in the reference
+        # zone, two hours ahead of UTC in June.
+        assert row["Timestamp"] == "2026-06-15 22:30:41"
 
 
 class TestDetailsColumn:

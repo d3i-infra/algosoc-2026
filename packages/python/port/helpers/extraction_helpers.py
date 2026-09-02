@@ -6,7 +6,7 @@ import re
 import logging
 from collections import Counter
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Callable
 from pathlib import Path
 import zipfile
@@ -237,9 +237,189 @@ def replace_months(input_string: str) -> str:
     return input_string
 
 
+#: The shape every extracted timestamp is written in: ``2026-06-15 20:30:41``. Numbers
+#: throughout, no month abbreviations, so the column reads the same whatever language the
+#: donated export was written in. ``as.POSIXct`` in R and ``pandas.to_datetime`` both read
+#: it without being told a format, and it sorts correctly as plain text.
+DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
+
+#: The reference frame those timestamps are expressed in.
+#:
+#: The platforms disagree on what their clocks mean: Facebook, Instagram and the Google
+#: json export record an absolute instant, TikTok writes UTC without saying so, and the
+#: Google html export writes the local time of the account. Expressing all of them in one
+#: named zone is what makes the column comparable across platforms.
+#:
+#: What this frame is *not* is the time the participant's own watch showed. None of these
+#: exports record where someone was: an epoch timestamp carries no location, and Takeout
+#: renders every record in the account's timezone setting at export time, so activity from
+#: a trip abroad still comes out in the account's home zone. That information is not in the
+#: data and no conversion can recover it.
+REFERENCE_TIMEZONE = "Europe/Amsterdam"
+
+#: A zone spelled out at the end of a timestamp rather than as an offset, as the TikTok
+#: txt export writes it: ``2026-05-02 10:09:50 UTC``. Only the zero-offset names are
+#: listed, so anything else falls through to the parser and is counted rather than guessed
+#: at.
+NAMED_UTC = re.compile(r"[\s_]+(?:UTC|GMT)$", re.IGNORECASE)
+
+
+def _last_sunday(year: int, month: int) -> date:
+    """The date of the last Sunday in *month*, which is when the European clocks change."""
+
+    # The first of the next month less a day is the last of this one. Only March and
+    # October are ever asked for, so the next month is always within the same year.
+    last = date(year, month + 1, 1) - timedelta(days=1)
+    return last - timedelta(days=(last.weekday() + 1) % 7)
+
+
+def _reference_offset(moment: datetime) -> timedelta:
+    """How far ``REFERENCE_TIMEZONE`` stands ahead of UTC at *moment*, a naive UTC time.
+
+    The rule is applied directly rather than read from a timezone database, because this
+    code runs under Pyodide in the browser, where the IANA database is not on disk:
+    ``zoneinfo`` finds no tzdata package and ``dateutil.tz.gettz`` finds no
+    ``/usr/share/zoneinfo``. The rule itself is small and fixed — the EU has changed the
+    clocks on the last Sunday of March and of October, at 01:00 UTC, since 1996, and
+    Amsterdam stands one hour ahead of UTC in winter and two in summer. Donated data does
+    not reach back before that, so the two are equivalent here.
+    """
+
+    start = datetime.combine(_last_sunday(moment.year, 3), datetime.min.time()) + timedelta(hours=1)
+    end = datetime.combine(_last_sunday(moment.year, 10), datetime.min.time()) + timedelta(hours=1)
+    return timedelta(hours=2) if start <= moment < end else timedelta(hours=1)
+
+
+def _to_reference(moment: datetime) -> str:
+    """Write *moment*, an aware datetime, in ``REFERENCE_TIMEZONE`` and ``DATETIME_FORMAT``."""
+
+    utc = moment.astimezone(timezone.utc).replace(tzinfo=None)
+    return (utc + _reference_offset(utc)).strftime(DATETIME_FORMAT)
+
+
+def epoch_to_datetime_string(epoch_timestamp: str | int | float, errors: Counter | None = None) -> str:
+    """Convert epoch seconds to ``DATETIME_FORMAT`` in ``REFERENCE_TIMEZONE``.
+
+    Epoch seconds name an absolute instant, so this conversion is exact — nothing about
+    the participant has to be assumed. Used for the Facebook and Instagram exports.
+
+    Args:
+        epoch_timestamp: Seconds since the epoch, as a number or a string holding one.
+        errors: Optional counter that aggregates error types.
+
+    Returns:
+        str: The formatted timestamp, ``""`` for an absent one, or the input unchanged
+        when it cannot be read as a number.
+
+    Examples::
+
+        >>> epoch_to_datetime_string(1632139200)
+        "2021-09-20 14:00:00"
+    """
+    # Empty/falsy timestamps are expected absences, not errors
+    if not epoch_timestamp and epoch_timestamp != 0:
+        return ""
+
+    out = str(epoch_timestamp)
+    try:
+        moment = datetime.fromtimestamp(int(float(epoch_timestamp)), tz=timezone.utc)
+        out = _to_reference(moment)
+    except (OverflowError, OSError, ValueError, TypeError) as e:
+        logger.error("Could not convert epoch timestamp, %s", e)
+        if errors is not None:
+            errors["TimestampParseError"] += 1
+
+    return out
+
+
+def utc_timestamp_to_datetime_string(timestamp: str, errors: Counter | None = None) -> str:
+    """Convert a timestamp string to ``DATETIME_FORMAT`` in ``REFERENCE_TIMEZONE``.
+
+    Reads what the platform wrote about the zone and honours it: a trailing ``Z`` or an
+    offset names the instant exactly, as the Google json export writes it, and so does a
+    zone spelled out in full, as the TikTok txt export writes it (``... 10:09:50 UTC``).
+
+    A timestamp carrying no zone at all is taken for UTC. That is what the TikTok json
+    export writes, and it is the one reading here that the file itself does not state —
+    though the txt export of the same data says ``UTC`` outright, which is good evidence
+    for what the bare json values mean.
+
+    Note that a naive timestamp is *always* read as UTC, so this must not be called on a
+    value it has already converted. Callers that mix converted and unconverted records,
+    as the Google extractor does, convert at the point the raw records are read instead.
+
+    Args:
+        timestamp: An ISO 8601 timestamp, with or without a zone.
+        errors: Optional counter that aggregates error types.
+
+    Returns:
+        str: The formatted timestamp, ``""`` for an absent one, or the input unchanged
+        when it cannot be read.
+
+    Examples::
+
+        >>> utc_timestamp_to_datetime_string("2021-09-20T12:00:00.123Z")
+        "2021-09-20 14:00:00"
+        >>> utc_timestamp_to_datetime_string("2021-09-20 12:00:00 UTC")
+        "2021-09-20 14:00:00"
+        >>> utc_timestamp_to_datetime_string("2021-09-20 12:00:00")
+        "2021-09-20 14:00:00"
+    """
+    if not timestamp or not isinstance(timestamp, str):
+        return ""
+
+    # A zone written as a name carries no offset for the parser to read, so it is dropped
+    # here; the zero-offset names it matches mean the same as the UTC default below.
+    text = NAMED_UTC.sub("", timestamp.strip())
+
+    try:
+        # Python reads the trailing Z itself from 3.11 on, but the exports are not
+        # consistent about upper case and this keeps the parse independent of that.
+        moment = datetime.fromisoformat(text.replace("Z", "+00:00").replace("z", "+00:00"))
+    except (ValueError, TypeError) as e:
+        logger.error("Could not convert timestamp, %s", e)
+        if errors is not None:
+            errors["TimestampParseError"] += 1
+        return timestamp
+
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+
+    return _to_reference(moment)
+
+
+def local_time_to_datetime_string(
+    moment: datetime, utc_offset: timedelta, errors: Counter | None = None
+) -> str:
+    """Convert a local wall-clock time to ``DATETIME_FORMAT`` in ``REFERENCE_TIMEZONE``.
+
+    Used for the Google html export, which writes the local time of the account together
+    with the zone it stands in. Knowing that offset is what makes the record comparable
+    with the platforms that write an absolute instant.
+
+    Args:
+        moment: A naive datetime holding the local wall-clock time.
+        utc_offset: How far that local time stands ahead of UTC.
+        errors: Optional counter that aggregates error types.
+
+    Returns:
+        str: The formatted timestamp.
+    """
+    try:
+        return _to_reference(moment.replace(tzinfo=timezone(utc_offset)))
+    except (OverflowError, ValueError, TypeError) as e:
+        logger.error("Could not convert local timestamp, %s", e)
+        if errors is not None:
+            errors["TimestampParseError"] += 1
+        return moment.strftime(DATETIME_FORMAT)
+
+
 def epoch_to_iso(epoch_timestamp: str | int | float, errors: Counter | None = None) -> str:
     """
     Convert epoch timestamp to an ISO 8601 string, assuming UTC.
+
+    Used by the platforms that have not been moved onto ``DATETIME_FORMAT``; the Facebook,
+    Instagram, TikTok and Google extractors call ``epoch_to_datetime_string`` instead.
 
     Args:
         epoch_timestamp (str | int): The epoch timestamp to convert.

@@ -47,26 +47,32 @@ def search_cell(timestamp: str) -> str:
     return f'Searched for <a href="https://www.youtube.com/results?search_query=cats">cats</a><br>{timestamp}'
 
 
+#: An account standing in the zone the output is expressed in, which is the common case
+#: for this study: the local time it writes is already the time that is wanted, so the
+#: conversion changes the separator and nothing else.
 TIMESTAMPS = [
     # A 12-hour clock writes no leading zero, so the hour is a single digit before 10.
-    ("Aug 17, 2026, 1:14:48 PM CEST", "2026-08-17T13:14:48"),
-    ("Aug 15, 2026, 11:39:58 AM CEST", "2026-08-15T11:39:58"),
-    ("15 jun 2026, 9:30:41 CEST", "2026-06-15T09:30:41"),
-    ("15 mrt 2026, 20:30:41 CET", "2026-03-15T20:30:41"),
+    ("Aug 17, 2026, 1:14:48 PM CEST", "2026-08-17 13:14:48"),
+    ("Aug 15, 2026, 11:39:58 AM CEST", "2026-08-15 11:39:58"),
+    ("15 jun 2026, 9:30:41 CEST", "2026-06-15 09:30:41"),
+    ("15 mrt 2026, 20:30:41 CET", "2026-03-15 20:30:41"),
 ]
 
 #: Shapes the conversion reads directly, beyond the ones above.
 DIRECT = [
-    ("Dec 31, 2026, 12:00:00 AM CET", "2026-12-31T00:00:00"),  # midnight is 12 AM
-    ("Jan 1, 2026, 12:30:00 PM CET", "2026-01-01T12:30:00"),   # noon is 12 PM
-    ("1 mei 2026, 07:05:00 CEST", "2026-05-01T07:05:00"),
-    ("17. Aug. 2026, 22:14:48 MESZ", "2026-08-17T22:14:48"),   # ordinal dots
-    ("17 Ağu 2026, 22:14:48 GMT+3", "2026-08-17T22:14:48"),
+    ("Dec 31, 2026, 12:00:00 AM CET", "2026-12-31 00:00:00"),  # midnight is 12 AM
+    ("Jan 1, 2026, 12:30:00 PM CET", "2026-01-01 12:30:00"),   # noon is 12 PM
+    ("1 mei 2026, 07:05:00 CEST", "2026-05-01 07:05:00"),
+    ("17. Aug. 2026, 22:14:48 MESZ", "2026-08-17 22:14:48"),   # ordinal dots, zone in German
+    # An account standing somewhere else is moved into the reference zone: three hours
+    # ahead of UTC in August is one hour ahead of Amsterdam.
+    ("17 Ağu 2026, 22:14:48 GMT+3", "2026-08-17 21:14:48"),
 ]
 
 #: Shapes it hands to dateutil instead, which reads what it can.
 FALLBACK = [
-    ("17.08.2026, 22:14:48", "2026-08-17T22:14:48"),  # no month name to recognize
+    # No zone to read, so the local time is written as it stands and counted as unconverted.
+    ("17.08.2026, 22:14:48", "2026-08-17 22:14:48"),  # no month name to recognize
     ("2026年8月17日 22:14:48", "2026年8月17日 22:14:48"),  # unreadable, kept as it was
 ]
 
@@ -160,10 +166,10 @@ class TestMicroseconds:
     epoch, which the shared ``epoch_to_iso`` reads as seconds and overflows on."""
 
     def test_a_microsecond_timestamp_reads_as_a_time(self):
-        assert google._convert_usec_to_iso8601(1787225185379660) == "2026-08-20T11:26:25"
+        assert google._convert_usec_to_iso8601(1787225185379660) == "2026-08-20 13:26:25"
 
     def test_a_number_written_as_text_reads_the_same(self):
-        assert google._convert_usec_to_iso8601("1787225185379660") == "2026-08-20T11:26:25"
+        assert google._convert_usec_to_iso8601("1787225185379660") == "2026-08-20 13:26:25"
 
     def test_the_shape_matches_the_activity_timestamps(self):
         """One column holds timestamps from both, so they are written the same way."""
@@ -268,7 +274,7 @@ class TestRecord:
         assert records == [{
             "title": "Visited An example page - Example",
             "titleUrl": "https://example.org/a-page",
-            "time": "2026-08-16T17:42:07",
+            "time": "2026-08-16 17:42:07",
         }]
 
     def test_an_activity_without_a_link_reads_as_an_empty_url(self):

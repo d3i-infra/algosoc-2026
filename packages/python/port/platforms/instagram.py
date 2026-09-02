@@ -6,6 +6,31 @@ This module contains an example flow of a Instagram data donation study
 Assumptions:
 It handles DDPs in the english language with filetype JSON.
 
+Timestamps
+----------
+Every date column is written as ``YYYY-MM-DD HH:MM:SS`` in the reference timezone named by
+``extraction_helpers.REFERENCE_TIMEZONE``, so that a date means the same thing here as it
+does in the TikTok, Facebook and Google tables.
+
+The json export records epoch seconds, which name an absolute instant, so placing them in
+that zone is exact.
+
+The html export names no timezone, but it is not written in the timezone of the
+participant either: it is rendered eight hours behind UTC, always. Knowing that offset is
+what makes it convertible, so the two export formats now agree rather than sitting nine or
+ten hours apart.
+
+That offset was measured, not assumed. ``scripts/meta_html_timezone_probe.py`` matches
+records held in both formats and reports the difference; run over two donated archives it
+put every source at -8 — eight sources apiece, one archive reaching back to 2012, with no
+exception anywhere. It is a *fixed* -8 rather than US Pacific, which it otherwise resembles:
+records falling inside US daylight saving, where Pacific stands seven hours behind, are
+eight hours behind here too, so no daylight saving rule of its own is needed.
+
+It also belongs to Instagram rather than to the person. The Facebook export of those same
+two accounts is on a different clock again — Amsterdam for one, UTC for the other — which
+is why ``facebook.py`` cannot do the same thing and leaves its html clock alone.
+
 Configuration
 -------------
 The ``extraction`` function is driven by ``port_config.json``.  Generate one with::
@@ -29,7 +54,9 @@ Platform info::
 
 import logging
 import os
+import re
 from collections import Counter
+from datetime import datetime, timedelta
 from typing import Any, Callable
 
 from lxml import etree
@@ -53,6 +80,101 @@ from port.helpers.table_extractor import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+#: Months by the first three letters of how the html export abbreviates them, lowercased,
+#: across the languages it is written in that use Latin script. An account writes its export
+#: in whatever language it is set to, which is not always the language of the study, so the
+#: same table the Google extractor reads its html dates with is used here.
+_HTML_MONTHS = {
+    "jan": 1, "oca": 1, "ene": 1,
+    "feb": 2, "şub": 2, "sub": 2,
+    "mar": 3, "mrt": 3, "mär": 3, "mrz": 3,
+    "apr": 4, "nis": 4, "abr": 4,
+    "may": 5, "mei": 5, "mai": 5,
+    "jun": 6, "haz": 6,
+    "jul": 7, "tem": 7,
+    "aug": 8, "ağu": 8, "agu": 8, "ago": 8,
+    "sep": 9, "eyl": 9, "set": 9,
+    "oct": 10, "okt": 10, "eki": 10,
+    "nov": 11, "kas": 11,
+    "dec": 12, "dez": 12, "ara": 12, "dic": 12,
+}
+
+#: ``Aug 09, 2026 9:49 am`` — how the html export writes a timestamp: the month as a word, a 12-hour
+#: clock in lower case, and the seconds left off. The meridiem is optional so that a
+#: 24-hour locale reads too.
+_HTML_TIMESTAMP = re.compile(
+    r"^([^\s\d]+)\.?\s+(\d{1,2}),?\s+(\d{4})[\s,]+(\d{1,2}):(\d{2})(?::(\d{2}))?"
+    r"(?:\s*([AaPp])\.?[Mm]\.?)?\s*$"
+)
+
+
+#: How far the html export stands behind UTC. It names no timezone, so this was measured
+#: rather than assumed: ``scripts/meta_html_timezone_probe.py`` matched records held in both
+#: export formats across two donated archives — eight sources apiece, one of them reaching
+#: back to 2012 — and every one of them came out eight hours behind UTC.
+#:
+#: It is not the timezone of the participant. The Facebook export of the same two accounts
+#: is on a different clock again (Amsterdam for one, UTC for the other), so this belongs to
+#: Instagram rather than to the person or the account.
+#:
+#: Nor is it US Pacific, which the offset otherwise resembles. Records falling inside US
+#: daylight saving, where Pacific stands seven hours behind, are eight hours behind here
+#: too — so the offset is fixed and needs no daylight saving rule of its own.
+HTML_EXPORT_UTC_OFFSET = timedelta(hours=-8)
+
+
+def _html_timestamp(timestamp: str, errors: Counter | None = None) -> str:
+    """Write a timestamp read out of the html export in the shared datetime format.
+
+    The html names no timezone and is not written in the timezone of the participant; it is
+    rendered at the fixed ``HTML_EXPORT_UTC_OFFSET`` measured above. Knowing that offset is
+    what lets this column be converted like any other, so an html donation now agrees with
+    a json one rather than sitting nine or ten hours away from it.
+
+    Args:
+        timestamp: Text of the date element, e.g. ``Aug 09, 2026 9:49 am``.
+        errors: Optional counter that aggregates error types.
+
+    Returns:
+        str: The formatted timestamp, ``""`` for an absent one, or the input unchanged
+        when it cannot be read.
+
+    Examples::
+
+        >>> _html_timestamp("Aug 09, 2026 9:49 am")   # 2026-08-09 17:49 UTC
+        "2026-08-09 19:49:00"
+    """
+    if not timestamp or not isinstance(timestamp, str):
+        return ""
+
+    match = _HTML_TIMESTAMP.match(timestamp.strip())
+    if match:
+        month, day, year, hour, minute, second, meridiem = match.groups()
+        number = _HTML_MONTHS.get(month[:3].lower())
+
+        if number is not None:
+            hour = int(hour)
+            if meridiem:
+                # A 12-hour clock counts noon as 12 pm and midnight as 12 am.
+                hour = hour % 12 + (12 if meridiem.lower() == "p" else 0)
+            try:
+                moment = datetime(int(year), number, int(day), hour, int(minute), int(second or 0))
+            except ValueError:
+                moment = None
+
+            if moment is not None:
+                return eh.local_time_to_datetime_string(
+                    moment, HTML_EXPORT_UTC_OFFSET, errors=errors
+                )
+
+    logger.error("Could not read an html timestamp: %s", timestamp)
+    if errors is not None:
+        errors["TimestampParseError"] += 1
+
+    return timestamp
+
 
 DDP_CATEGORIES = [
     DDPCategory(
@@ -349,7 +471,7 @@ def _following_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
             datapoints.append((
                 eh.fix_latin1_string(eh.find_item(d, "title") or eh.find_item(d, "value")),
                 eh.find_item(d, "href"),
-                eh.epoch_to_iso(eh.find_item(d, "timestamp"), errors=errors),
+                eh.epoch_to_datetime_string(eh.find_item(d, "timestamp"), errors=errors),
             ))
         out = pd.DataFrame(datapoints, columns=["Account", "URL", "Date"])  # pyright: ignore
         out = _sort_by_date(out, "Date")
@@ -384,7 +506,7 @@ def _following_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
             timestamp = ""
             for d in date_divs:
                 if d.text and d.text.strip():
-                    timestamp = d.text.strip()
+                    timestamp = _html_timestamp(d.text.strip(), errors)
                     break
 
             datapoints.append((account, url, timestamp))
@@ -497,7 +619,7 @@ def _posts_viewed_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFram
                 datapoints.append((
                     eh.fix_latin1_string(str(author.get("value", ""))),
                     url.get("href", ""),
-                    eh.epoch_to_iso(time.get("timestamp", ""), errors=errors),
+                    eh.epoch_to_datetime_string(time.get("timestamp", ""), errors=errors),
                 ))
         else:
             for item in data:  # pyright: ignore
@@ -505,7 +627,7 @@ def _posts_viewed_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFram
                 datapoints.append((
                     owner_username or owner_name,
                     url,
-                    eh.epoch_to_iso(item.get("timestamp", ""), errors=errors),
+                    eh.epoch_to_datetime_string(item.get("timestamp", ""), errors=errors),
                 ))
 
         out = pd.DataFrame(datapoints, columns=["Author", "URL", "Date"])  # pyright: ignore
@@ -537,7 +659,7 @@ def _posts_viewed_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFram
             url = url_a[0].get("href", "") if url_a else ""
 
             ts = section.xpath(".//div[contains(@class, '_a6-o')]")
-            timestamp = ts[0].text.strip() if ts and ts[0].text else ""
+            timestamp = _html_timestamp(ts[0].text.strip() if ts and ts[0].text else "", errors)
 
             datapoints.append((author, url, timestamp))
 
@@ -644,7 +766,7 @@ def _videos_watched_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFr
                 datapoints.append((
                     eh.fix_latin1_string(str(author.get("value", ""))),
                     url.get("href", ""),
-                    eh.epoch_to_iso(time.get("timestamp", ""), errors=errors),
+                    eh.epoch_to_datetime_string(time.get("timestamp", ""), errors=errors),
                 ))
         else:
             for item in data:  # pyright: ignore
@@ -652,7 +774,7 @@ def _videos_watched_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFr
                 datapoints.append((
                     owner_username or owner_name,
                     url,
-                    eh.epoch_to_iso(item.get("timestamp", ""), errors=errors),
+                    eh.epoch_to_datetime_string(item.get("timestamp", ""), errors=errors),
                 ))
 
         out = pd.DataFrame(datapoints, columns=["Author", "URL", "Date"])  # pyright: ignore
@@ -684,7 +806,7 @@ def _videos_watched_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFr
             url = url_a[0].get("href", "") if url_a else ""
 
             ts = section.xpath(".//div[contains(@class, '_a6-o')]")
-            timestamp = ts[0].text.strip() if ts and ts[0].text else ""
+            timestamp = _html_timestamp(ts[0].text.strip() if ts and ts[0].text else "", errors)
 
             datapoints.append((author, url, timestamp))
 
@@ -782,7 +904,7 @@ def _post_comments_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFra
                 datapoints.append((
                     eh.fix_latin1_string(str(comment.get("value", ""))),
                     eh.fix_latin1_string(str(owner.get("value", ""))),
-                    eh.epoch_to_iso(time.get("timestamp", ""), errors=errors),
+                    eh.epoch_to_datetime_string(time.get("timestamp", ""), errors=errors),
                 ))
 
         out = pd.DataFrame(datapoints, columns=["Comment", "Media owner", "Date"])  # pyright: ignore
@@ -824,7 +946,7 @@ def _post_comments_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFra
                     elif label == "Time":
                         sibling = td.getnext()
                         if sibling is not None and sibling.text:
-                            timestamp = sibling.text.strip()
+                            timestamp = _html_timestamp(sibling.text.strip(), errors)
 
                 datapoints.append((comment, media_owner, timestamp))
 
@@ -917,7 +1039,7 @@ def _liked_comments_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFr
                 datapoints.append((
                     eh.fix_latin1_string(item.get("title", "")),
                     eh.fix_latin1_string(entry.get("value", "")),
-                    eh.epoch_to_iso(entry.get("timestamp", ""), errors=errors),
+                    eh.epoch_to_datetime_string(entry.get("timestamp", ""), errors=errors),
                 ))
         else:
             for item in data:  # pyright: ignore
@@ -925,7 +1047,7 @@ def _liked_comments_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFr
                 datapoints.append((
                     owner_username or owner_name,
                     "",  # comment text not available in label_values format
-                    eh.epoch_to_iso(item.get("timestamp", ""), errors=errors),
+                    eh.epoch_to_datetime_string(item.get("timestamp", ""), errors=errors),
                 ))
 
         out = pd.DataFrame(datapoints, columns=["Account name", "Value", "Date"])  # pyright: ignore
@@ -962,7 +1084,7 @@ def _liked_comments_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFr
             timestamp = ""
             for d in date_divs:
                 if d.text and d.text.strip():
-                    timestamp = d.text.strip()
+                    timestamp = _html_timestamp(d.text.strip(), errors)
                     break
 
             datapoints.append((account_name, value, timestamp))
@@ -1061,7 +1183,7 @@ def _liked_posts_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame
                 datapoints.append((
                     eh.fix_latin1_string(eh.find_item(d, "title")),
                     eh.fix_latin1_string(eh.find_item(d, "value")),
-                    eh.epoch_to_iso(eh.find_item(d, "timestamp"), errors=errors),
+                    eh.epoch_to_datetime_string(eh.find_item(d, "timestamp"), errors=errors),
                 ))
         else:
             for item in data:  # pyright: ignore
@@ -1069,7 +1191,7 @@ def _liked_posts_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame
                 datapoints.append((
                     owner_username or owner_name,
                     owner_name,
-                    eh.epoch_to_iso(item.get("timestamp", ""), errors=errors),
+                    eh.epoch_to_datetime_string(item.get("timestamp", ""), errors=errors),
                 ))
 
         out = pd.DataFrame(datapoints, columns=["Account name", "Value", "Date"])  # pyright: ignore
@@ -1098,7 +1220,7 @@ def _liked_posts_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame
             account_name = username or name
 
             ts = section.xpath(".//div[contains(@class, '_a6-o')]")
-            timestamp = ts[0].text.strip() if ts and ts[0].text else ""
+            timestamp = _html_timestamp(ts[0].text.strip() if ts and ts[0].text else "", errors)
 
             datapoints.append((account_name, name, timestamp))
 
@@ -1185,14 +1307,14 @@ def _story_likes_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame
                 entry = item.get("string_list_data", [{}])[0]
                 datapoints.append((
                     eh.fix_latin1_string(item.get("title", "")),
-                    eh.epoch_to_iso(entry.get("timestamp", ""), errors=errors),
+                    eh.epoch_to_datetime_string(entry.get("timestamp", ""), errors=errors),
                 ))
         else:
             for item in data:  # pyright: ignore
                 owner_name, owner_username, _ = _extract_owner_details(item.get("label_values", []))
                 datapoints.append((
                     owner_username or owner_name,
-                    eh.epoch_to_iso(item.get("timestamp", ""), errors=errors),
+                    eh.epoch_to_datetime_string(item.get("timestamp", ""), errors=errors),
                 ))
 
         out = pd.DataFrame(datapoints, columns=["Account name", "Date"])  # pyright: ignore
@@ -1221,7 +1343,7 @@ def _story_likes_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame
             account_name = username or name
 
             ts = section.xpath(".//div[contains(@class, '_a6-o')]")
-            timestamp = ts[0].text.strip() if ts and ts[0].text else ""
+            timestamp = _html_timestamp(ts[0].text.strip() if ts and ts[0].text else "", errors)
 
             datapoints.append((account_name, timestamp))
 
@@ -1352,7 +1474,7 @@ def _saved_posts_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame
                 url,
                 username,
                 hashtags,
-                eh.epoch_to_iso(item.get("timestamp", ""), errors=errors),
+                eh.epoch_to_datetime_string(item.get("timestamp", ""), errors=errors),
             ))
         out = pd.DataFrame(datapoints, columns=["Caption", "URL", "Username", "Hashtags", "Timestamp"])  # pyright: ignore
         out = _sort_by_date(out, "Timestamp")
@@ -1403,7 +1525,7 @@ def _saved_posts_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame
 
             # Timestamp
             ts = section.xpath(".//div[contains(@class, '_a6-o')]")
-            timestamp = ts[0].text.strip() if ts and ts[0].text else ""
+            timestamp = _html_timestamp(ts[0].text.strip() if ts and ts[0].text else "", errors)
 
             datapoints.append((caption, url, username, hashtags, timestamp))
 
@@ -1516,7 +1638,7 @@ def _word_or_phrase_searches_json(reader: ZipArchiveReader, errors: Counter) -> 
             ])
             datapoints.append((
                 eh.fix_latin1_string(str(search.get("value", ""))),
-                eh.epoch_to_iso(time.get("timestamp", ""), errors=errors),
+                eh.epoch_to_datetime_string(time.get("timestamp", ""), errors=errors),
             ))
 
         out = pd.DataFrame(datapoints, columns=["Search term", "Date"])  # pyright: ignore
@@ -1553,7 +1675,7 @@ def _word_or_phrase_searches_html(reader: ZipArchiveReader, errors: Counter) -> 
                 elif label == "Time":
                     sibling = td.getnext()
                     if sibling is not None and sibling.text:
-                        timestamp = sibling.text.strip()
+                        timestamp = _html_timestamp(sibling.text.strip(), errors)
 
             datapoints.append((search_term, timestamp))
 
@@ -1652,7 +1774,7 @@ def _stories_published_json(reader: ZipArchiveReader, errors: Counter) -> pd.Dat
             datapoints.append((
                 title,
                 ext,
-                eh.epoch_to_iso(item.get("creation_timestamp", ""), errors=errors),
+                eh.epoch_to_datetime_string(item.get("creation_timestamp", ""), errors=errors),
             ))
 
         out = pd.DataFrame(datapoints, columns=["Text", "Media type", "Date"])  # pyright: ignore
@@ -1690,7 +1812,7 @@ def _stories_published_html(reader: ZipArchiveReader, errors: Counter) -> pd.Dat
 
             # Timestamp
             ts = section.xpath(".//div[contains(@class, '_a6-o')]")
-            timestamp = ts[0].text.strip() if ts and ts[0].text else ""
+            timestamp = _html_timestamp(ts[0].text.strip() if ts and ts[0].text else "", errors)
 
             datapoints.append((title, ext, timestamp))
 
@@ -1935,7 +2057,7 @@ def _ads_viewed_json(
                 owner_username or owner_name,
                 owner_name,
                 url,
-                eh.epoch_to_iso(item.get("timestamp", ""), errors=errors),
+                eh.epoch_to_datetime_string(item.get("timestamp", ""), errors=errors),
             ))
 
         out = pd.DataFrame(datapoints, columns=["Account name", "Name", "URL", "Date"])  # pyright: ignore
@@ -1966,7 +2088,7 @@ def _ads_viewed_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
             url = url_a[0].get("href", "") if url_a else ""
 
             ts = section.xpath(".//div[contains(@class, '_a6-o')]")
-            timestamp = ts[0].text.strip() if ts and ts[0].text else ""
+            timestamp = _html_timestamp(ts[0].text.strip() if ts and ts[0].text else "", errors)
 
             datapoints.append((username or name, name, url, timestamp))
 
@@ -2049,7 +2171,7 @@ def profile_searches_to_df(
         for item in items:
             d = eh.dict_denester(item)
             datapoints.append((
-                eh.epoch_to_iso(eh.find_item(d, "timestamp"), errors=errors),
+                eh.epoch_to_datetime_string(eh.find_item(d, "timestamp"), errors=errors),
                 eh.fix_latin1_string(eh.find_item(d, "title") or eh.find_item(d, "value")),
             ))
         out = pd.DataFrame(datapoints, columns=["Timestamp", "Name"])  # pyright: ignore
@@ -2139,7 +2261,7 @@ def threads_viewed_to_df(
                 datapoints.append((
                     eh.fix_latin1_string(str(author.get("value", ""))),
                     url.get("href", ""),
-                    eh.epoch_to_iso(time.get("timestamp", ""), errors=errors),
+                    eh.epoch_to_datetime_string(time.get("timestamp", ""), errors=errors),
                 ))
         else:
             for item in data:  # pyright: ignore
@@ -2147,7 +2269,7 @@ def threads_viewed_to_df(
                 datapoints.append((
                     owner_username or owner_name,
                     url,
-                    eh.epoch_to_iso(item.get("timestamp", ""), errors=errors),
+                    eh.epoch_to_datetime_string(item.get("timestamp", ""), errors=errors),
                 ))
 
         out = pd.DataFrame(datapoints, columns=["Author", "URL", "Date"])  # pyright: ignore
@@ -2249,7 +2371,7 @@ def ads_clicked_to_df(
                 action,
                 title,
                 url,
-                eh.epoch_to_iso(item.get("timestamp", ""), errors=errors),
+                eh.epoch_to_datetime_string(item.get("timestamp", ""), errors=errors),
             ))
 
         out = pd.DataFrame(datapoints, columns=["Action", "Title", "URL", "Timestamp"])  # pyright: ignore
@@ -2353,7 +2475,7 @@ def _posts_published_json(
                 dd = eh.dict_denester(item)
                 datapoints.append((
                     eh.fix_latin1_string(eh.find_item(dd, "title")),
-                    eh.epoch_to_iso(eh.find_item(dd, "creation_timestamp"), errors=errors),
+                    eh.epoch_to_datetime_string(eh.find_item(dd, "creation_timestamp"), errors=errors),
                 ))
 
         out = pd.DataFrame(datapoints, columns=["Title", "Timestamp"])  # pyright: ignore
@@ -2385,7 +2507,7 @@ def _posts_published_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataF
                 title = h2[0].text.strip() if h2 and h2[0].text else ""
 
                 ts = section.xpath(".//div[contains(@class, '_a6-o')]")
-                timestamp = ts[0].text.strip() if ts and ts[0].text else ""
+                timestamp = _html_timestamp(ts[0].text.strip() if ts and ts[0].text else "", errors)
 
                 datapoints.append((title, timestamp))
 
@@ -2611,7 +2733,7 @@ def _subscription_for_no_ads_html(reader: ZipArchiveReader, errors: Counter) -> 
 #             datapoints.append((
 #                 eh.fix_latin1_string(eh.find_item(d, "value") or eh.find_item(d, "title")),
 #                 eh.find_item(d, "href"),
-#                 eh.epoch_to_iso(eh.find_item(d, "timestamp"), errors=errors),
+#                 eh.epoch_to_datetime_string(eh.find_item(d, "timestamp"), errors=errors),
 #             ))
 #         out = pd.DataFrame(datapoints, columns=["Account", "URL", "Date"])  # pyright: ignore
 #         out = _sort_by_date(out, "Date")
