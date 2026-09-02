@@ -5,9 +5,10 @@ Held extractors are not in ``EXTRACTOR_REGISTRY`` and have no entry in the
 committed config, so nothing but these tests (and the ``HELD_EXTRACTORS`` pins
 in ``test_extractor_integration_facebook.py``) exercises them. Synthetic inputs
 cover both interaction layouts Facebook writes: the grouped
-``recently_viewed`` file every local export uses, and the split
-``content_that_has_been_shown_to_you_in_your_feed`` file whose shape is
-assumed from the spreadsheet (no local export attests it). The off-Meta
+``recently_viewed`` file of exports up to June 2026, and the split layout of
+the September 2026 device exports — the feed file (one record holding Posts /
+Videos / Links lists), ``ads`` and ``shows_you_have_watched`` — with the
+synthetic HTML modelled on those pages' markup. The off-Meta
 activity table is covered in both of its JSON shapes (the 2025
 ``off_facebook_activity_v2`` object and the 2026 list of records) and in its
 HTML form: an index page plus one page per business, read one at a time.
@@ -55,8 +56,12 @@ def _table_config(fn) -> dict:
 
 _GROUPED_JSON = "export/logged_information/interactions/recently_viewed.json"
 _GROUPED_HTML = "export/logged_information/interactions/recently_viewed.html"
-_SPLIT_JSON = "export/logged_information/interactions/content_that_has_been_shown_to_you_in_your_feed.json"
-_SPLIT_HTML = "export/logged_information/interactions/content_that_has_been_shown_to_you_in_your_feed.html"
+_FEED_JSON = "export/logged_information/interactions/content_that_has_been_shown_to_you_in_your_feed.json"
+_FEED_HTML = "export/logged_information/interactions/content_that_has_been_shown_to_you_in_your_feed.html"
+_ADS_JSON = "export/logged_information/interactions/ads.json"
+_ADS_HTML = "export/logged_information/interactions/ads.html"
+_SHOWS_JSON = "export/logged_information/interactions/shows_you_have_watched.json"
+_SHOWS_HTML = "export/logged_information/interactions/shows_you_have_watched.html"
 
 _FEED = "Posts that have been shown to you in your Feed"
 
@@ -196,84 +201,255 @@ class TestContentShownGroupedHtml:
 
 
 # ---------------------------------------------------------------------------
-# Content shown to you — split layout (content_that_has_been_shown_to_you_in_your_feed)
+# Content shown to you — split layout (September 2026: the feed file, ads,
+# shows_you_have_watched)
 # ---------------------------------------------------------------------------
 
-_SPLIT_RECORDS = json.dumps([
-    {
-        "timestamp": _T4,
-        "label_values": [
-            {"label": "Name", "value": "A page's post"},
-            {"label": "Link", "href": "https://www.facebook.com/p/9"},
-        ],
-        "fbid": "9",
-        "media": [],
-        "title": "Post shown to you",
-    },
-    {
-        "timestamp": _T1,
-        "label_values": [{"label": "Link", "href": "https://www.facebook.com/p/8"}],
-        "fbid": "8",
-        "media": [],
-        "title": "Untitled post shown to you",
-    },
-])
 
-_SPLIT_ROWS = [
-    (_FEED, "A page's post", "https://www.facebook.com/p/9", _D4),
-    (_FEED, "Untitled post shown to you", "https://www.facebook.com/p/8", _D1),
+def _vec_item(*entries: dict) -> dict:
+    return {"dict": list(entries)}
+
+
+# The feed file: one bare record whose label_values are the Posts / Videos /
+# Links lists, each a vec of Event · URL · Time dicts (the list label is the
+# category). The second post has no href on its URL entry, only a value.
+_FEED_RECORD = json.dumps({
+    "media": [],
+    "label_values": [
+        {"label": "Posts", "vec": [
+            _vec_item({"label": "Event", "value": _MOJIBAKE},
+                      {"label": "URL", "value": "https://www.facebook.com/p/2", "href": "https://www.facebook.com/p/2"},
+                      {"label": "Time", "timestamp_value": _T2}),
+            _vec_item({"label": "Event", "value": "Older post"},
+                      {"label": "URL", "value": "https://www.facebook.com/p/1"},
+                      {"label": "Time", "timestamp_value": _T1}),
+        ]},
+        {"label": "Videos", "vec": [
+            _vec_item({"label": "Event", "value": "A video"},
+                      {"label": "URL", "value": "https://www.facebook.com/v/3", "href": "https://www.facebook.com/v/3"},
+                      {"label": "Time", "timestamp_value": _T3}),
+        ]},
+        {"label": "Links", "vec": []},
+    ],
+    "fbid": "1",
+})
+
+_FEED_ROWS = [
+    ("Videos", "A video", "https://www.facebook.com/v/3", _D3),
+    ("Posts", "Café", "https://www.facebook.com/p/2", _D2),
+    ("Posts", "Older post", "https://www.facebook.com/p/1", _D1),
 ]
 
-_SPLIT_PAGE = """<html><body><main>
-<section class="_a6-g"><div class="_a6-p"><table>
-  <tr><td class="_a6_q">Name</td><td class="_a6_r">A page's post</td></tr>
-  <tr><td class="_a6_q">Link</td><td class="_a6_r"><a href="https://www.facebook.com/p/9">https://www.facebook.com/p/9</a></td></tr>
-</table></div><footer class="_a6-o"><div class="_a72d">Nov 17, 2023 10:13:20 pm</div></footer></section>
-<section class="_a6-g"><div class="_a6-p"><table>
-  <tr><td class="_a6_q">Link</td><td class="_a6_r"><a href="https://www.facebook.com/p/8">https://www.facebook.com/p/8</a></td></tr>
-</table></div><footer class="_a6-o"><div class="_a72d">Nov 14, 2023 10:13:20 pm</div></footer></section>
-</main></body></html>"""
+# ads: a list of records with an Ad (value + href) and a Time entry, no
+# record-level timestamp.
+_ADS_RECORDS = json.dumps([
+    {"media": [], "label_values": [
+        {"label": "Ad", "value": "An advertiser", "href": "https://www.facebook.com/ads/1"},
+        {"label": "Time", "timestamp_value": _T1},
+    ], "fbid": "11"},
+    {"media": [], "label_values": [
+        {"label": "Ad", "value": _MOJIBAKE, "href": "https://www.facebook.com/ads/2"},
+        {"label": "Time", "timestamp_value": _T4},
+    ], "fbid": "12"},
+])
 
-_SPLIT_HTML_ROWS = [
-    (_FEED, "A page's post", "https://www.facebook.com/p/9", "2023-11-17 22:13:20"),
-    (_FEED, "", "https://www.facebook.com/p/8", "2023-11-14 22:13:20"),
+_ADS_ROWS = [
+    ("Ads", "Café", "https://www.facebook.com/ads/2", _D4),
+    ("Ads", "An advertiser", "https://www.facebook.com/ads/1", _D1),
+]
+
+# shows_you_have_watched: records with Title and URL (href) and a record-level timestamp.
+_SHOWS_RECORDS = json.dumps([
+    {"timestamp": _T3, "media": [], "label_values": [
+        {"label": "Title", "value": "A show"},
+        {"label": "URL", "value": "https://www.facebook.com/s/1", "href": "https://www.facebook.com/s/1"},
+    ], "fbid": "21"},
+    {"timestamp": _T2, "media": [], "label_values": [
+        {"label": "Title", "value": "Another show"},
+        {"label": "URL", "value": "https://www.facebook.com/s/2", "href": "https://www.facebook.com/s/2"},
+    ], "fbid": "22"},
+])
+
+_SHOWS = "Videos you have watched"
+
+_SHOWS_ROWS = [
+    (_SHOWS, "A show", "https://www.facebook.com/s/1", _D3),
+    (_SHOWS, "Another show", "https://www.facebook.com/s/2", _D2),
+]
+
+
+def _value_row(label: str, value: str) -> str:
+    return f'<tr><td class="_a6_q">{label}</td><td class="_2piu _a6_r">{value}</td></tr>'
+
+
+def _link_row(label: str, href: str, text: str) -> str:
+    """A link row as the September pages write it: the label cell spans both
+    columns and holds the anchor; there is no value cell."""
+    return f'<tr><td class="_a6_q" colspan="2">{label}<div><a href="{href}">{text}</a></div></td></tr>'
+
+
+def _leaf_table(rows: str) -> str:
+    return (
+        '<section class="_3-95 _a6-g"><div class="_2pi8 _2pic _a6-p">'
+        '<section class="_3-95 _a6-g"><div class="_2pi8 _2pic _a6-p">'
+        f'<table>{rows}</table></div></section></div>'
+    )
+
+
+def _record_section(rows: str, footer_date: str) -> str:
+    """One record as ads.html / shows_you_have_watched.html write it: a top-level
+    section holding a leaf table and a footer."""
+    return _leaf_table(rows) + f'<footer class="_3-94 _a6-o"><div class="_a72d">{footer_date}</div></footer></section>'
+
+
+def _feed_leaf(event: str, href: str, when: str) -> str:
+    """One feed item: a nested section pair with Event / URL / Time rows and no footer."""
+    return f'<div>{_leaf_table(_value_row("Event", event) + _link_row("URL", href, href) + _value_row("Time", when))}</section></div>'
+
+
+def _feed_list(name: str, leaves: str) -> str:
+    """A Posts / Videos list: a colspan label cell of the enclosing table whose
+    text is the list name, holding the item sections."""
+    return f'<tr><td class="_a6_q" colspan="2">{name}<div><div>{leaves}</div></div></td></tr>'
+
+
+_MAIN_OPEN = '<html><body><div class="_li"><main class="_a706">'
+_MAIN_CLOSE = '</main></div></body></html>'
+
+_FEED_PAGE = (
+    _MAIN_OPEN
+    + _leaf_table(
+        _feed_list("Posts", _feed_leaf("Older post", "https://www.facebook.com/p/1", "Nov 14, 2023 10:13:20 pm")
+                   + _feed_leaf("Newer post", "https://www.facebook.com/p/2", "Nov 15, 2023 10:13:20 pm"))
+        + _feed_list("Videos", _feed_leaf("A video", "https://www.facebook.com/v/3", "Nov 16, 2023 10:13:20 pm"))
+    )
+    + '<footer class="_3-94 _a6-o"><div class="_a72d"></div></footer></section>'
+    + _MAIN_CLOSE
+)
+
+_FEED_HTML_ROWS = [
+    ("Videos", "A video", "https://www.facebook.com/v/3", "2023-11-16 22:13:20"),
+    ("Posts", "Newer post", "https://www.facebook.com/p/2", "2023-11-15 22:13:20"),
+    ("Posts", "Older post", "https://www.facebook.com/p/1", "2023-11-14 22:13:20"),
+]
+
+# ads.html: the Ad row is a link row (anchor text = advertiser); the footer's
+# _a72d is empty, so the time comes from the Time cell.
+_ADS_PAGE = (
+    _MAIN_OPEN
+    + _record_section(_link_row("Ad", "https://www.facebook.com/ads/1", "An advertiser") + _value_row("Time", "Nov 14, 2023 10:13:20 pm"), "")
+    + _record_section(_link_row("Ad", "https://www.facebook.com/ads/2", "Another advertiser") + _value_row("Time", "Nov 17, 2023 10:13:20 pm"), "")
+    + _MAIN_CLOSE
+)
+
+_ADS_HTML_ROWS = [
+    ("Ads", "Another advertiser", "https://www.facebook.com/ads/2", "2023-11-17 22:13:20"),
+    ("Ads", "An advertiser", "https://www.facebook.com/ads/1", "2023-11-14 22:13:20"),
+]
+
+# shows_you_have_watched.html: Title value row, URL link row, dated footer.
+_SHOWS_PAGE = (
+    _MAIN_OPEN
+    + _record_section(_value_row("Title", "A show") + _link_row("URL", "https://www.facebook.com/s/1", "https://www.facebook.com/s/1"), "Nov 16, 2023 10:13:20 pm")
+    + _record_section(_value_row("Title", "Another show") + _link_row("URL", "https://www.facebook.com/s/2", "https://www.facebook.com/s/2"), "Nov 15, 2023 10:13:20 pm")
+    + _MAIN_CLOSE
+)
+
+_SHOWS_HTML_ROWS = [
+    (_SHOWS, "A show", "https://www.facebook.com/s/1", "2023-11-16 22:13:20"),
+    (_SHOWS, "Another show", "https://www.facebook.com/s/2", "2023-11-15 22:13:20"),
 ]
 
 
 class TestContentShownSplitJson:
-    def test_records_become_rows_under_the_feed_category(self):
+    def test_feed_lists_become_rows_under_the_list_label(self):
         errors: Counter = Counter()
-        reader = _reader((_SPLIT_JSON, _SPLIT_RECORDS), errors=errors)
+        reader = _reader((_FEED_JSON, _FEED_RECORD), errors=errors)
         df = facebook.content_shown_to_you_to_df(reader, errors)
         assert not errors
-        assert list(df.itertuples(index=False, name=None)) == _SPLIT_ROWS
+        assert list(df.itertuples(index=False, name=None)) == _FEED_ROWS
+
+    def test_ads_become_rows_dated_from_their_time_entry(self):
+        errors: Counter = Counter()
+        reader = _reader((_ADS_JSON, _ADS_RECORDS), errors=errors)
+        df = facebook.content_shown_to_you_to_df(reader, errors)
+        assert not errors
+        assert list(df.itertuples(index=False, name=None)) == _ADS_ROWS
+
+    def test_shows_watched_become_rows_dated_from_the_record(self):
+        errors: Counter = Counter()
+        reader = _reader((_SHOWS_JSON, _SHOWS_RECORDS), errors=errors)
+        df = facebook.content_shown_to_you_to_df(reader, errors)
+        assert not errors
+        assert list(df.itertuples(index=False, name=None)) == _SHOWS_ROWS
+
+    def test_the_three_split_files_are_concatenated_newest_first(self):
+        errors: Counter = Counter()
+        reader = _reader((_FEED_JSON, _FEED_RECORD), (_ADS_JSON, _ADS_RECORDS), (_SHOWS_JSON, _SHOWS_RECORDS), errors=errors)
+        df = facebook.content_shown_to_you_to_df(reader, errors)
+        assert not errors
+        assert len(df) == len(_FEED_ROWS) + len(_ADS_ROWS) + len(_SHOWS_ROWS)
+        assert sorted(df["Date"].tolist(), reverse=True) == df["Date"].tolist()
+        assert set(df["Category"]) == {"Posts", "Videos", "Ads", _SHOWS}
+
+    def test_a_bare_single_record_is_read_like_a_one_element_list(self):
+        """Facebook writes an object, not a one-element list, when a file has
+        exactly one record."""
+        errors: Counter = Counter()
+        reader = _reader((_ADS_JSON, json.dumps(json.loads(_ADS_RECORDS)[0])), errors=errors)
+        df = facebook.content_shown_to_you_to_df(reader, errors)
+        assert not errors
+        assert list(df.itertuples(index=False, name=None)) == [_ADS_ROWS[1]]
 
     def test_grouped_and_split_are_concatenated_when_both_present(self):
         errors: Counter = Counter()
-        reader = _reader((_GROUPED_JSON, _grouped_json()), (_SPLIT_JSON, _SPLIT_RECORDS), errors=errors)
+        reader = _reader((_GROUPED_JSON, _grouped_json()), (_FEED_JSON, _FEED_RECORD), errors=errors)
         df = facebook.content_shown_to_you_to_df(reader, errors)
         assert not errors
-        assert len(df) == len(_GROUPED_ROWS) + len(_SPLIT_ROWS)
+        assert len(df) == len(_GROUPED_ROWS) + len(_FEED_ROWS)
         assert sorted(df["Date"].tolist(), reverse=True) == df["Date"].tolist()
-        assert set(df["Category"]) == {row[0] for row in _GROUPED_ROWS}
+        assert set(df["Category"]) == {row[0] for row in _GROUPED_ROWS} | {"Posts", "Videos"}
 
 
 class TestContentShownSplitHtml:
-    def test_sections_become_rows_under_the_feed_category(self):
+    def test_feed_items_take_the_category_of_their_enclosing_list_cell(self):
         errors: Counter = Counter()
-        reader = _reader((_SPLIT_HTML, _SPLIT_PAGE), errors=errors)
+        reader = _reader((_FEED_HTML, _FEED_PAGE), errors=errors)
         df = facebook.content_shown_to_you_to_df(reader, errors, validation=_HTML_VALIDATION)
         assert not errors
-        assert list(df.itertuples(index=False, name=None)) == _SPLIT_HTML_ROWS
+        assert list(df.itertuples(index=False, name=None)) == _FEED_HTML_ROWS
+
+    def test_ads_are_dated_from_the_time_cell_when_the_footer_is_empty(self):
+        errors: Counter = Counter()
+        reader = _reader((_ADS_HTML, _ADS_PAGE), errors=errors)
+        df = facebook.content_shown_to_you_to_df(reader, errors, validation=_HTML_VALIDATION)
+        assert not errors
+        assert list(df.itertuples(index=False, name=None)) == _ADS_HTML_ROWS
+
+    def test_shows_watched_are_dated_from_the_footer(self):
+        errors: Counter = Counter()
+        reader = _reader((_SHOWS_HTML, _SHOWS_PAGE), errors=errors)
+        df = facebook.content_shown_to_you_to_df(reader, errors, validation=_HTML_VALIDATION)
+        assert not errors
+        assert list(df.itertuples(index=False, name=None)) == _SHOWS_HTML_ROWS
 
     def test_grouped_and_split_are_concatenated_when_both_present(self):
         errors: Counter = Counter()
-        reader = _reader((_GROUPED_HTML, _GROUPED_PAGE), (_SPLIT_HTML, _SPLIT_PAGE), errors=errors)
+        reader = _reader(
+            (_GROUPED_HTML, _GROUPED_PAGE), (_FEED_HTML, _FEED_PAGE), (_ADS_HTML, _ADS_PAGE), (_SHOWS_HTML, _SHOWS_PAGE),
+            errors=errors,
+        )
         df = facebook.content_shown_to_you_to_df(reader, errors, validation=_HTML_VALIDATION)
         assert not errors
-        assert len(df) == len(_GROUPED_HTML_ROWS) + len(_SPLIT_HTML_ROWS)
+        assert len(df) == len(_GROUPED_HTML_ROWS) + len(_FEED_HTML_ROWS) + len(_ADS_HTML_ROWS) + len(_SHOWS_HTML_ROWS)
         assert sorted(df["Date"].tolist(), reverse=True) == df["Date"].tolist()
 
+    def test_absence_of_every_split_file_is_an_empty_frame_and_no_error(self):
+        errors: Counter = Counter()
+        reader = _reader(("export/logged_information/interactions/items_viewed.html", "<html/>"), errors=errors)
+        df = facebook.content_shown_to_you_to_df(reader, errors, validation=_HTML_VALIDATION)
+        assert df.empty
+        assert not errors
 
 # ---------------------------------------------------------------------------
 # Table contract: columns match the docstring, names are anonymized

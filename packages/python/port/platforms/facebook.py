@@ -142,6 +142,49 @@ def _section_timestamp(section, errors: Counter) -> str:
     return eh.meta_html_timestamp_to_datetime_string(text, errors=errors)
 
 
+def _records(data) -> list:
+    """The label/value records of a JSON file, as a list.
+
+    Facebook writes a list of ``{timestamp?, media, label_values, fbid}``
+    records — except that a file with exactly one record holds that record
+    bare, as an object (``link_history`` in the September 2026 export,
+    ``groups_you've_visited`` in the 2025 device export). Anything else is
+    not a record file and yields nothing.
+    """
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict) and "label_values" in data:
+        return [data]
+    return []
+
+
+def _leaf_fields(node) -> tuple[dict[str, str], dict[str, str]]:
+    """Label → text and label → href of the label/value rows under *node*,
+    the first occurrence of a label winning.
+
+    A row is a ``_a6_q`` label cell beside a ``_a6_r`` value cell, or — for a
+    link — a colspan label cell that holds the anchor itself (the anchor's
+    text is the value, its ``href`` the link). A colspan cell that holds
+    neither (a list of nested records) is not a field.
+    """
+    values: dict[str, str] = {}
+    hrefs: dict[str, str] = {}
+    for row in eh.xpath_nodes(node, ".//tr[td[contains(@class, '_a6_q')]]"):
+        label_td = eh.xpath_nodes(row, "td[contains(@class, '_a6_q')]")[0]
+        label = label_td.text.strip() if label_td.text else ""
+        if not label or label in values:
+            continue
+        value_td = eh.xpath_nodes(row, "td[contains(@class, '_a6_r')]")
+        if value_td:
+            values[label] = value_td[0].text.strip() if value_td[0].text else ""
+            continue
+        anchors = eh.xpath_nodes(label_td, ".//a[@href]")
+        if anchors:
+            values[label] = anchors[0].text.strip() if anchors[0].text else ""
+            hrefs[label] = str(anchors[0].get("href", ""))
+    return values, hrefs
+
+
 _DATE_COLUMNS = ("Timestamp", "Date", "Created")
 
 
@@ -998,33 +1041,44 @@ def _ads_interests_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFra
 
 _CONTENT_SHOWN_COLUMNS = ["Category", "Name", "Link", "Date"]
 
-#: The split layout writes the feed section as its own file, without the
-#: section name the grouped file carries; every export seen so far names the
-#: section this way (and the file name says the same).
-_CONTENT_SHOWN_FEED_CATEGORY = "Posts that have been shown to you in your Feed"
+#: Categories of the split files that carry no list label of their own; worded
+#: as the grouped layout named the matching sections.
+_ADS_CATEGORY = "Ads"
+_SHOWS_WATCHED_CATEGORY = "Videos you have watched"
 
 _RECENTLY_VIEWED_JSON = "logged_information/interactions/recently_viewed.json"
 _RECENTLY_VIEWED_HTML = "logged_information/interactions/recently_viewed.html"
-_CONTENT_SHOWN_SPLIT_JSON = "logged_information/interactions/content_that_has_been_shown_to_you_in_your_feed.json"
-_CONTENT_SHOWN_SPLIT_HTML = "logged_information/interactions/content_that_has_been_shown_to_you_in_your_feed.html"
+_CONTENT_SHOWN_FEED_JSON = "logged_information/interactions/content_that_has_been_shown_to_you_in_your_feed.json"
+_CONTENT_SHOWN_FEED_HTML = "logged_information/interactions/content_that_has_been_shown_to_you_in_your_feed.html"
+_ADS_JSON = "logged_information/interactions/ads.json"
+_ADS_HTML = "logged_information/interactions/ads.html"
+_SHOWS_WATCHED_JSON = "logged_information/interactions/shows_you_have_watched.json"
+_SHOWS_WATCHED_HTML = "logged_information/interactions/shows_you_have_watched.html"
 
 
 def content_shown_to_you_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
     """Extract the content Facebook showed the participant (the exposure log).
 
-    Facebook writes this log in one of two layouts. Every local export uses
-    the *grouped* one: ``recently_viewed`` holds sections (feed posts, videos,
-    ads, Marketplace, web pages opened off Facebook), each with ``entries``
-    or with ``children`` that hold entries. A record is an entry with a
-    ``timestamp``; the section's ``name`` becomes the row's category, so
-    Meta's renamings between exports pass through unchanged. Marketplace
+    Facebook writes this log in one of two layouts. Exports up to June 2026
+    use the *grouped* one: ``recently_viewed`` holds sections (feed posts,
+    videos, ads, Marketplace, web pages opened off Facebook), each with
+    ``entries`` or with ``children`` that hold entries. A record is an entry
+    with a ``timestamp``; the section's ``name`` becomes the row's category,
+    so Meta's renamings between exports pass through unchanged. Marketplace
     activity counters (entries that carry only a date ``value``) are not
     rows. Marketplace records that do carry a timestamp (e.g. "Marketplace
     Items") are included under their own category for now — a researcher
-    decision is pending. The *split* layout (not attested locally; shape
-    assumed from the extractor spreadsheet) writes the feed section as its
-    own file of label/value records; both files are read and concatenated
-    when both are present.
+    decision is pending.
+
+    From September 2026 the log is *split* over files of label/value records
+    in ``logged_information/interactions``: the feed file (one record whose
+    Posts / Videos / Links lists hold Event · URL · Time items; the list
+    label is the category), ``ads`` (Ad · Time records, category "Ads") and
+    ``shows_you_have_watched`` (Title · URL records with a record timestamp,
+    category "Videos you have watched"). Every file present is read and the
+    rows concatenated. ``shows_that_you_have_not_finished_watching`` and
+    ``time_spent_watching_facebook_shows`` are candidates for this table
+    awaiting the researcher decision; ``items_viewed`` stays its own table.
 
     Parameters
     ----------
@@ -1045,10 +1099,10 @@ def content_shown_to_you_to_df(reader: ZipArchiveReader, errors: Counter, valida
     Table documentation::
 
         {
-          "summary": "Each row is an item Facebook showed the participant or the participant watched in roughly the last 90 days: posts shown in the feed, videos watched, ads shown, Marketplace items viewed, web pages opened off Facebook. Read from the grouped recently_viewed file (all exports seen so far) and from the split content_that_has_been_shown_to_you_in_your_feed file when an export uses that layout. Marketplace activity counters that carry only a date are not rows.",
-          "source_file": "logged_information/interactions/recently_viewed.json (grouped) or content_that_has_been_shown_to_you_in_your_feed.json (split); .html twins",
+          "summary": "Each row is an item Facebook showed the participant or the participant watched in roughly the last 90 days: posts shown in the feed, videos watched, ads shown, Marketplace items viewed, web pages opened off Facebook. Read from the grouped recently_viewed file (exports up to June 2026) and, from September 2026, from the split content_that_has_been_shown_to_you_in_your_feed (Posts / Videos / Links lists), ads and shows_you_have_watched files; every file present contributes rows. Marketplace activity counters that carry only a date are not rows.",
+          "source_file": "logged_information/interactions/recently_viewed.json (grouped, up to June 2026); content_that_has_been_shown_to_you_in_your_feed.json + ads.json + shows_you_have_watched.json (split, from September 2026); .html twins",
           "columns": {
-            "Category": "The export's section name for the item (e.g. Posts that have been shown to you in your Feed, Ads, Marketplace Items).",
+            "Category": "The export's section or list name for the item (e.g. Posts that have been shown to you in your Feed, Posts, Videos, Ads, Videos you have watched, Marketplace Items).",
             "Name": "Name or title of the item as the export gives it.",
             "Link": "URL of the item (the share URL for web pages opened off Facebook).",
             "Date": "ISO 8601 timestamp of when the item was shown or watched."
@@ -1084,18 +1138,18 @@ def content_shown_to_you_to_df(reader: ZipArchiveReader, errors: Counter, valida
 def _content_shown_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
     datapoints: list[tuple[str, str, str, str]] = []
 
-    grouped = reader.json(_RECENTLY_VIEWED_JSON)
-    if grouped.found:
+    sources: list[tuple[str, Callable[..., list[tuple[str, str, str, str]]]]] = [
+        (_RECENTLY_VIEWED_JSON, _content_shown_grouped_json),
+        (_CONTENT_SHOWN_FEED_JSON, _content_shown_feed_json),
+        (_ADS_JSON, _content_shown_ads_json),
+        (_SHOWS_WATCHED_JSON, _content_shown_shows_json),
+    ]
+    for member, read in sources:
+        result = reader.json(member)
+        if not result.found:
+            continue
         try:
-            datapoints.extend(_content_shown_grouped_json(grouped.data, errors))
-        except Exception as e:
-            logger.error("Exception caught: %s", e)
-            errors[type(e).__name__] += 1
-
-    split = reader.json(_CONTENT_SHOWN_SPLIT_JSON)
-    if split.found:
-        try:
-            datapoints.extend(_content_shown_split_json(split.data, errors))
+            datapoints.extend(read(result.data, errors))
         except Exception as e:
             logger.error("Exception caught: %s", e)
             errors[type(e).__name__] += 1
@@ -1126,44 +1180,74 @@ def _content_shown_grouped_json(d, errors: Counter) -> list[tuple[str, str, str,
     return rows
 
 
-def _content_shown_split_json(d, errors: Counter) -> list[tuple[str, str, str, str]]:
-    """Rows of the split file: a list of ``{timestamp, label_values:
-    [{label, value|href}], fbid, media, title}`` records (assumed shape)."""
+def _content_shown_feed_json(d, errors: Counter) -> list[tuple[str, str, str, str]]:
+    """Rows of the feed file: one record whose ``label_values`` are the lists
+    (``{label: "Posts", vec: [{dict: [{label: "Event", value}, {label: "URL",
+    value, href}, {label: "Time", timestamp_value}]}…]}``); the list label
+    is the category."""
     rows = []
-    for item in d:
-        lv_map: dict[str, str] = {}
-        link = ""
-        for lv in item.get("label_values", []):
-            label = lv.get("label", "")
-            if label and label not in lv_map and "value" in lv:
-                lv_map[label] = lv["value"]
-            if not link and lv.get("href"):
-                link = lv["href"]
-        name = lv_map.get("Name") or lv_map.get("Title") or item.get("title", "")
-        rows.append((
-            _CONTENT_SHOWN_FEED_CATEGORY,
-            eh.fix_latin1_string(name),
-            link,
-            eh.epoch_to_datetime_string(item.get("timestamp", ""), errors=errors),
-        ))
+    for record in _records(d):
+        for lv in record.get("label_values", []):
+            category = eh.fix_latin1_string(lv.get("label", ""))
+            for item in lv.get("vec", []):
+                name = link = date = ""
+                for entry in item.get("dict", []):
+                    label = entry.get("label")
+                    if label == "Event":
+                        name = entry.get("value", "")
+                    elif label == "URL":
+                        link = entry.get("href") or entry.get("value", "")
+                    elif label == "Time":
+                        date = eh.epoch_to_datetime_string(entry.get("timestamp_value", ""), errors=errors)
+                rows.append((category, eh.fix_latin1_string(name), link, date))
     return rows
+
+
+def _content_shown_records_json(d, category: str, name_label: str, errors: Counter) -> list[tuple[str, str, str, str]]:
+    """Rows of a split file of ``{timestamp?, label_values: [{label, value,
+    href?} | {label: "Time", timestamp_value}]}`` records: the name is the
+    *name_label* value (its ``href``, if any, the link), a ``URL`` entry the
+    link, a ``Time`` entry the date, else the record's own ``timestamp``."""
+    rows = []
+    for record in _records(d):
+        name = link = ""
+        date = eh.epoch_to_datetime_string(record.get("timestamp", ""), errors=errors)
+        for lv in record.get("label_values", []):
+            label = lv.get("label")
+            if label == name_label:
+                name = lv.get("value", "")
+                link = lv.get("href") or link
+            elif label == "URL":
+                link = lv.get("href") or lv.get("value", "")
+            elif label == "Time":
+                date = eh.epoch_to_datetime_string(lv.get("timestamp_value", ""), errors=errors)
+        rows.append((category, eh.fix_latin1_string(name), link, date))
+    return rows
+
+
+def _content_shown_ads_json(d, errors: Counter) -> list[tuple[str, str, str, str]]:
+    return _content_shown_records_json(d, _ADS_CATEGORY, "Ad", errors)
+
+
+def _content_shown_shows_json(d, errors: Counter) -> list[tuple[str, str, str, str]]:
+    return _content_shown_records_json(d, _SHOWS_WATCHED_CATEGORY, "Title", errors)
 
 
 def _content_shown_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
     datapoints: list[tuple[str, str, str, str]] = []
 
-    grouped = reader.raw(_RECENTLY_VIEWED_HTML)
-    if grouped.found:
+    sources: list[tuple[str, Callable[..., list[tuple[str, str, str, str]]]]] = [
+        (_RECENTLY_VIEWED_HTML, _content_shown_grouped_html),
+        (_CONTENT_SHOWN_FEED_HTML, _content_shown_feed_html),
+        (_ADS_HTML, _content_shown_ads_html),
+        (_SHOWS_WATCHED_HTML, _content_shown_shows_html),
+    ]
+    for member, read in sources:
+        result = reader.raw(member)
+        if not result.found:
+            continue
         try:
-            datapoints.extend(_content_shown_grouped_html(etree.HTML(grouped.data.read()), errors))
-        except Exception as e:
-            logger.error("Exception caught: %s", e)
-            errors[type(e).__name__] += 1
-
-    split = reader.raw(_CONTENT_SHOWN_SPLIT_HTML)
-    if split.found:
-        try:
-            datapoints.extend(_content_shown_split_html(etree.HTML(split.data.read()), errors))
+            datapoints.extend(read(etree.HTML(result.data.read()), errors))
         except Exception as e:
             logger.error("Exception caught: %s", e)
             errors[type(e).__name__] += 1
@@ -1196,29 +1280,55 @@ def _content_shown_grouped_html(tree, errors: Counter) -> list[tuple[str, str, s
     return rows
 
 
-def _content_shown_split_html(tree, errors: Counter) -> list[tuple[str, str, str, str]]:
-    """Rows of the split page (assumed shape, as ``items_viewed.html``): one
-    top-level section per record with a label/value table and a footer."""
+def _content_shown_feed_html(tree, errors: Counter) -> list[tuple[str, str, str, str]]:
+    """Rows of the feed page. Each item is a leaf ``section._a6-g`` holding an
+    Event / URL / Time table (the time a display timestamp in the cell, no
+    footer); the items of a list sit inside a colspan label cell of the
+    enclosing table whose text is the list name — the nearest such ancestor
+    cell is the category."""
     rows = []
-    sections = eh.xpath_nodes(tree, "//section[contains(@class, '_a6-g') and not(ancestor::section) and .//table]")
-    for section in sections:
-        kv_rows = eh.xpath_nodes(section, ".//tr[td[contains(@class, '_a6_q') and not(@colspan)] and td[contains(@class, '_a6_r')]]")
-        lv_map: dict[str, str] = {}
-        for row in kv_rows:
-            label_td = eh.xpath_nodes(row, "td[contains(@class, '_a6_q')]")
-            value_td = eh.xpath_nodes(row, "td[contains(@class, '_a6_r')]")
-            label = label_td[0].text.strip() if label_td and label_td[0].text else ""
-            value = value_td[0].text.strip() if value_td and value_td[0].text else ""
-            if label and label not in lv_map:
-                lv_map[label] = value
-        hrefs = eh.xpath_nodes(section, ".//td[contains(@class, '_a6_r')]//a/@href")
+    for leaf in eh.xpath_nodes(tree, "//section[contains(@class, '_a6-g') and not(.//section)]"):
+        values, hrefs = _leaf_fields(leaf)
+        if not values:
+            continue
+        cells = eh.xpath_nodes(leaf, "ancestor::td[contains(@class, '_a6_q')][1]")
+        category = cells[0].text.strip() if cells and cells[0].text else ""
         rows.append((
-            _CONTENT_SHOWN_FEED_CATEGORY,
-            lv_map.get("Name") or lv_map.get("Title") or "",
-            str(hrefs[0]) if hrefs else "",
-            _section_timestamp(section, errors),
+            category,
+            values.get("Event", ""),
+            hrefs.get("URL") or values.get("URL", ""),
+            eh.meta_html_timestamp_to_datetime_string(values.get("Time", ""), errors=errors),
         ))
     return rows
+
+
+def _content_shown_records_html(tree, category: str, name_label: str, errors: Counter) -> list[tuple[str, str, str, str]]:
+    """Rows of a split page of records: one top-level ``section._a6-g`` per
+    record with a label/value table and a footer. The name is the
+    *name_label* cell (its anchor, if it is a link row, the link), a ``URL``
+    row the link; the date is a ``Time`` cell when there is one (``ads``
+    writes an empty footer), else the footer's ``_a72d``."""
+    rows = []
+    for section in eh.xpath_nodes(tree, "//section[contains(@class, '_a6-g') and not(ancestor::section)]"):
+        values, hrefs = _leaf_fields(section)
+        if not values:
+            continue
+        date = eh.meta_html_timestamp_to_datetime_string(values.get("Time", ""), errors=errors)
+        rows.append((
+            category,
+            values.get(name_label, ""),
+            hrefs.get(name_label) or hrefs.get("URL") or values.get("URL", ""),
+            date or _section_timestamp(section, errors),
+        ))
+    return rows
+
+
+def _content_shown_ads_html(tree, errors: Counter) -> list[tuple[str, str, str, str]]:
+    return _content_shown_records_html(tree, _ADS_CATEGORY, "Ad", errors)
+
+
+def _content_shown_shows_html(tree, errors: Counter) -> list[tuple[str, str, str, str]]:
+    return _content_shown_records_html(tree, _SHOWS_WATCHED_CATEGORY, "Title", errors)
 
 
 _OFF_META_JSON = "apps_and_websites_off_of_facebook/your_activity_off_meta_technologies.json"
@@ -1338,7 +1448,7 @@ def _off_meta_records_json(d, errors: Counter) -> list[tuple[str, str, str]]:
     [{label: "Events", vec: [{dict: [{label, value|timestamp_value}]}]}]}``
     records."""
     rows = []
-    for record in d:
+    for record in _records(d):
         name = eh.fix_latin1_string(record.get("title", ""))
         for lv in record.get("label_values", []):
             if lv.get("label") != "Events":
@@ -3039,10 +3149,18 @@ def controls_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
 
 
 _PROFILE_VISITS_COLUMNS = ["Category", "Name", "Timestamp"]
-#: Category of every row of the split file, which holds profile visits only.
+#: Category of every row of the split profile_visits file, which holds profile visits only.
 _PROFILE_VISITS_SPLIT_CATEGORY = "Profile visits"
+#: Categories of the split groups-and-events file, worded as the grouped layout
+#: named the matching sections.
+_EVENTS_VISITED_CATEGORY = "Events visited"
+_GROUPS_VISITED_CATEGORY = "Groups visited"
+#: A groups-and-events record carrying either of these is an event; a group has only a Name.
+_EVENT_LABELS = frozenset({"Start time", "End time"})
 _PROFILE_VISITS_SPLIT_JSON = "logged_information/interactions/profile_visits.json"
 _PROFILE_VISITS_SPLIT_HTML = "profile_visits.html"
+_GROUPS_AND_EVENTS_JSON = "logged_information/interactions/groups_and_events_you've_visited.json"
+_GROUPS_AND_EVENTS_HTML = "logged_information/interactions/groups_and_events_you've_visited.html"
 _RECENTLY_VISITED_JSON = "logged_information/interactions/recently_visited.json"
 _RECENTLY_VISITED_HTML = "logged_information/interactions/recently_visited.html"
 
@@ -3050,16 +3168,20 @@ _RECENTLY_VISITED_HTML = "logged_information/interactions/recently_visited.html"
 def profile_visits_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
     """Extract the profiles, pages, groups and events the participant opened.
 
-    Facebook writes these visits in one of two layouts. The *split* layout
-    (not attested locally; shape assumed from the extractor spreadsheet)
-    writes profile visits as their own file of label/value records. Every
-    local export uses the *grouped* one: ``recently_visited`` holds sections
-    (Profile visits, Page visits, Events visited, Groups visited, Marketplace
-    Visits), each with ``entries``. A record is an entry with a
-    ``timestamp``; the section's ``name`` becomes the row's category, so
-    Meta's renamings between exports pass through unchanged. Marketplace
-    visit counters (entries that carry only a date ``value``) are not rows.
-    The split file is read when present, otherwise the grouped one.
+    Facebook writes these visits in one of two layouts. Exports up to June
+    2026 use the *grouped* one: ``recently_visited`` holds sections (Profile
+    visits, Page visits, Events visited, Groups visited, Marketplace Visits),
+    each with ``entries``. A record is an entry with a ``timestamp``; the
+    section's ``name`` becomes the row's category, so Meta's renamings
+    between exports pass through unchanged. Marketplace visit counters
+    (entries that carry only a date ``value``) are not rows. From September
+    2026 the *split* layout writes two files of label/value records in
+    ``logged_information/interactions``: ``profile_visits`` (Name records,
+    category "Profile visits") and ``groups_and_events_you've_visited``,
+    where a record with a Start time or End time is an event ("Events
+    visited") and one with only a Name a group ("Groups visited"). The split
+    files are read, and concatenated, when either is present; otherwise the
+    grouped one.
 
     Parameters
     ----------
@@ -3080,10 +3202,10 @@ def profile_visits_to_df(reader: ZipArchiveReader, errors: Counter, validation=N
     Table documentation::
 
         {
-          "summary": "Each row is a Facebook profile, page, group or event the participant opened in roughly the last 90 days. Read from the profile_visits file in the split layout or from the grouped recently_visited file (all exports seen so far). Marketplace visit counters that carry only a date are not rows.",
-          "source_file": "logged_information/interactions/profile_visits.json (split) or recently_visited.json (grouped); .html twins",
+          "summary": "Each row is a Facebook profile, page, group or event the participant opened in roughly the last 90 days. Read from the grouped recently_visited file (exports up to June 2026) or, from September 2026, from the split profile_visits and groups_and_events_you've_visited files (an event carries a Start time or End time, a group only a Name). Marketplace visit counters that carry only a date are not rows.",
+          "source_file": "logged_information/interactions/recently_visited.json (grouped, up to June 2026); profile_visits.json + groups_and_events_you've_visited.json (split, from September 2026); .html twins",
           "columns": {
-            "Category": "The export's section name for the visit (Profile visits, Page visits, Events visited, Groups visited); always Profile visits in the split layout.",
+            "Category": "The export's section name for the visit (Profile visits, Page visits, Events visited, Groups visited); in the split layout Profile visits for the profile_visits file and Events visited or Groups visited for the groups-and-events file.",
             "Name": "Name of the visited profile, page, group or event.",
             "Timestamp": "ISO 8601 timestamp of when the visit occurred."
           }
@@ -3117,14 +3239,22 @@ def profile_visits_to_df(reader: ZipArchiveReader, errors: Counter, validation=N
 def _profile_visits_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
     datapoints: list[tuple[str, str, str]] = []
 
-    split = reader.json(_PROFILE_VISITS_SPLIT_JSON)
-    if split.found:
+    split_layout = False
+    sources: list[tuple[str, Callable[..., list[tuple[str, str, str]]]]] = [
+        (_PROFILE_VISITS_SPLIT_JSON, _profile_visits_split_json),
+        (_GROUPS_AND_EVENTS_JSON, _groups_and_events_visited_json),
+    ]
+    for member, read in sources:
+        result = reader.json(member)
+        if not result.found:
+            continue
+        split_layout = True
         try:
-            datapoints = _profile_visits_split_json(split.data, errors)
+            datapoints.extend(read(result.data, errors))
         except Exception as e:
             logger.error("Exception caught: %s", e)
             errors[type(e).__name__] += 1
-    else:
+    if not split_layout:
         grouped = reader.json(_RECENTLY_VISITED_JSON)
         if grouped.found:
             try:
@@ -3140,15 +3270,33 @@ def _profile_visits_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFr
 
 
 def _profile_visits_split_json(d, errors: Counter) -> list[tuple[str, str, str]]:
-    """Rows of the split file: a list of ``{timestamp, label_values:
-    [{label, value}]}`` records (assumed shape); the name is the first value."""
+    """Rows of the split ``profile_visits`` file: ``{timestamp, label_values:
+    [{label: "Name", value}]}`` records; the name is the first value."""
     rows = []
-    for item in d:
+    for item in _records(d):
         denested_dict = eh.dict_denester(item)
         rows.append((
             _PROFILE_VISITS_SPLIT_CATEGORY,
             eh.fix_latin1_string(eh.find_item(denested_dict, "-value")),
             eh.epoch_to_datetime_string(item.get("timestamp", ""), errors=errors),
+        ))
+    return rows
+
+
+def _groups_and_events_visited_json(d, errors: Counter) -> list[tuple[str, str, str]]:
+    """Rows of the split ``groups_and_events_you've_visited`` file:
+    ``{timestamp, label_values: [{label: "Name", value}, …]}`` records where
+    an event also carries Start time / End time (``timestamp_value``),
+    Description and URL (``href``) entries and a group only the Name."""
+    rows = []
+    for record in _records(d):
+        label_values = record.get("label_values", [])
+        labels = {lv.get("label") for lv in label_values}
+        name = next((lv.get("value", "") for lv in label_values if lv.get("label") == "Name"), "")
+        rows.append((
+            _EVENTS_VISITED_CATEGORY if labels & _EVENT_LABELS else _GROUPS_VISITED_CATEGORY,
+            eh.fix_latin1_string(name),
+            eh.epoch_to_datetime_string(record.get("timestamp", ""), errors=errors),
         ))
     return rows
 
@@ -3173,14 +3321,22 @@ def _profile_visits_grouped_json(d, errors: Counter) -> list[tuple[str, str, str
 def _profile_visits_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
     datapoints: list[tuple[str, str, str]] = []
 
-    split = reader.raw(_PROFILE_VISITS_SPLIT_HTML)
-    if split.found:
+    split_layout = False
+    sources: list[tuple[str, Callable[..., list[tuple[str, str, str]]]]] = [
+        (_PROFILE_VISITS_SPLIT_HTML, _profile_visits_split_html),
+        (_GROUPS_AND_EVENTS_HTML, _groups_and_events_visited_html),
+    ]
+    for member, read in sources:
+        result = reader.raw(member)
+        if not result.found:
+            continue
+        split_layout = True
         try:
-            datapoints = _profile_visits_split_html(etree.HTML(split.data.read()), errors)
+            datapoints.extend(read(etree.HTML(result.data.read()), errors))
         except Exception as e:
             logger.error("Exception caught: %s", e)
             errors[type(e).__name__] += 1
-    else:
+    if not split_layout:
         grouped = reader.raw(_RECENTLY_VISITED_HTML)
         if grouped.found:
             try:
@@ -3196,7 +3352,7 @@ def _profile_visits_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFr
 
 
 def _profile_visits_split_html(tree, errors: Counter) -> list[tuple[str, str, str]]:
-    """Rows of the split page (assumed shape): one top-level section per
+    """Rows of the split ``profile_visits`` page: one top-level section per
     record with the name in a ``_a6_r`` cell and a dated footer."""
     rows = []
     sections = eh.xpath_nodes(tree, "//section[contains(@class, '_a6-g') and not(ancestor::section)]")
@@ -3206,6 +3362,23 @@ def _profile_visits_split_html(tree, errors: Counter) -> list[tuple[str, str, st
         date = _section_timestamp(section, errors)
         if name or date:
             rows.append((_PROFILE_VISITS_SPLIT_CATEGORY, name, date))
+    return rows
+
+
+def _groups_and_events_visited_html(tree, errors: Counter) -> list[tuple[str, str, str]]:
+    """Rows of the split ``groups_and_events_you've_visited`` page: one
+    top-level section per record with a Name row — an event also has Start
+    time / End time, Description and URL rows — and a dated footer."""
+    rows = []
+    for section in eh.xpath_nodes(tree, "//section[contains(@class, '_a6-g') and not(ancestor::section)]"):
+        values, _ = _leaf_fields(section)
+        if not values:
+            continue
+        rows.append((
+            _EVENTS_VISITED_CATEGORY if _EVENT_LABELS & values.keys() else _GROUPS_VISITED_CATEGORY,
+            values.get("Name", ""),
+            _section_timestamp(section, errors),
+        ))
     return rows
 
 
@@ -3399,7 +3572,7 @@ def _link_history_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFram
     datapoints = []
 
     try:
-        for item in d:
+        for item in _records(d):
             denested_dict = eh.dict_denester(item)
             title = ""
             label_values = item.get("label_values", [])
@@ -4200,7 +4373,7 @@ def _items_viewed_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFram
     datapoints = []
 
     try:
-        for item in d:
+        for item in _records(d):
             lv_map = {}
             for lv in item.get("label_values", []):
                 label = lv.get("label", "")
@@ -4310,7 +4483,7 @@ EXTRACTOR_REGISTRY: dict[str, Callable[..., pd.DataFrame]] = {
     # (rm + `pnpm generate-config facebook`, ADR-0030), and drop the name from
     # HELD_EXTRACTORS in tests/test_extractor_integration_facebook.py (its
     # EXPECT_NON_EMPTY pins stay as they are).
-    # "content_shown_to_you_to_df": content_shown_to_you_to_df,      # logged_information/interactions/recently_viewed.json | content_that_has_been_shown_to_you_in_your_feed.json
+    # "content_shown_to_you_to_df": content_shown_to_you_to_df,      # logged_information/interactions/recently_viewed.json | content_that_has_been_shown_to_you_in_your_feed.json + ads.json + shows_you_have_watched.json
     # "your_activity_off_meta_to_df": your_activity_off_meta_to_df,  # apps_and_websites_off_of_facebook/your_activity_off_meta_technologies.json | .html + your_activity_off_meta_technologies/<business>.html
     # --- Not in spreadsheet — commented out ---
     # "notifications_to_df": notifications_to_df,

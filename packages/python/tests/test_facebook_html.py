@@ -420,3 +420,156 @@ class TestProfileVisitsFallsBackToRecentlyVisited:
         assert facebook.profile_visits_to_df(reader, errors).empty
         assert facebook.profile_visits_to_df(reader, errors, validation=_HTML_VALIDATION).empty
         assert not errors
+
+
+# The September 2026 split layout also writes groups_and_events_you've_visited:
+# a record with Start time / End time (and a URL) is an event, one with only a
+# Name is a group. The categories match the grouped layout's section names.
+_GROUPS_AND_EVENTS_JSON = "export/logged_information/interactions/groups_and_events_you've_visited.json"
+_GROUPS_AND_EVENTS_HTML = "export/logged_information/interactions/groups_and_events_you've_visited.html"
+
+_GROUPS_AND_EVENTS_RECORDS = json.dumps([
+    {"timestamp": _V3, "media": [], "label_values": [
+        {"label": "Name", "value": "An Event"},
+        {"label": "Start time", "timestamp_value": _V4},
+        {"label": "Description", "value": "About the event."},
+        {"label": "End time", "timestamp_value": _V4},
+        {"label": "URL", "value": "https://www.facebook.com/events/1/", "href": "https://www.facebook.com/events/1/"},
+    ], "fbid": "1"},
+    {"timestamp": _V4, "media": [], "label_values": [{"label": "Name", "value": "CafÃ© Group"}], "fbid": "2"},
+    {"timestamp": _V1, "media": [], "label_values": [
+        {"label": "Name", "value": "An Open-Ended Event"},
+        {"label": "Start time", "timestamp_value": _V2},
+        {"label": "URL", "value": "https://www.facebook.com/events/2/", "href": "https://www.facebook.com/events/2/"},
+    ], "fbid": "3"},
+])
+
+_GROUPS_AND_EVENTS_ROWS = [
+    ("Groups visited", "Café Group", "2023-11-17 23:13:20"),
+    ("Events visited", "An Event", "2023-11-16 23:13:20"),
+    ("Events visited", "An Open-Ended Event", "2023-11-14 23:13:20"),
+]
+
+
+def _visited_record(rows: str, when: str) -> str:
+    """One record as the September pages write it: a top-level section holding
+    a nested leaf section with the label/value table, then a dated footer."""
+    return (
+        '<section class="_3-95 _a6-g"><div class="_2pi8 _2pic _a6-p">'
+        '<section class="_3-95 _a6-g"><div class="_2pi8 _2pic _a6-p">'
+        f'<table>{rows}</table></div></section></div>'
+        f'<footer class="_3-94 _a6-o"><div class="_a72d">{when}</div></footer></section>'
+    )
+
+
+def _cell_row(label: str, value: str) -> str:
+    return f'<tr><td class="_a6_q">{label}</td><td class="_2piu _a6_r">{value}</td></tr>'
+
+
+def _url_row(href: str) -> str:
+    return f'<tr><td class="_a6_q" colspan="2">URL<div><a href="{href}">{href}</a></div></td></tr>'
+
+
+_GROUPS_AND_EVENTS_PAGE = '<html><body><div class="_li"><main class="_a706">' + _visited_record(
+    _cell_row("Name", "An Event") + _cell_row("Start time", "Nov 17, 2023 10:13:20 pm") + _cell_row("Description", "About the event.")
+    + _cell_row("End time", "Nov 17, 2023 11:13:20 pm") + _url_row("https://www.facebook.com/events/1/"),
+    "Nov 16, 2023 10:13:20 pm",
+) + _visited_record(
+    _cell_row("Name", "A Group"), "Nov 17, 2023 10:13:20 pm",
+) + _visited_record(
+    _cell_row("Name", "An Open-Ended Event") + _cell_row("Start time", "Nov 15, 2023 10:13:20 pm") + _url_row("https://www.facebook.com/events/2/"),
+    "Nov 14, 2023 10:13:20 pm",
+) + '</main></div></body></html>'
+
+_GROUPS_AND_EVENTS_HTML_ROWS = [
+    ("Groups visited", "A Group", "2023-11-17 22:13:20"),
+    ("Events visited", "An Event", "2023-11-16 22:13:20"),
+    ("Events visited", "An Open-Ended Event", "2023-11-14 22:13:20"),
+]
+
+
+class TestProfileVisitsReadsGroupsAndEvents:
+    def test_json_events_and_groups_are_categorised_by_their_labels(self):
+        errors: Counter = Counter()
+        reader = _reader((_GROUPS_AND_EVENTS_JSON, _GROUPS_AND_EVENTS_RECORDS), errors=errors)
+        df = facebook.profile_visits_to_df(reader, errors)
+        assert not errors
+        assert list(df.itertuples(index=False, name=None)) == _GROUPS_AND_EVENTS_ROWS
+
+    def test_json_is_concatenated_after_profile_visits(self):
+        errors: Counter = Counter()
+        reader = _reader(
+            (_PROFILE_VISITS_SPLIT_JSON, _SPLIT_VISITS_JSON),
+            (_GROUPS_AND_EVENTS_JSON, _GROUPS_AND_EVENTS_RECORDS),
+            (_RECENTLY_VISITED_JSON, _GROUPED_VISITS_JSON),
+            errors=errors,
+        )
+        df = facebook.profile_visits_to_df(reader, errors)
+        assert not errors
+        assert len(df) == 2 + len(_GROUPS_AND_EVENTS_ROWS)
+        assert sorted(df["Timestamp"].tolist(), reverse=True) == df["Timestamp"].tolist()
+        assert set(df["Category"]) == {"Profile visits", "Events visited", "Groups visited"}
+        assert "A Person" not in df["Name"].tolist()  # the grouped file is not read in the split layout
+
+    def test_html_events_and_groups_are_categorised_by_their_rows(self):
+        errors: Counter = Counter()
+        reader = _reader((_GROUPS_AND_EVENTS_HTML, _GROUPS_AND_EVENTS_PAGE), errors=errors)
+        df = facebook.profile_visits_to_df(reader, errors, validation=_HTML_VALIDATION)
+        assert not errors
+        assert list(df.itertuples(index=False, name=None)) == _GROUPS_AND_EVENTS_HTML_ROWS
+
+    def test_html_is_concatenated_after_profile_visits(self):
+        errors: Counter = Counter()
+        reader = _reader(
+            (_PROFILE_VISITS_SPLIT_HTML, _split_visits_page(("Split Older", "Nov 14, 2023 10:13:20 pm"))),
+            (_GROUPS_AND_EVENTS_HTML, _GROUPS_AND_EVENTS_PAGE),
+            errors=errors,
+        )
+        df = facebook.profile_visits_to_df(reader, errors, validation=_HTML_VALIDATION)
+        assert not errors
+        assert len(df) == 1 + len(_GROUPS_AND_EVENTS_HTML_ROWS)
+        assert sorted(df["Timestamp"].tolist(), reverse=True) == df["Timestamp"].tolist()
+        assert ("Profile visits", "Split Older", "2023-11-14 22:13:20") in list(df.itertuples(index=False, name=None))
+
+
+# ---------------------------------------------------------------------------
+# A bare single record: Facebook writes an object, not a one-element list,
+# when a file has exactly one item
+# ---------------------------------------------------------------------------
+
+
+_BARE_LINK_HISTORY = json.dumps({
+    "timestamp": _V2,
+    "media": [],
+    "label_values": [
+        {"label": "Website link you visited", "value": "https://example.org/article", "href": "https://example.org/article"},
+        {"label": "Title of website page you visited", "value": "An article"},
+        {"label": "Website session start time", "value": "Nov 15, 2023 11:13:20 pm"},
+        {"label": "Website session end time", "value": "Nov 15, 2023 11:20:00 pm"},
+    ],
+    "fbid": "1",
+})
+
+
+class TestBareSingleRecord:
+    def test_link_history_with_one_record_yields_one_row(self):
+        errors: Counter = Counter()
+        reader = _reader(("export/your_facebook_activity/other_activity/link_history.json", _BARE_LINK_HISTORY), errors=errors)
+        df = facebook.link_history_to_df(reader, errors)
+        assert not errors
+        assert list(df.itertuples(index=False, name=None)) == [
+            ("https://example.org/article", "An article", "2023-11-15 23:13:20"),
+        ]
+
+    @pytest.mark.parametrize(
+        "data, expected",
+        [
+            ([{"label_values": []}, {"label_values": []}], 2),
+            ({"timestamp": 1, "label_values": [{"label": "Name", "value": "x"}]}, 1),
+            ({"recently_viewed": []}, 0),
+            ("not records", 0),
+        ],
+        ids=["list", "bare-record", "other-dict", "not-json-records"],
+    )
+    def test_records_helper(self, data, expected):
+        assert len(facebook._records(data)) == expected

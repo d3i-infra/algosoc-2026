@@ -104,10 +104,10 @@
       },
       "extractor": "profile_visits_to_df",
       "documentation": {
-        "summary": "Each row is a Facebook profile, page, group or event the participant opened in roughly the last 90 days. Read from the profile_visits file in the split layout or from the grouped recently_visited file (all exports seen so far). Marketplace visit counters that carry only a date are not rows.",
-        "source_file": "logged_information/interactions/profile_visits.json (split) or recently_visited.json (grouped); .html twins",
+        "summary": "Each row is a Facebook profile, page, group or event the participant opened in roughly the last 90 days. Read from the grouped recently_visited file (exports up to June 2026) or, from September 2026, from the split profile_visits and groups_and_events_you've_visited files (an event carries a Start time or End time, a group only a Name). Marketplace visit counters that carry only a date are not rows.",
+        "source_file": "logged_information/interactions/recently_visited.json (grouped, up to June 2026); profile_visits.json + groups_and_events_you've_visited.json (split, from September 2026); .html twins",
         "columns": {
-          "Category": "The export's section name for the visit (Profile visits, Page visits, Events visited, Groups visited); always Profile visits in the split layout.",
+          "Category": "The export's section name for the visit (Profile visits, Page visits, Events visited, Groups visited); in the split layout Profile visits for the profile_visits file and Events visited or Groups visited for the groups-and-events file.",
           "Name": "Name of the visited profile, page, group or event.",
           "Timestamp": "ISO 8601 timestamp of when the visit occurred."
         }

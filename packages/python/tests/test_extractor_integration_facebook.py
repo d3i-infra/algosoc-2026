@@ -74,6 +74,23 @@ _ACTIVITY_TABLES = {
     "your_comments_in_groups_to_df",
 }
 
+# Every table the September 2026 device pair yields, measured 2026-09-02 on
+# both formats.
+_SEPTEMBER_2026_TABLES = _ADS_TABLES | _ACTIVITY_TABLES | {
+    "your_search_history_to_df",
+    "ads_interests_to_df",
+    "profile_visits_to_df",
+    "facebook_reels_usage_to_df",
+    "link_history_to_df",
+    "comments_to_df",
+    "who_youve_followed_to_df",
+    "pages_and_profiles_you_follow_to_df",
+    "pages_youve_liked_to_df",
+    "items_viewed_to_df",
+    "content_shown_to_you_to_df",
+    "your_activity_off_meta_to_df",
+}
+
 EXPECT_NON_EMPTY: dict[str, set[str]] = {
     # Real account, JSON, March 2026 — all categories except pages/followers.
     "facebook_json_self-2026-03": _ADS_TABLES | _ACTIVITY_TABLES | {
@@ -180,6 +197,15 @@ EXPECT_NON_EMPTY: dict[str, set[str]] = {
         "profile_visits_to_df",
         "your_activity_off_meta_to_df",
     },
+    # Same account as the self-2026-03 exports, device downloads, September
+    # 2026, both formats on one day: the first fixtures of the split
+    # interaction layout (recently_viewed / recently_visited / groups_you've_visited
+    # gone; items_viewed, profile_visits, groups_and_events_you've_visited, ads,
+    # the feed file and shows_you_have_watched in their place). The one account
+    # with a bare single-record link_history.json. No
+    # advertisers_you've_interacted_with for this account.
+    "facebook_json_self-device-2026-09": _SEPTEMBER_2026_TABLES,
+    "facebook_html_self-device-2026-09": _SEPTEMBER_2026_TABLES,
 }
 # Not pinned on facebook_html_self-2026-03: that Drive part carries no
 # logged_information/interactions folder, so the content-shown and profile
@@ -216,7 +242,6 @@ _HELD_SMOKE_INPUTS: dict[str, list[tuple[str, str]]] = {
 }
 
 UNPINNED_KNOWN_GAPS: dict[str, str] = {
-    "items_viewed_to_df": "no local export contains logged_information/interactions/items_viewed.*",
     "news_your_locations_to_df": (
         "facebook_news/your_locations.json is absent from every 2026 export seen "
         "(Facebook News was discontinued); stays registered until the researcher "
