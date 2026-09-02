@@ -149,7 +149,8 @@ UNPINNED_KNOWN_GAPS: dict[str, str] = {
     "items_viewed_to_df": "no local export contains logged_information/interactions/items_viewed.*",
     "news_your_locations_to_df": (
         "facebook_news/your_locations.json is absent from every 2026 export seen "
-        "(Facebook News was discontinued); registered as PENDING, candidate for removal"
+        "(Facebook News was discontinued); stays registered until the researcher "
+        "meeting decides on its removal"
     ),
 }
 

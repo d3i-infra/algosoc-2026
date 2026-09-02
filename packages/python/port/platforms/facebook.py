@@ -244,8 +244,8 @@ def who_youve_followed_to_df(reader: ZipArchiveReader, errors: Counter, validati
             "nl": "Gevolgde accounts"
           },
           "description": {
-            "en": "This table shows the Facebook profiles and pages you currently follow.",
-            "nl": "Deze tabel toont de Facebook-profielen en -pagina's die je momenteel volgt."
+            "en": "This table lists the people, Pages and profiles you follow on Facebook, with the date you started following each. It can overlap with the tables of Pages you follow or like.",
+            "nl": "Deze tabel toont de personen, pagina's en profielen die je volgt op Facebook, met de datum waarop je ze bent gaan volgen. Deze kan overlappen met de tabellen van pagina's die je volgt of leuk vindt."
           },
           "headers": {
             "Name": {"en": "Name", "nl": "Naam"},
@@ -751,8 +751,8 @@ def your_search_history_to_df(reader: ZipArchiveReader, errors: Counter, validat
             "nl": "Zoekopdrachten"
           },
           "description": {
-            "en": "This table contains a record of your search queries on Facebook.",
-            "nl": "Deze tabel bevat een overzicht van je zoekopdrachten op Facebook."
+            "en": "This table contains a record of your search queries on Facebook. Facebook keeps roughly the last year of search history, so older searches are not included.",
+            "nl": "Deze tabel bevat een overzicht van je zoekopdrachten op Facebook. Facebook bewaart ongeveer het laatste jaar aan zoekgeschiedenis; oudere zoekopdrachten zijn niet opgenomen."
           },
           "headers": {
             "Search term": {"en": "Search term", "nl": "Zoekterm"},
@@ -1778,8 +1778,8 @@ def pages_and_profiles_you_follow_to_df(reader: ZipArchiveReader, errors: Counte
             "nl": "Pagina's en profielen die je volgt"
           },
           "description": {
-            "en": "This table displays the Facebook Pages and profiles that you actively follow.",
-            "nl": "Deze tabel toont de Facebookpagina's en -profielen die je actief volgt."
+            "en": "This table lists the Facebook Pages and professional profiles you follow, as recorded in your Pages activity. Liking a Page also follows it, so this can overlap with the other two tables.",
+            "nl": "Deze tabel toont de Facebookpagina's en professionele profielen die je volgt, zoals vastgelegd in je pagina-activiteit. Een pagina leuk vinden betekent ook dat je die volgt, dus deze kan overlappen met de andere twee tabellen."
           },
           "headers": {
             "Title": {"en": "Title", "nl": "Titel"},
@@ -1885,8 +1885,8 @@ def pages_youve_liked_to_df(reader: ZipArchiveReader, errors: Counter, validatio
             "nl": "Pagina's die je leuk vindt"
           },
           "description": {
-            "en": "This table contains a history of the Facebook Pages you have liked.",
-            "nl": "Deze tabel bevat een overzicht van de Facebookpagina's die je leuk vindt."
+            "en": "This table lists the Facebook Pages you have liked, with the date of each like. Liking a Page is recorded separately from following it.",
+            "nl": "Deze tabel toont de Facebookpagina's die je leuk vindt, met de datum van elke like. Een pagina leuk vinden wordt apart vastgelegd van een pagina volgen."
           },
           "headers": {
             "Name": {"en": "Name", "nl": "Naam"},
@@ -3951,7 +3951,12 @@ EXTRACTOR_REGISTRY: dict[str, Callable[..., pd.DataFrame]] = {
     "pages_and_profiles_you_follow_to_df": pages_and_profiles_you_follow_to_df,                   # your_facebook_activity/pages/pages_and_profiles_you_follow.json
     "pages_youve_liked_to_df": pages_youve_liked_to_df,                                          # your_facebook_activity/pages/pages_you've_liked.json
     "items_viewed_to_df": items_viewed_to_df,                                                    # logged_information/interactions/items_viewed.json
-    "news_your_locations_to_df": news_your_locations_to_df,                                      # PENDING — Locations Facebook News is set to
+    # Dead in 2026 exports: no export seen has a facebook_news/ folder (Facebook
+    # News was discontinued in the EU, Dec 2023), so this table is always empty
+    # and never shown. Kept registered until the researcher meeting decides on
+    # its removal (2026-09-02); see UNPINNED_KNOWN_GAPS in
+    # tests/test_extractor_integration_facebook.py.
+    "news_your_locations_to_df": news_your_locations_to_df,                                      # facebook_news/your_locations.json
     #"your_comment_active_days_to_df": your_comment_active_days_to_df,                            # PENDING — Days with active commenting
     # --- Not in spreadsheet — commented out ---
     # "notifications_to_df": notifications_to_df,
