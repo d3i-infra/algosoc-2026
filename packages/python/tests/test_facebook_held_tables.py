@@ -7,7 +7,10 @@ in ``test_extractor_integration_facebook.py``) exercises them. Synthetic inputs
 cover both interaction layouts Facebook writes: the grouped
 ``recently_viewed`` file every local export uses, and the split
 ``content_that_has_been_shown_to_you_in_your_feed`` file whose shape is
-assumed from the spreadsheet (no local export attests it).
+assumed from the spreadsheet (no local export attests it). The off-Meta
+activity table is covered in both of its JSON shapes (the 2025
+``off_facebook_activity_v2`` object and the 2026 list of records) and in its
+HTML form: an index page plus one page per business, read one at a time.
 """
 import io
 import json
@@ -293,3 +296,196 @@ class TestContentShownTableContract:
         eh.anonymize_dataframe(df, facebook.TEXT_COLUMNS, "Some Name")
         assert not df["Name"].str.contains("Some Name").any()
         assert df.loc[0, "Name"] == "[user] shared a photo"
+
+
+# ---------------------------------------------------------------------------
+# Your activity off Meta technologies — JSON (two shapes)
+# ---------------------------------------------------------------------------
+
+_OFF_META_JSON = "apps_and_websites_off_of_facebook/your_activity_off_meta_technologies.json"
+_OFF_META_INDEX = "apps_and_websites_off_of_facebook/your_activity_off_meta_technologies.html"
+_OFF_META_PAGES = "apps_and_websites_off_of_facebook/your_activity_off_meta_technologies/"
+
+# The 2025 device export: one object keyed off_facebook_activity_v2 with a
+# name and flat events per business.
+_OFF_META_V2 = json.dumps({"off_facebook_activity_v2": [
+    {"name": _MOJIBAKE, "events": [
+        {"id": 1001, "type": "PAGE_VIEW", "timestamp": _T1},
+        {"id": 1002, "type": "PURCHASE", "timestamp": _T3},
+    ]},
+    {"name": "App Beta", "events": [
+        {"id": 1003, "type": "CUSTOM", "timestamp": _T2},
+    ]},
+]})
+
+
+def _off_meta_event(event_id: int, event: str, when: int) -> dict:
+    return {"dict": [
+        {"label": "ID", "value": str(event_id)},
+        {"label": "Event", "value": event},
+        {"label": "Received on", "timestamp_value": when},
+    ]}
+
+
+# The 2026 exports: a top-level list of records whose only label_values entry
+# is an Events vec of ID / Event / Received on dicts.
+_OFF_META_RECORDS = json.dumps([
+    {"title": _MOJIBAKE, "fbid": "10", "media": [], "label_values": [
+        {"label": "Events", "vec": [_off_meta_event(1001, "PAGE_VIEW", _T1), _off_meta_event(1002, "PURCHASE", _T3)]},
+    ]},
+    {"title": "App Beta", "fbid": "11", "media": [], "label_values": [
+        {"label": "Events", "vec": [_off_meta_event(1003, "CUSTOM", _T2)]},
+    ]},
+])
+
+_OFF_META_ROWS = [
+    ("Café", "PURCHASE", _D3),
+    ("App Beta", "CUSTOM", _D2),
+    ("Café", "PAGE_VIEW", _D1),
+]
+
+
+class TestOffMetaJson:
+    def test_v2_events_become_rows_newest_first(self):
+        errors: Counter = Counter()
+        reader = _reader(("export/" + _OFF_META_JSON, _OFF_META_V2), errors=errors)
+        df = facebook.your_activity_off_meta_to_df(reader, errors)
+        assert not errors
+        assert list(df.itertuples(index=False, name=None)) == _OFF_META_ROWS
+
+    def test_record_list_events_become_rows_newest_first(self):
+        errors: Counter = Counter()
+        reader = _reader(("export/" + _OFF_META_JSON, _OFF_META_RECORDS), errors=errors)
+        df = facebook.your_activity_off_meta_to_df(reader, errors)
+        assert not errors
+        assert list(df.itertuples(index=False, name=None)) == _OFF_META_ROWS
+
+    def test_absence_is_an_empty_frame_and_no_error(self):
+        errors: Counter = Counter()
+        reader = _reader(("export/ads_information/ad_preferences.json", "{}"), errors=errors)
+        df = facebook.your_activity_off_meta_to_df(reader, errors)
+        assert df.empty
+        assert not errors
+
+
+# ---------------------------------------------------------------------------
+# Your activity off Meta technologies — HTML (index plus one page per business)
+# ---------------------------------------------------------------------------
+
+
+def _off_meta_index(*links: tuple[str, str]) -> str:
+    """The index page: one top-level section per business whose h2 holds the
+    one anchor, root-relative, to that business's page."""
+    sections = "".join(
+        f'<section class="_a6-g"><h2 class="_2ph_ _a6-h"><a href="{_OFF_META_PAGES}{slug}">{name}</a></h2></section>'
+        for name, slug in links
+    )
+    return f'<html><body><div class="_li"><main class="_a706">{sections}</main></div></body></html>'
+
+
+def _off_meta_event_table(event_id: int, event: str, when: str) -> str:
+    """One event as the business page writes it: a section holding a leaf
+    table of ID / Event / Received on rows (label ``_a6_q``, value ``_2piu _a6_r``)."""
+    return (
+        '<section class="_3-95 _a6-g"><div class="_2pi8 _2pic _a6-p"><table>'
+        f'<tr><td class="_a6_q">ID</td><td class="_2piu _a6_r">{event_id}</td></tr>'
+        f'<tr><td class="_a6_q">Event</td><td class="_2piu _a6_r">{event}</td></tr>'
+        f'<tr><td class="_a6_q">Received on</td><td class="_2piu _a6_r">{when}</td></tr>'
+        '</table></div></section>'
+    )
+
+
+def _off_meta_page(name: str, fbid: str, events: list[tuple[int, str, str]]) -> str:
+    """A business page: h2 = business name; a wrapper table with the business
+    ID row and an Events row whose label cell nests one event table each."""
+    inner = "".join(_off_meta_event_table(*event) for event in events)
+    return (
+        '<html><body><div class="_li"><main class="_a706">'
+        f'<section class="_3-95 _a6-g"><h2 class="_2ph_ _a6-h _a6-i">{name}</h2>'
+        '<div class="_2pi8 _2pic _a6-p"><section class="_3-95 _a6-g"><div class="_2pi8 _2pic _a6-p"><table>'
+        f'<tr><td class="_a6_q">ID</td><td class="_2piu _a6_r">{fbid}</td></tr>'
+        f'<tr><td class="_a6_q" colspan="2">Events<div><div><div>{inner}</div></div></div></td></tr>'
+        '</table></div></section></div>'
+        '<footer class="_3-94 _a6-o"><div class="_a72d"></div></footer></section>'
+        '</main></div></body></html>'
+    )
+
+
+_OFF_META_INDEX_PAGE = _off_meta_index(
+    ("Shop Alpha", "shop_alpha_10.html"),
+    ("Ghost Co", "ghost_co_99.html"),  # linked but not in the archive (a truncated Drive part)
+    ("App Beta", "app_beta_11.html"),
+)
+_OFF_META_ALPHA = _off_meta_page("Shop Alpha", "10", [
+    (1001, "PAGE_VIEW", "Nov 14, 2023 10:13:20 pm"),
+    (1002, "PURCHASE", "Nov 16, 2023 10:13:20 pm"),
+])
+_OFF_META_BETA = _off_meta_page("App Beta", "11", [(1003, "CUSTOM", "Nov 15, 2023 10:13:20 pm")])
+# The numbered pages duplicate the linked ones under another name; the index
+# never links them and the extractor must not read them.
+_OFF_META_NUMBERED = _off_meta_page("Numbered Duplicate", "12", [(1004, "VIEW_CONTENT", "Nov 17, 2023 10:13:20 pm")])
+
+_OFF_META_HTML_ROWS = [
+    ("Shop Alpha", "PURCHASE", "2023-11-16 22:13:20"),
+    ("App Beta", "CUSTOM", "2023-11-15 22:13:20"),
+    ("Shop Alpha", "PAGE_VIEW", "2023-11-14 22:13:20"),
+]
+
+
+def _off_meta_html_entries(root: str = "") -> list[tuple[str, str]]:
+    return [
+        (root + _OFF_META_INDEX, _OFF_META_INDEX_PAGE),
+        (root + _OFF_META_PAGES + "shop_alpha_10.html", _OFF_META_ALPHA),
+        (root + _OFF_META_PAGES + "app_beta_11.html", _OFF_META_BETA),
+        (root + _OFF_META_PAGES + "0.html", _OFF_META_NUMBERED),
+    ]
+
+
+class TestOffMetaHtml:
+    def test_linked_pages_become_rows_newest_first(self):
+        errors: Counter = Counter()
+        reader = _reader(*_off_meta_html_entries(), errors=errors)
+        df = facebook.your_activity_off_meta_to_df(reader, errors, validation=_HTML_VALIDATION)
+        assert not errors
+        assert list(df.itertuples(index=False, name=None)) == _OFF_META_HTML_ROWS
+
+    def test_unlinked_numbered_pages_are_not_read(self):
+        reader = _reader(*_off_meta_html_entries())
+        df = facebook.your_activity_off_meta_to_df(reader, Counter(), validation=_HTML_VALIDATION)
+        assert "Numbered Duplicate" not in df["Business"].tolist()
+        assert "VIEW_CONTENT" not in df["Event"].tolist()
+
+    def test_a_linked_page_missing_from_the_archive_is_skipped_silently(self):
+        errors: Counter = Counter()
+        reader = _reader(*_off_meta_html_entries(), errors=errors)
+        df = facebook.your_activity_off_meta_to_df(reader, errors, validation=_HTML_VALIDATION)
+        assert not errors
+        assert "Ghost Co" not in df["Business"].tolist()
+        assert len(df) == 3
+
+    def test_drive_style_root_prefix_is_derived_from_the_index_path(self):
+        errors: Counter = Counter()
+        reader = _reader(*_off_meta_html_entries(root="meta-x/facebook-y/"), errors=errors)
+        df = facebook.your_activity_off_meta_to_df(reader, errors, validation=_HTML_VALIDATION)
+        assert not errors
+        assert list(df.itertuples(index=False, name=None)) == _OFF_META_HTML_ROWS
+
+    def test_absence_is_an_empty_frame_and_no_error(self):
+        errors: Counter = Counter()
+        reader = _reader(("export/ads_information/ad_preferences.html", "<html/>"), errors=errors)
+        df = facebook.your_activity_off_meta_to_df(reader, errors, validation=_HTML_VALIDATION)
+        assert df.empty
+        assert not errors
+
+
+class TestOffMetaTableContract:
+    def test_columns_match_the_docstring_headers(self):
+        reader = _reader(("export/" + _OFF_META_JSON, _OFF_META_V2))
+        df = facebook.your_activity_off_meta_to_df(reader, Counter())
+        config = _table_config(facebook.your_activity_off_meta_to_df)
+        assert config["id"] == "facebook_activity_off_meta"
+        assert list(df.columns) == list(config["headers"]) == ["Business", "Event", "Date"]
+
+    def test_columns_are_not_anonymized(self):
+        """Business names and event codes are Meta's vocabulary, not participant text."""
+        assert not {"Business", "Event", "Date"} & set(facebook.TEXT_COLUMNS)

@@ -1221,6 +1221,208 @@ def _content_shown_split_html(tree, errors: Counter) -> list[tuple[str, str, str
     return rows
 
 
+_OFF_META_JSON = "apps_and_websites_off_of_facebook/your_activity_off_meta_technologies.json"
+_OFF_META_HTML = "apps_and_websites_off_of_facebook/your_activity_off_meta_technologies.html"
+_OFF_META_COLUMNS = ["Business", "Event", "Date"]
+
+
+def your_activity_off_meta_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
+    """Extract the activity businesses reported to Meta about the participant
+    from their own websites and apps.
+
+    Facebook writes the JSON in one of two shapes. The 2025 device export
+    holds one object keyed ``off_facebook_activity_v2``: a list of businesses,
+    each with a ``name`` and flat ``events`` (``id``, ``type``, epoch
+    ``timestamp``). The 2026 exports write a top-level list of records
+    (``title``, ``fbid``, ``label_values``) whose ``Events`` entry holds a
+    ``vec`` of ``ID`` / ``Event`` / ``Received on`` dicts. The two are told
+    apart on the top-level type. The HTML export is an index page with one
+    section per business linking, root-relative, to that business's own page
+    (``h2`` = name; one leaf table per event with ``ID`` / ``Event`` /
+    ``Received on`` rows). The linked pages are read one at a time by exact
+    path; a page the archive does not hold (a truncated Drive part) is an
+    absence, not an error (ADR-0024). The unlinked numbered pages in the same
+    folder duplicate the linked ones and are never read.
+
+    Parameters
+    ----------
+    reader:
+        Archive reader used to load JSON or HTML files from the DDP zip.
+    errors:
+        Mutable counter that accumulates error type counts encountered during
+        extraction.  Updated in-place.
+    validation:
+        Validation result; its DDP category selects the JSON or HTML path.
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: ``Business``, ``Event``, ``Date``, newest first.
+        Empty DataFrame when the files are absent or parsing fails.
+
+    Table documentation::
+
+        {
+          "summary": "Each row is one activity that a business or organisation reported to Meta about the participant on its own website or app (page view, search, purchase, app open, ...). JSON has two shapes (off_facebook_activity_v2 with events[]; 2026 record format with label_values); HTML is an index page plus one page per business, read one at a time.",
+          "source_file": "apps_and_websites_off_of_facebook/your_activity_off_meta_technologies.json / .html + your_activity_off_meta_technologies/<business>.html",
+          "columns": {
+            "Business": "Name of the business or app that reported the activity.",
+            "Event": "Meta's event code (PAGE_VIEW, VIEW_CONTENT, SEARCH, PURCHASE, CUSTOM, ...).",
+            "Date": "Timestamp of when Meta received the event, in the reference zone."
+          }
+        }
+
+    Table config::
+
+        {
+          "id": "facebook_activity_off_meta",
+          "title": {
+            "en": "Your activity off Meta technologies",
+            "nl": "Je activiteit buiten Meta"
+          },
+          "description": {
+            "en": "Businesses and apps share with Meta what you do on their websites and apps, such as page views, searches and purchases. This table lists what they reported about you.",
+            "nl": "Bedrijven en apps delen met Meta wat je op hun websites en apps doet, zoals paginaweergaven, zoekopdrachten en aankopen. Deze tabel toont wat zij over jou hebben doorgegeven."
+          },
+          "headers": {
+            "Business": {"en": "Business", "nl": "Bedrijf"},
+            "Event": {"en": "Event", "nl": "Gebeurtenis"},
+            "Date": {"en": "Date", "nl": "Datum en tijd"}
+          }
+        }
+    """
+    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
+        return _sort_by_date(_your_activity_off_meta_html(reader, errors), "Date")
+
+    return _sort_by_date(_your_activity_off_meta_json(reader, errors), "Date")
+
+
+def _your_activity_off_meta_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    result = reader.json(_OFF_META_JSON)
+    if not result.found:
+        return pd.DataFrame()
+
+    datapoints: list[tuple[str, str, str]] = []
+    try:
+        if isinstance(result.data, dict):
+            datapoints = _off_meta_v2_json(result.data, errors)
+        else:
+            datapoints = _off_meta_records_json(result.data, errors)
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+
+    if datapoints:
+        return pd.DataFrame(datapoints, columns=_OFF_META_COLUMNS)  # pyright: ignore
+
+    return pd.DataFrame()
+
+
+def _off_meta_v2_json(d, errors: Counter) -> list[tuple[str, str, str]]:
+    """Rows of the 2025 shape: ``{"off_facebook_activity_v2": [{name,
+    events: [{id, type, timestamp}]}]}``."""
+    rows = []
+    for business in d.get("off_facebook_activity_v2", []):
+        name = eh.fix_latin1_string(business.get("name", ""))
+        for event in business.get("events", []):
+            rows.append((
+                name,
+                event.get("type", ""),
+                eh.epoch_to_datetime_string(event.get("timestamp", ""), errors=errors),
+            ))
+    return rows
+
+
+def _off_meta_records_json(d, errors: Counter) -> list[tuple[str, str, str]]:
+    """Rows of the 2026 shape: a list of ``{title, fbid, media, label_values:
+    [{label: "Events", vec: [{dict: [{label, value|timestamp_value}]}]}]}``
+    records."""
+    rows = []
+    for record in d:
+        name = eh.fix_latin1_string(record.get("title", ""))
+        for lv in record.get("label_values", []):
+            if lv.get("label") != "Events":
+                continue
+            for item in lv.get("vec", []):
+                event = ""
+                received = ""
+                for entry in item.get("dict", []):
+                    label = entry.get("label")
+                    if label == "Event":
+                        event = entry.get("value", "")
+                    elif label == "Received on":
+                        received = eh.epoch_to_datetime_string(entry.get("timestamp_value", ""), errors=errors)
+                rows.append((name, event, received))
+    return rows
+
+
+def _your_activity_off_meta_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
+    index = reader.raw(_OFF_META_HTML)
+    if not index.found:
+        return pd.DataFrame()
+
+    # The index links each business page root-relative; the export root is
+    # whatever precedes the index's own path in the archive (a Drive delivery
+    # wraps the export in one or two folders, a device download in none).
+    member_path = index.member_path or _OFF_META_HTML
+    root = member_path[: -len(_OFF_META_HTML)] if member_path.endswith(_OFF_META_HTML) else ""
+
+    links: list[tuple[str, str]] = []
+    try:
+        tree = etree.HTML(index.data.read())
+        for anchor in eh.xpath_nodes(tree, "//section[contains(@class, '_a6-g')]//a[@href]"):
+            links.append((anchor.text.strip() if anchor.text else "", str(anchor.get("href"))))
+        del tree
+    except Exception as e:
+        logger.error("Exception caught: %s", e)
+        errors[type(e).__name__] += 1
+        return pd.DataFrame()
+
+    datapoints: list[tuple[str, str, str]] = []
+    for linked_name, href in links:
+        page = reader.raw(root + href)
+        if not page.found:
+            continue  # the page sits in another part of a split export (ADR-0024)
+        try:
+            datapoints.extend(_off_meta_page_html(etree.HTML(page.data.read()), linked_name, errors))
+        except Exception as e:
+            logger.error("Exception caught: %s", e)
+            errors[type(e).__name__] += 1
+
+    if datapoints:
+        return pd.DataFrame(datapoints, columns=_OFF_META_COLUMNS)  # pyright: ignore
+
+    return pd.DataFrame()
+
+
+def _off_meta_page_html(tree, linked_name: str, errors: Counter) -> list[tuple[str, str, str]]:
+    """Rows of one business page. The business is the page's ``h2`` (the
+    index's anchor text when the page has none). Each event is a leaf table
+    (no table nested inside it) of ``ID`` / ``Event`` / ``Received on`` rows;
+    the wrapper table that holds the business ID and nests the event tables
+    has no ``Event`` row and yields nothing."""
+    headings = eh.xpath_nodes(tree, "//h2")
+    name = headings[0].text.strip() if headings and headings[0].text else ""
+    rows = []
+    for table in eh.xpath_nodes(tree, "//table[not(.//table)]"):
+        lv_map: dict[str, str] = {}
+        for row in eh.xpath_nodes(table, "./tr[td[contains(@class, '_a6_q')] and td[contains(@class, '_a6_r')]]"):
+            label_td = eh.xpath_nodes(row, "td[contains(@class, '_a6_q')]")
+            value_td = eh.xpath_nodes(row, "td[contains(@class, '_a6_r')]")
+            label = label_td[0].text.strip() if label_td and label_td[0].text else ""
+            value = value_td[0].text.strip() if value_td and value_td[0].text else ""
+            if label and label not in lv_map:
+                lv_map[label] = value
+        if "Event" not in lv_map:
+            continue
+        rows.append((
+            name or linked_name,
+            lv_map["Event"],
+            eh.meta_html_timestamp_to_datetime_string(lv_map.get("Received on", ""), errors=errors),
+        ))
+    return rows
+
+
 def recently_visited_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
     """Extract Facebook profiles recently visited.
 
@@ -4102,6 +4304,7 @@ EXTRACTOR_REGISTRY: dict[str, Callable[..., pd.DataFrame]] = {
     # HELD_EXTRACTORS in tests/test_extractor_integration_facebook.py (its
     # EXPECT_NON_EMPTY pins stay as they are).
     # "content_shown_to_you_to_df": content_shown_to_you_to_df,      # logged_information/interactions/recently_viewed.json | content_that_has_been_shown_to_you_in_your_feed.json
+    # "your_activity_off_meta_to_df": your_activity_off_meta_to_df,  # apps_and_websites_off_of_facebook/your_activity_off_meta_technologies.json | .html + your_activity_off_meta_technologies/<business>.html
     # --- Not in spreadsheet — commented out ---
     # "notifications_to_df": notifications_to_df,
     # "content_sharing_you_have_created_to_df": content_sharing_you_have_created_to_df,

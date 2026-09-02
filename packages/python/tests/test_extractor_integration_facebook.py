@@ -81,11 +81,16 @@ EXPECT_NON_EMPTY: dict[str, set[str]] = {
         "ads_interests_to_df",
         "facebook_reels_usage_to_df",
         "content_shown_to_you_to_df",
+        "your_activity_off_meta_to_df",
     },
     # Same account and day, HTML. No logged_information/search in this export:
     # its only your_search_history.html is the Marketplace one, which the
-    # Searches table deliberately does not read — search stays unpinned.
-    "facebook_html_self-2026-03": _ADS_TABLES | _ACTIVITY_TABLES,
+    # Searches table deliberately does not read — search stays unpinned. This
+    # is Drive part -001: 262 of the 289 linked off-Meta business pages sit in
+    # another part, so the held off-Meta table reads the 27 present ones.
+    "facebook_html_self-2026-03": _ADS_TABLES | _ACTIVITY_TABLES | {
+        "your_activity_off_meta_to_df",
+    },
     # Real account, JSON, all time, delivered via Google Drive, March 2026 —
     # 2,209 files, the format participants are instructed to request. Drive
     # delivery spells the follow / like files `who_you_ve_followed` (apostrophe
@@ -103,6 +108,7 @@ EXPECT_NON_EMPTY: dict[str, set[str]] = {
         "who_youve_followed_to_df",
         "pages_youve_liked_to_df",
         "content_shown_to_you_to_df",
+        "your_activity_off_meta_to_df",
     },
     # Real account, HTML, all time (registered 2005), delivered via Google
     # Drive, March 2026 — 2,815 files. Carries both search-history files
@@ -119,6 +125,7 @@ EXPECT_NON_EMPTY: dict[str, set[str]] = {
         "who_youve_followed_to_df",
         "pages_youve_liked_to_df",
         "content_shown_to_you_to_df",
+        "your_activity_off_meta_to_df",
     },
     # Real account, device downloads, October 2025: a three-month JSON window
     # (57 files) and a one-year HTML window (980 files). Device downloads keep
@@ -129,12 +136,14 @@ EXPECT_NON_EMPTY: dict[str, set[str]] = {
         "ads_interests_to_df",
         "facebook_reels_usage_to_df",
         "content_shown_to_you_to_df",
+        "your_activity_off_meta_to_df",
     },
     "facebook_html_self-device-2025-10": _ADS_TABLES | {
         "your_search_history_to_df",
         "ads_interests_to_df",
         "facebook_reels_usage_to_df",
         "content_shown_to_you_to_df",
+        "your_activity_off_meta_to_df",
         "your_events_to_df",
         "your_group_membership_activity_to_df",
         "comments_to_df",
@@ -162,6 +171,7 @@ EXPECT_NON_EMPTY: dict[str, set[str]] = {
         "pages_and_profiles_you_follow_to_df",
         "pages_youve_liked_to_df",
         "content_shown_to_you_to_df",
+        "your_activity_off_meta_to_df",
     },
 }
 # Not pinned on facebook_html_self-2026-03: that Drive part carries no
@@ -175,6 +185,7 @@ EXPECT_NON_EMPTY: dict[str, set[str]] = {
 # registry side — the pins in EXPECT_NON_EMPTY stay as they are.
 HELD_EXTRACTORS: dict[str, Callable[..., pd.DataFrame]] = {
     "content_shown_to_you_to_df": facebook.content_shown_to_you_to_df,
+    "your_activity_off_meta_to_df": facebook.your_activity_off_meta_to_df,
 }
 
 _ALL_EXTRACTORS: dict[str, Callable[..., pd.DataFrame]] = {**facebook.EXTRACTOR_REGISTRY, **HELD_EXTRACTORS}
@@ -188,6 +199,12 @@ _HELD_SMOKE_INPUTS: dict[str, list[tuple[str, str]]] = {
         json.dumps({"recently_viewed": [{"name": "Ads", "description": "", "entries": [
             {"timestamp": 1700000000, "data": {"name": "An ad", "uri": "https://www.facebook.com/ads/1"}},
         ]}]}),
+    )],
+    "your_activity_off_meta_to_df": [(
+        "export/apps_and_websites_off_of_facebook/your_activity_off_meta_technologies.json",
+        json.dumps({"off_facebook_activity_v2": [
+            {"name": "A shop", "events": [{"id": 1, "type": "PAGE_VIEW", "timestamp": 1700000000}]},
+        ]}),
     )],
 }
 
