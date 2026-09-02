@@ -114,6 +114,46 @@
       }
     },
     {
+      "id": "facebook_content_shown_to_you",
+      "title": {
+        "en": "Content shown to you on Facebook",
+        "nl": "Content die Facebook je heeft laten zien"
+      },
+      "description": {
+        "en": "This table lists the posts, videos and ads Facebook showed you and the items you viewed in roughly the last 90 days.",
+        "nl": "Deze tabel toont de berichten, video's en advertenties die Facebook je in ongeveer de laatste 90 dagen heeft laten zien, en de items die je hebt bekeken."
+      },
+      "headers": {
+        "Category": {
+          "en": "Category",
+          "nl": "Categorie"
+        },
+        "Name": {
+          "en": "Name",
+          "nl": "Naam"
+        },
+        "Link": {
+          "en": "Link",
+          "nl": "Link"
+        },
+        "Date": {
+          "en": "Date",
+          "nl": "Datum en tijd"
+        }
+      },
+      "extractor": "content_shown_to_you_to_df",
+      "documentation": {
+        "summary": "Each row is an item Facebook showed the participant or the participant watched in roughly the last 90 days: posts shown in the feed, videos watched, ads shown, Marketplace items viewed, web pages opened off Facebook. Read from the grouped recently_viewed file (exports up to June 2026) and, from September 2026, from the split content_that_has_been_shown_to_you_in_your_feed (Posts / Videos / Links lists), ads and shows_you_have_watched files; every file present contributes rows. Marketplace activity counters that carry only a date are not rows.",
+        "source_file": "logged_information/interactions/recently_viewed.json (grouped, up to June 2026); content_that_has_been_shown_to_you_in_your_feed.json + ads.json + shows_you_have_watched.json (split, from September 2026); .html twins",
+        "columns": {
+          "Category": "The export's section or list name for the item (e.g. Posts that have been shown to you in your Feed, Posts, Videos, Ads, Videos you have watched, Marketplace Items).",
+          "Name": "Name or title of the item as the export gives it.",
+          "Link": "URL of the item (the share URL for web pages opened off Facebook).",
+          "Date": "ISO 8601 timestamp of when the item was shown or watched."
+        }
+      }
+    },
+    {
       "id": "facebook_reels_usage",
       "title": {
         "en": "Interactions with Facebook Reels",
@@ -365,6 +405,41 @@
           "Title": "Title of the ad interacted with.",
           "URL": "URL of the ad or post interacted with.",
           "Timestamp": "ISO 8601 timestamp of when the interaction occurred."
+        }
+      }
+    },
+    {
+      "id": "facebook_activity_off_meta",
+      "title": {
+        "en": "Your activity off Meta technologies",
+        "nl": "Je activiteit buiten Meta"
+      },
+      "description": {
+        "en": "Businesses and apps share with Meta what you do on their websites and apps, such as page views, searches and purchases. This table lists what they reported about you.",
+        "nl": "Bedrijven en apps delen met Meta wat je op hun websites en apps doet, zoals paginaweergaven, zoekopdrachten en aankopen. Deze tabel toont wat zij over jou hebben doorgegeven."
+      },
+      "headers": {
+        "Business": {
+          "en": "Business",
+          "nl": "Bedrijf"
+        },
+        "Event": {
+          "en": "Event",
+          "nl": "Gebeurtenis"
+        },
+        "Date": {
+          "en": "Date",
+          "nl": "Datum en tijd"
+        }
+      },
+      "extractor": "your_activity_off_meta_to_df",
+      "documentation": {
+        "summary": "Each row is one activity that a business or organisation reported to Meta about the participant on its own website or app (page view, search, purchase, app open, ...). JSON has two shapes (off_facebook_activity_v2 with events[]; 2026 record format with label_values); HTML is an index page plus one page per business, read one at a time.",
+        "source_file": "apps_and_websites_off_of_facebook/your_activity_off_meta_technologies.json / .html + your_activity_off_meta_technologies/<business>.html",
+        "columns": {
+          "Business": "Name of the business or app that reported the activity.",
+          "Event": "Meta's event code (PAGE_VIEW, VIEW_CONTENT, SEARCH, PURCHASE, CUSTOM, ...).",
+          "Date": "Timestamp of when Meta received the event, in the reference zone."
         }
       }
     },
@@ -685,31 +760,6 @@
           "Product Name": "Product name of the viewed item.",
           "Description": "Description of the viewed item.",
           "Date": "ISO 8601 timestamp of when the item was viewed."
-        }
-      }
-    },
-    {
-      "id": "facebook_news_your_locations",
-      "title": {
-        "en": "The locations Facebook news is set to",
-        "nl": "De locaties waar Facebook Nieuws op is ingesteld"
-      },
-      "description": {
-        "en": "This table displays the geographical locations for which your Facebook News feed is configured.",
-        "nl": "Deze tabel toont de geografische locaties waarvoor je Facebook Nieuwsfeed is geconfigureerd."
-      },
-      "headers": {
-        "Location": {
-          "en": "Location",
-          "nl": "Locatie"
-        }
-      },
-      "extractor": "news_your_locations_to_df",
-      "documentation": {
-        "summary": "Each row represents a geographical location for which the participant's Facebook News feed is configured.",
-        "source_file": "facebook_news/your_locations.json",
-        "columns": {
-          "Location": "Name of the configured location."
         }
       }
     }

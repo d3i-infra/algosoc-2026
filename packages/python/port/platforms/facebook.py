@@ -355,84 +355,6 @@ def _who_youve_followed_html(reader: ZipArchiveReader, errors: Counter) -> pd.Da
     return pd.DataFrame()
 
 
-def news_your_locations_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
-    """Extract the locations Facebook News is configured to show.
-
-    Parameters
-    ----------
-    reader:
-        Archive reader used to load JSON files from the DDP zip.
-    errors:
-        Mutable counter that accumulates error type counts encountered during
-        extraction.  Updated in-place.
-
-    Returns
-    -------
-    pd.DataFrame
-        Columns: ``Location``.
-        Empty DataFrame when the file is absent or parsing fails.
-
-    Table documentation::
-
-        {
-          "summary": "Each row represents a geographical location for which the participant's Facebook News feed is configured.",
-          "source_file": "facebook_news/your_locations.json",
-          "columns": {
-            "Location": "Name of the configured location."
-          }
-        }
-
-    Table config::
-
-        {
-          "id": "facebook_news_your_locations",
-          "title": {
-            "en": "The locations Facebook news is set to",
-            "nl": "De locaties waar Facebook Nieuws op is ingesteld"
-          },
-          "description": {
-            "en": "This table displays the geographical locations for which your Facebook News feed is configured.",
-            "nl": "Deze tabel toont de geografische locaties waarvoor je Facebook Nieuwsfeed is geconfigureerd."
-          },
-          "headers": {
-            "Location": {"en": "Location", "nl": "Locatie"}
-          }
-        }
-    """
-    if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
-        return _news_your_locations_html(reader, errors)
-
-    return _news_your_locations_json(reader, errors)
-
-
-def _news_your_locations_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
-    result = reader.json("facebook_news/your_locations.json")
-    if not result.found:
-        return pd.DataFrame()
-    d = result.data
-
-    out = pd.DataFrame()
-    datapoints = []
-
-    try:
-        items = d["news_your_locations_v2"]  # pyright: ignore
-        for item in items:
-            datapoints.append(
-                item
-            )
-        out = pd.DataFrame(datapoints, columns=["Location"]) #pyright: ignore
-
-    except Exception as e:
-        logger.error("Exception caught: %s", e)
-        errors[type(e).__name__] += 1
-
-    return out
-
-
-def _news_your_locations_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
-    return pd.DataFrame()
-
-
 def notifications_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
     """Extract Facebook notifications history.
 
@@ -4453,6 +4375,7 @@ EXTRACTOR_REGISTRY: dict[str, Callable[..., pd.DataFrame]] = {
     "your_search_history_to_df": your_search_history_to_df,                                      # logged_information/search/your_search_history.json
     "ads_interests_to_df": ads_interests_to_df,                                                  # logged_information/other_logged_information/ads_interests.json
     "profile_visits_to_df": profile_visits_to_df,                                                # logged_information/interactions/profile_visits.json
+    "content_shown_to_you_to_df": content_shown_to_you_to_df,                                    # logged_information/interactions/recently_viewed.json (to June 2026) | content_that_has_been_shown_to_you_in_your_feed.json + ads.json + shows_you_have_watched.json
     "facebook_reels_usage_to_df": facebook_reels_usage_to_df,                                    # logged_information/other_logged_information/facebook_reels_usage_information.json
     #"video_consumption_summary_to_df": video_consumption_summary_to_df,                          # your_facebook_activity/other_activity/your_video_consumption_summary.json
     "link_history_to_df": link_history_to_df,                                                    # your_facebook_activity/other_activity/link_history.json
@@ -4462,6 +4385,7 @@ EXTRACTOR_REGISTRY: dict[str, Callable[..., pd.DataFrame]] = {
     "other_categories_used_to_reach_you_to_df": other_categories_used_to_reach_you_to_df,        # ads_information/other_categories_used_to_reach_you.json
     "advertisers_using_your_activity_to_df": advertisers_using_your_activity_to_df,               # ads_information/advertisers_using_your_activity_or_information.json
     "advertisers_youve_interacted_with_to_df": advertisers_youve_interacted_with_to_df,           # ads_information/advertisers_you've_interacted_with
+    "your_activity_off_meta_to_df": your_activity_off_meta_to_df,                                # apps_and_websites_off_of_facebook/your_activity_off_meta_technologies.json | .html + your_activity_off_meta_technologies/<business>.html
     "comments_to_df": comments_to_df,                                                            # your_facebook_activity/comments_and_reactions/comments.json
     "likes_and_reactions_to_df": likes_and_reactions_to_df,                                       # your_facebook_activity/comments_and_reactions/likes_and_reactions_1.json
     "your_posts_check_ins_to_df": your_posts_check_ins_to_df,                                    # your_facebook_activity/posts/your_posts__check_ins__photos_and_videos_1.json
@@ -4471,20 +4395,7 @@ EXTRACTOR_REGISTRY: dict[str, Callable[..., pd.DataFrame]] = {
     "pages_and_profiles_you_follow_to_df": pages_and_profiles_you_follow_to_df,                   # your_facebook_activity/pages/pages_and_profiles_you_follow.json
     "pages_youve_liked_to_df": pages_youve_liked_to_df,                                          # your_facebook_activity/pages/pages_you've_liked.json
     "items_viewed_to_df": items_viewed_to_df,                                                    # logged_information/interactions/items_viewed.json
-    # Dead in 2026 exports: no export seen has a facebook_news/ folder (Facebook
-    # News was discontinued in the EU, Dec 2023), so this table is always empty
-    # and never shown. Kept registered until the researcher meeting decides on
-    # its removal (2026-09-02); see UNPINNED_KNOWN_GAPS in
-    # tests/test_extractor_integration_facebook.py.
-    "news_your_locations_to_df": news_your_locations_to_df,                                      # facebook_news/your_locations.json
     #"your_comment_active_days_to_df": your_comment_active_days_to_df,                            # PENDING — Days with active commenting
-    # --- Implemented and tested; held until the researcher meeting (2026-09-02) ---
-    # To activate: uncomment the line, add the table to configs/facebook_config.json
-    # (rm + `pnpm generate-config facebook`, ADR-0030), and drop the name from
-    # HELD_EXTRACTORS in tests/test_extractor_integration_facebook.py (its
-    # EXPECT_NON_EMPTY pins stay as they are).
-    # "content_shown_to_you_to_df": content_shown_to_you_to_df,      # logged_information/interactions/recently_viewed.json | content_that_has_been_shown_to_you_in_your_feed.json + ads.json + shows_you_have_watched.json
-    # "your_activity_off_meta_to_df": your_activity_off_meta_to_df,  # apps_and_websites_off_of_facebook/your_activity_off_meta_technologies.json | .html + your_activity_off_meta_technologies/<business>.html
     # --- Not in spreadsheet — commented out ---
     # "notifications_to_df": notifications_to_df,
     # "content_sharing_you_have_created_to_df": content_sharing_you_have_created_to_df,

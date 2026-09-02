@@ -216,37 +216,16 @@ EXPECT_NON_EMPTY: dict[str, set[str]] = {
 # in facebook.py, add the table to configs/facebook_config.json (rm +
 # `pnpm generate-config facebook`, ADR-0030), and move the name from here to the
 # registry side — the pins in EXPECT_NON_EMPTY stay as they are.
-HELD_EXTRACTORS: dict[str, Callable[..., pd.DataFrame]] = {
-    "content_shown_to_you_to_df": facebook.content_shown_to_you_to_df,
-    "your_activity_off_meta_to_df": facebook.your_activity_off_meta_to_df,
-}
+HELD_EXTRACTORS: dict[str, Callable[..., pd.DataFrame]] = {}  # activated 2026-09-02 after the researcher meeting
 
 _ALL_EXTRACTORS: dict[str, Callable[..., pd.DataFrame]] = {**facebook.EXTRACTOR_REGISTRY, **HELD_EXTRACTORS}
 
 # Fixture-free smoke input per held extractor: the smallest archive that makes
 # it produce a non-empty frame, so its docstring headers can be checked against
 # the columns it actually emits without a real export present.
-_HELD_SMOKE_INPUTS: dict[str, list[tuple[str, str]]] = {
-    "content_shown_to_you_to_df": [(
-        "export/logged_information/interactions/recently_viewed.json",
-        json.dumps({"recently_viewed": [{"name": "Ads", "description": "", "entries": [
-            {"timestamp": 1700000000, "data": {"name": "An ad", "uri": "https://www.facebook.com/ads/1"}},
-        ]}]}),
-    )],
-    "your_activity_off_meta_to_df": [(
-        "export/apps_and_websites_off_of_facebook/your_activity_off_meta_technologies.json",
-        json.dumps({"off_facebook_activity_v2": [
-            {"name": "A shop", "events": [{"id": 1, "type": "PAGE_VIEW", "timestamp": 1700000000}]},
-        ]}),
-    )],
-}
+_HELD_SMOKE_INPUTS: dict[str, list[tuple[str, str]]] = {}
 
 UNPINNED_KNOWN_GAPS: dict[str, str] = {
-    "news_your_locations_to_df": (
-        "facebook_news/your_locations.json is absent from every 2026 export seen "
-        "(Facebook News was discontinued); stays registered until the researcher "
-        "meeting decides on its removal"
-    ),
 }
 
 
