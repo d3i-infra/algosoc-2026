@@ -22,7 +22,7 @@ applies_to:
 priority: invariant
 ---
 
-# Three logging boundaries for diagnostics, milestones, and consent-gated errors
+# Use three logging boundaries: local, milestone, consent-gated
 
 ## Decision
 
@@ -33,6 +33,7 @@ Python diagnostics stay local; host-visible milestones are explicit PII-free `Co
 - Do not auto-forward Python module loggers or raw Python error strings to the host; hidden forwarding pipelines are forbidden — in particular, `LogForwardingHandler` (the rejected hidden-handler mechanism) must never be attached to a port logger.
 - Keep local diagnostics on module (`__name__`) loggers for in-browser debugging.
 - Emit host-visible milestones deliberately via `port_helpers.emit_log()` with a constrained PII-free vocabulary.
+- Extraction error-counter keys reach the host through the extraction-summary milestone (`FlowBuilder`), so a key may embed only code constants: `AmbiguousMemberMatch(<name>)` carries the name the extractor requested — a literal or a value from a code-level table, never anything derived from a participant's archive.
 - The JS logging/bridge/worker files are in `applies_to` as enforcement points (not context). Their framework-level logging (`worker.onerror`, `LogForwarder`, `sendLogs()`) is intentional and fine for JS/worker observability; the boundary is that JS must not become a hidden path for **Python module diagnostics or raw Python participant-data error text**. Concretely, do not add a producer that posts raw Python errors into the worker → `LogForwarder` → `sendLogs()` path — the `worker_engine` `error`-event handler is inert only because `py_worker.js` posts no such event.
 
 ## Why

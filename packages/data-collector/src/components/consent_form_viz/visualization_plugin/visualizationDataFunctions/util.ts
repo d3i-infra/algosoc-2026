@@ -1,12 +1,25 @@
 import { DateFormat, Table } from "../types";
 
+// The extractors write every timestamp as "YYYY-MM-DD HH:MM:SS", already expressed in the
+// study's reference timezone. A space between the date and the time is not part of the
+// format the ECMAScript spec requires engines to accept, and Safari rejected it outright
+// before 15.4, so it is swapped for the "T" that every engine reads. Without an offset the
+// result is read as a local time, which is what keeps the wall clock the extractors wrote
+// from being shifted again by the timezone of whatever machine the participant is on.
+const DATE_TIME = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})$/;
+
+export function parseTimestamp(timestamp: string): number {
+  const match = DATE_TIME.exec(timestamp);
+  return new Date(match ? `${match[1]}T${match[2]}` : timestamp).getTime();
+}
+
 export function formatDate(
   dateString: string[],
   format: DateFormat,
   minValues: number = 10
 ): [string[], Record<string, number> | null] {
   let formattedDate: string[];
-  const dateNumbers = dateString.map((date) => new Date(date).getTime());
+  const dateNumbers = dateString.map(parseTimestamp);
   let domain: [number, number] | null = null;
   let formatter: (date: Date) => string = (date) => date.toISOString();
 

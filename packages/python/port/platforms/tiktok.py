@@ -6,6 +6,18 @@ This module contains an example flow of a TikTok data donation study.
 Assumptions:
 It handles DDPs in the English or Dutch language, either with filetype JSON or a compressed folder with TXT files.
 
+Timestamps
+----------
+Every date column is written as ``YYYY-MM-DD HH:MM:SS`` in the reference timezone named by
+``extraction_helpers.REFERENCE_TIMEZONE``, so that a date means the same thing here as it
+does in the Facebook, Instagram and Google tables.
+
+The two export formats say different amounts about the clock. The txt format names the
+zone outright (``Datum: 2026-05-02 10:09:50 UTC``); the json format writes the same moment
+bare (``"Date": "2026-05-02 10:09:50"``). Both are read as UTC — stated in the one case,
+and in the other resting on TikTok's convention, which the txt export of the same data
+corroborates.
+
 Configuration
 -------------
 The ``extraction`` function is driven by ``port_config.json``.  Generate one with::
@@ -169,6 +181,22 @@ def _item_get(item: dict, *keys: str):
         if lower in item:
             return item.get(lower)
     return ""
+
+
+def _item_date(item: dict, errors: Counter, *keys: str) -> str:
+    """Read a timestamp from a record and write it in the shared datetime format.
+
+    The two export formats say different amounts about the zone. The txt export names it
+    outright — ``Datum: 2026-05-02 10:09:50 UTC`` — while the json export writes the same
+    moment bare, as ``"Date": "2026-05-02 10:09:50"``. Both are read as UTC, which the txt
+    export confirms and which the json export leaves implicit.
+
+    Defaults to the keys the date is written under, in English and in Dutch; pass *keys*
+    where a file uses another name for it."""
+
+    return eh.utc_timestamp_to_datetime_string(
+        _item_get(item, *(keys or ("Date", "Datum"))) or "", errors=errors
+    )
 
 
 def _parse_tiktok_txt(data: io.BytesIO) -> dict[str, Any] | list[dict[str, Any]] | None:
@@ -651,7 +679,7 @@ def watch_history_to_df(reader: ZipArchiveReader, errors: Counter, validation) -
         # this try so an unbound name is still counted, exactly as before.
         if not isinstance(items, list):
             return out
-        rows = [(_item_get(item, "Date", "Datum"), _item_get(item, "Link")) for item in items]
+        rows = [(_item_date(item, errors), _item_get(item, "Link")) for item in items]
         out = pd.DataFrame(rows, columns=["Date", "Link"])  # pyright: ignore
         out = out.sort_values("Date", ascending=False)
     except Exception as e:
@@ -752,7 +780,7 @@ def favorite_videos_to_df(reader: ZipArchiveReader, errors: Counter, validation)
         # this try so an unbound name is still counted, exactly as before.
         if not isinstance(items, list):
             return out
-        rows = [(_item_get(item, "Date", "Datum"), _item_get(item, "Link")) for item in items]
+        rows = [(_item_date(item, errors), _item_get(item, "Link")) for item in items]
         out = pd.DataFrame(rows, columns=["Date", "Link"])  # pyright: ignore
         out = out.sort_values("Date", ascending=False)
     except Exception as e:
@@ -852,7 +880,7 @@ def follower_to_df(reader: ZipArchiveReader, errors: Counter, validation) -> pd.
         # this try so an unbound name is still counted, exactly as before.
         if not isinstance(items, list):
             return out
-        rows = [(_item_get(item, "Date", "Datum"), _item_get(item, "UserName", "User Name", "Gebruikersnaam")) for item in items]
+        rows = [(_item_date(item, errors), _item_get(item, "UserName", "User Name", "Gebruikersnaam")) for item in items]
         out = pd.DataFrame(rows, columns=["Date", "UserName"])  # pyright: ignore
         out = out.sort_values("Date", ascending=False)
     except Exception as e:
@@ -952,7 +980,7 @@ def following_to_df(reader: ZipArchiveReader, errors: Counter, validation) -> pd
         # this try so an unbound name is still counted, exactly as before.
         if not isinstance(items, list):
             return out
-        rows = [(_item_get(item, "Date", "Datum"), _item_get(item, "UserName", "User Name", "Gebruikersnaam", "Username")) for item in items]
+        rows = [(_item_date(item, errors), _item_get(item, "UserName", "User Name", "Gebruikersnaam", "Username")) for item in items]
         out = pd.DataFrame(rows, columns=["Date", "UserName"])  # pyright: ignore
         out = out.sort_values("Date", ascending=False)
     except Exception as e:
@@ -1155,7 +1183,7 @@ def like_list_to_df(reader: ZipArchiveReader, errors: Counter, validation) -> pd
         # this try so an unbound name is still counted, exactly as before.
         if not isinstance(items, list):
             return out
-        rows = [(_item_get(item, "Date", "Datum"), _item_get(item, "Link")) for item in items]
+        rows = [(_item_date(item, errors), _item_get(item, "Link")) for item in items]
         out = pd.DataFrame(rows, columns=["Date", "Link"])  # pyright: ignore
         out = out.sort_values("Date", ascending=False)
     except Exception as e:
@@ -1264,7 +1292,7 @@ def searches_to_df(reader: ZipArchiveReader, errors: Counter, validation) -> pd.
         # this try so an unbound name is still counted, exactly as before.
         if not isinstance(items, list):
             return out
-        rows = [(_item_get(item, "Date","Datum"), _item_get(item, "SearchTerm", "Search Term", "Zoekterm")) for item in items]
+        rows = [(_item_date(item, errors), _item_get(item, "SearchTerm", "Search Term", "Zoekterm")) for item in items]
         out = pd.DataFrame(rows, columns=["Date", "SearchTerm"])  # pyright: ignore
         out = out.sort_values("Date", ascending=False)
     except Exception as e:
@@ -1372,7 +1400,7 @@ def share_history_to_df(reader: ZipArchiveReader, errors: Counter, validation) -
             return out
         rows = [
             (
-                _item_get(item, "Date", "Datum"),
+                _item_date(item, errors),
                 _item_get(item, "SharedContent", "Shared Content", "Gedeelde inhoud"),
                 _item_get(item, "Link"),
                 _item_get(item, "Method", "Methode"),
@@ -1492,7 +1520,7 @@ def comments_to_df(reader: ZipArchiveReader, errors: Counter, validation) -> pd.
             return out
         rows = [
             (
-                _item_get(item, "Date", "Datum"),
+                _item_date(item, errors),
                 _item_get(item, "Comment", "Reactie"),
                 _item_get(item, "Photo", "Foto"),
                 _item_get(item, "Url", "Link", "originalPostUrl", "Original Post Link", "Originele link naar bericht") #Dutch translations are a guess for now, as I don't have a Dutch TikTok export with comments to verify against.
@@ -1595,7 +1623,7 @@ def off_tiktok_to_df(reader: ZipArchiveReader, errors: Counter, validation) -> p
     try:
         rows = [
             (
-                _item_get(item, "Date", "Datum", "TimeStamp"),
+                _item_date(item, errors, "Date", "Datum", "TimeStamp"),
                 _item_get(item, "Source", "Bron"),
                 _item_get(item, "Event", "Evenement"),
             )

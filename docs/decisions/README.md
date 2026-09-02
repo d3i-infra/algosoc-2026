@@ -32,7 +32,7 @@ Load the ADR(s) whose filename matches the area you are touching.
 - [0011 — Python generator protocol for workflow orchestration](./0011-python-generator-protocol-for-workflow-orchestration.md)
 - [0021 — Handle structured donation results with legacy PayloadVoid fallback](./0021-handle-structured-donation-results-with-legacy-payloadvoid-fallback.md)
 - [0022 — ScriptWrapper exception handling is a PII safety boundary](./0022-scriptwrapper-exception-handling-is-a-pii-safety-boundary.md)
-- [0023 — Three logging boundaries for diagnostics, milestones, and consent-gated errors](./0023-three-logging-boundaries-for-diagnostics-milestones-and-consent-gated-errors.md)
+- [0023 — Use three logging boundaries: local, milestone, consent-gated](./0023-use-three-logging-boundaries-local-milestone-consent-gated.md)
 - [0028 — Docstring-driven UI metadata for extractor functions](./0028-docstring-driven-ui-metadata-for-extractor-functions.md)
 - [0029 — Standard platform module interface](./0029-standard-platform-module-interface.md)
 - [0030 — Config lifecycle and generator overwrite policy](./0030-config-lifecycle-and-generator-overwrite-policy.md)

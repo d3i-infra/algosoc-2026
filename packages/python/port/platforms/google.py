@@ -38,13 +38,31 @@ Platform info::
         "description": "Handles the Google Takeout archive, uploaded as one or more zip parts (a multi-zip archive-set, so the export never needs to fit in a single upload). Extracts the ten tables this study asks for: four from YouTube (watch history, search history, subscriptions, comments), one each from Search, Chrome, Video Search, Ads, Discover and Google News. The general area a search or Discover card was made from is not extracted; rows of the Search, Chrome, Video Search and Ads tables that carry explicit content are dropped, and email addresses are redacted in the title and details columns of every table. Each source is read as JSON, HTML, CSV or TXT, whichever format it was exported in, which may differ per source within one archive. Handles DDPs in English, Dutch, German, Spanish, Arabic, Turkish and Chinese (Simplified only); the seven locales' path tables for the core sources were verified against real Google Takeout exports in August 2026. A handful of lower-traffic sources still carry older, unverified path guesses: the News My-Activity folder in every locale, Discover outside English (its English path is real-export-verified), and subscriptions/comments outside English and Dutch. Tested against the project's synthetic/canary test suite as of the date below; a live browser run against real exports updates this note when performed. If you find anything wrong with this script, report to datadonation@uu.nl and it will be fixed!",
         "time_last_tested": "30-08-2026"
     }
+
+Timestamps
+----------
+Every date column is written as ``YYYY-MM-DD HH:MM:SS`` in the reference timezone named by
+``extraction_helpers.REFERENCE_TIMEZONE``, so that a date means the same thing here as it
+does in the TikTok, Facebook and Instagram tables.
+
+The two export formats say different things about the clock. The json format writes an
+absolute instant in UTC (``2026-06-15T18:30:41Z``), which is converted exactly. The html
+format writes the local time of the account together with the zone it stands in
+(``15 jun 2026, 20:30:41 CEST``); that zone is read and the time converted from it, so an
+account set to Amsterdam comes through unchanged and one set elsewhere is moved. Where the
+zone is named by an abbreviation that means more than one thing, it is not guessed at: the
+local time is written as it stands and counted as ``TimestampTimezoneUnknown``.
+
+Note that Takeout renders every record in the timezone the account is set to at export
+time, so activity from a trip abroad is written in the home zone of the account rather than
+the zone the participant was actually in. No export records the latter.
 """
 import json
 import logging
 import re
 from collections import Counter
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Callable, IO, Literal, TypeGuard, overload
 
 import pandas as pd
@@ -53,6 +71,7 @@ from lxml import etree
 
 from port.api.d3i_props import ExtractionResult
 from port.helpers.archive_set import ArchiveSet
+import port.helpers.extraction_helpers as eh
 from port.helpers.extraction_helpers import ZipArchiveReader
 from port.helpers.flow_builder import FlowBuilder
 from port.helpers.study_redaction import apply_study_redaction
@@ -404,7 +423,7 @@ def validate_ddp(archive_set: ArchiveSet) -> GoogleValidation:
     )
 
 
-def _parse_activity_html(data: IO[bytes]) -> list[dict]:
+def _parse_activity_html(data: IO[bytes], errors: Counter | None = None) -> list[dict]:
     """Reads an activity file in html format and parses it into a list of dictionaries with
     the same shape as the json format: the title of the activity, the url it points to, what
     stands under it and its timestamp.
@@ -472,7 +491,7 @@ def _parse_activity_html(data: IO[bytes]) -> list[dict]:
             record = {
                 "title": lines[0]["text"],
                 "titleUrl": _strip_redirect(lines[0]["url"]) if lines[0]["url"] else "",
-                "time": _convert_to_iso8601(texts[-1]),
+                "time": _convert_to_iso8601(texts[-1], errors),
             }
             subtitles = [_subtitle(line) for line in middle if line["url"]]
             if subtitles:
@@ -641,10 +660,15 @@ MONTHS = {
 
 #: ``15 jun 2026, 20:30:41 CEST`` — how most locales write an activity timestamp, some of
 #: them with an ordinal dot after the day and after the month, as ``17. Aug. 2026`` is.
-DAY_FIRST = re.compile(r"^(\d{1,2})\.? ([^\s,]+),? (\d{4}),? (\d{1,2}):(\d{2}):(\d{2})")
+DAY_FIRST = re.compile(
+    r"^(\d{1,2})\.? ([^\s,]+),? (\d{4}),? (\d{1,2}):(\d{2}):(\d{2})(?:\s+(\S+))?\s*$"
+)
 
 #: ``Aug 17, 2026, 1:14:48 PM CEST`` — how the English locale writes one.
-MONTH_FIRST = re.compile(r"^([^\s,\d]+) (\d{1,2}), (\d{4}), (\d{1,2}):(\d{2}):(\d{2})(?:\s*([AaPp])\.?[Mm])?")
+MONTH_FIRST = re.compile(
+    r"^([^\s,\d]+) (\d{1,2}), (\d{4}), (\d{1,2}):(\d{2}):(\d{2})"
+    r"(?:\s*([AaPp])\.?[Mm])?(?:\s+(\S+))?\s*$"
+)
 
 #: ``27.08.2026, 20:04:54 MESZ`` — a fully numeric dotted date, as the current German
 #: export writes one. Dotted numeric dates are day-first in every locale that writes
@@ -653,7 +677,7 @@ MONTH_FIRST = re.compile(r"^([^\s,\d]+) (\d{1,2}), (\d{4}), (\d{1,2}):(\d{2}):(\
 #: 2026-12-07 instead of 2026-07-12). Tried before ``dateutil`` for exactly that reason;
 #: a month > 12 cannot be this shape at all, so that case (and any other ValueError, e.g.
 #: an out-of-range day) falls through to the existing paths below unchanged.
-NUMERIC_DAY_FIRST = re.compile(r"^(\d{1,2})\.(\d{1,2})\.(\d{4}),? (\d{1,2}):(\d{2}):(\d{2})")
+NUMERIC_DAY_FIRST = re.compile(r"^(\d{1,2})\.(\d{1,2})\.(\d{4}),? (\d{1,2}):(\d{2}):(\d{2})(?:\s+(\S+))?\s*$")
 
 #: ``2026年7月30日 00:23:06 CEST`` — how the Chinese export writes a timestamp. The
 #: 年 (year), 月 (month) and 日 (day) unit markers name each field, so this is
@@ -662,7 +686,7 @@ NUMERIC_DAY_FIRST = re.compile(r"^(\d{1,2})\.(\d{1,2})\.(\d{4}),? (\d{1,2}):(\d{
 #: even attempt, so without this it falls through unread (BUG C: confirmed against
 #: a real zh export, tests/ddp/google_set_uu-acct-zh/'s 观看记录.html — the zh
 #: locale writes English action words, e.g. "Watched", but CJK-formatted dates).
-CJK_DATE = re.compile(r"^(\d{4})年(\d{1,2})月(\d{1,2})日,? (\d{1,2}):(\d{2}):(\d{2})")
+CJK_DATE = re.compile(r"^(\d{4})年(\d{1,2})月(\d{1,2})日,? (\d{1,2}):(\d{2}):(\d{2})(?:\s+(\S+))?\s*$")
 
 #: ``23‏/07‏/2026، 4:20:22 م CEST`` — how the Arabic export writes a timestamp:
 #: Western digits in day/month/year order (day-first — confirmed against real
@@ -674,13 +698,73 @@ CJK_DATE = re.compile(r"^(\d{4})年(\d{1,2})月(\d{1,2})日,? (\d{1,2}):(\d{2}):
 #: the pattern (harmless if a future export ever omits it); the meridiem letter
 #: is not, since the hour alone is ambiguous without it.
 ARABIC_DATE = re.compile(
-    r"^(\d{1,2})‏?/(\d{1,2})‏?/(\d{4})، (\d{1,2}):(\d{2}):(\d{2}) ([صم])"
+    r"^(\d{1,2})‏?/(\d{1,2})‏?/(\d{4})، (\d{1,2}):(\d{2}):(\d{2}) ([صم])(?:\s+(\S+))?\s*$"
 )
 
 
-def _convert_to_iso8601(timestamp):
-    """Converts a time string extracted from the HTML DDP (e.g. 15 jun 2026, 20:30:41 CEST) to
-    ISO8601 format, ignoring timezone abbreviations and translating month abbreviations.
+#: How far each zone Takeout names stands ahead of UTC, in hours.
+#:
+#: Only zones whose abbreviation means one thing are listed. Many do not: ``CST`` is US
+#: Central, China Standard and Cuba Standard time, ``IST`` is India, Ireland and Israel,
+#: and ``BST`` is both British Summer and Bangladesh Standard time. Guessing at those
+#: would silently move an activity by hours, so a zone that is not listed here is counted
+#: as unknown instead — see ``_zone_offset``. Takeout writes a numeric ``GMT+3`` for many
+#: locales anyway, which needs no table.
+ZONE_OFFSETS = {
+    "UTC": 0, "GMT": 0, "Z": 0,
+    "WET": 0, "WEST": 1,
+    "CET": 1, "CEST": 2,
+    "EET": 2, "EEST": 3,
+    # The German locale names central European time in German: Mitteleuropäische
+    # (Sommer)Zeit, the same two zones as CET and CEST.
+    "MEZ": 1, "MESZ": 2,
+}
+
+#: ``GMT+3``, ``UTC-5``, ``GMT+5:30`` — a zone written as an offset rather than a name.
+NUMERIC_ZONE = re.compile(r"^(?:GMT|UTC)([+-])(\d{1,2})(?::?(\d{2}))?$", re.IGNORECASE)
+
+
+def _zone_offset(zone: str | None) -> timedelta | None:
+    """How far *zone*, as Takeout writes it at the end of a timestamp, stands ahead of UTC.
+
+    Returns ``None`` when the archive names no zone or names one that cannot be read
+    without guessing, which is what tells the caller to count the timestamp as unconverted
+    rather than move it by an offset that may be wrong."""
+
+    if not zone:
+        return None
+
+    match = NUMERIC_ZONE.match(zone)
+    if match:
+        sign, hours, minutes = match.groups()
+        offset = timedelta(hours=int(hours), minutes=int(minutes or 0))
+        return -offset if sign == "-" else offset
+
+    hours = ZONE_OFFSETS.get(zone.upper())
+    return None if hours is None else timedelta(hours=hours)
+
+
+def _from_local(moment: datetime, zone: str | None, errors: Counter | None) -> str:
+    """Write *moment*, the local time of the account, in the shared datetime format.
+
+    Where the zone is one that can be read, the local time is converted to the reference
+    frame every platform is expressed in. Where it is not, the local time is written as it
+    stands — which is what this extractor has always done — and counted, so that how often
+    it happens is a number that can be looked at rather than something taken on trust."""
+
+    offset = _zone_offset(zone)
+    if offset is None:
+        if errors is not None:
+            errors["TimestampTimezoneUnknown"] += 1
+        return moment.strftime(eh.DATETIME_FORMAT)
+
+    return eh.local_time_to_datetime_string(moment, offset, errors=errors)
+
+
+def _convert_to_iso8601(timestamp, errors: Counter | None = None):
+    """Converts a time string extracted from the HTML DDP (e.g. 15 jun 2026, 20:30:41 CEST)
+    to the shared datetime format, translating month abbreviations and converting the local
+    time of the account from the timezone it names.
 
     An activity file holds one timestamp per record, hundreds of thousands of them for a
     heavy user, and reading a date in any format a participant might have is expensive.
@@ -690,53 +774,53 @@ def _convert_to_iso8601(timestamp):
 
     numeric = NUMERIC_DAY_FIRST.match(timestamp)
     if numeric:
-        day, month, year, hour, minute, second = numeric.groups()
+        day, month, year, hour, minute, second, zone = numeric.groups()
         if 1 <= int(month) <= 12:
             try:
-                return datetime(
-                    int(year), int(month), int(day), int(hour), int(minute), int(second)
-                ).isoformat()
+                moment = datetime(int(year), int(month), int(day), int(hour), int(minute), int(second))
             except ValueError:
-                pass  # e.g. day out of range for the month — fall through below
+                moment = None  # e.g. day out of range for the month — fall through below
+            if moment is not None:
+                return _from_local(moment, zone, errors)
 
     cjk = CJK_DATE.match(timestamp)
     if cjk:
-        year, month, day, hour, minute, second = cjk.groups()
+        year, month, day, hour, minute, second, zone = cjk.groups()
         if 1 <= int(month) <= 12:
             try:
-                return datetime(
-                    int(year), int(month), int(day), int(hour), int(minute), int(second)
-                ).isoformat()
+                moment = datetime(int(year), int(month), int(day), int(hour), int(minute), int(second))
             except ValueError:
-                pass  # e.g. day out of range for the month — fall through below
+                moment = None
+            if moment is not None:
+                return _from_local(moment, zone, errors)
 
     arabic = ARABIC_DATE.match(timestamp)
     if arabic:
-        day, month, year, hour, minute, second, meridiem = arabic.groups()
+        day, month, year, hour, minute, second, meridiem, zone = arabic.groups()
         if 1 <= int(month) <= 12:
             # A 12-hour clock counts noon as 12 PM (م) and midnight as 12 AM (ص).
             hour = int(hour) % 12 + (12 if meridiem == "م" else 0)
             try:
-                return datetime(
-                    int(year), int(month), int(day), hour, int(minute), int(second)
-                ).isoformat()
+                moment = datetime(int(year), int(month), int(day), hour, int(minute), int(second))
             except ValueError:
-                pass  # e.g. day out of range for the month — fall through below
+                moment = None
+            if moment is not None:
+                return _from_local(moment, zone, errors)
 
     match = MONTH_FIRST.match(timestamp)
     if match:
-        month, day, year, hour, minute, second, meridiem = match.groups()
+        month, day, year, hour, minute, second, meridiem, zone = match.groups()
     else:
         match = DAY_FIRST.match(timestamp)
         if match:
-            day, month, year, hour, minute, second = match.groups()
+            day, month, year, hour, minute, second, zone = match.groups()
             meridiem = None
         else:
-            return _convert_with_dateutil(timestamp)
+            return _convert_with_dateutil(timestamp, errors)
 
     number = MONTHS.get(month[:3].lower())
     if number is None:
-        return _convert_with_dateutil(timestamp)
+        return _convert_with_dateutil(timestamp, errors)
 
     hour = int(hour)
     if meridiem:
@@ -744,38 +828,39 @@ def _convert_to_iso8601(timestamp):
         hour = hour % 12 + (12 if meridiem.lower() == "p" else 0)
 
     try:
-        return datetime(int(year), number, int(day), hour, int(minute), int(second)).isoformat()
+        moment = datetime(int(year), number, int(day), hour, int(minute), int(second))
     except ValueError:
-        return _convert_with_dateutil(timestamp)
+        return _convert_with_dateutil(timestamp, errors)
+
+    return _from_local(moment, zone, errors)
 
 
-def _convert_usec_to_iso8601(timestamp):
+def _convert_usec_to_iso8601(timestamp, errors: Counter | None = None):
     """Converts a timestamp in microseconds since the epoch, as the Chrome history writes
-    them (e.g. 1787225185379660), to ISO 8601. ``eh.epoch_to_iso`` cannot read these
-    numbers because it takes them for seconds and a microsecond count overflows the year.
+    them (e.g. 1787225185379660), to the shared datetime format. ``eh.epoch_to_iso`` cannot
+    read these numbers because it takes them for seconds and a microsecond count overflows
+    the year.
 
-    The time is read in UTC and written without the offset, in the shape the activity
-    files record their local time in, so that one column holds one format. Sub-second
-    precision is dropped for the same reason. A timestamp that is not a number is
-    returned unchanged."""
+    The count names an absolute instant, so it is converted to the reference frame exactly.
+    Sub-second precision is dropped, so that one column holds one format. A timestamp that
+    is not a number is returned unchanged."""
 
     try:
         seconds = int(timestamp) // 1_000_000
-        return datetime.fromtimestamp(seconds, tz=timezone.utc).replace(tzinfo=None).isoformat()
-    except (OverflowError, OSError, TypeError, ValueError):
+    except (TypeError, ValueError):
         return timestamp
+    return eh.epoch_to_datetime_string(seconds, errors=errors)
 
 
-def _convert_with_dateutil(timestamp):
+def _convert_with_dateutil(timestamp, errors: Counter | None = None):
     """Converts a timestamp of a shape ``_convert_to_iso8601`` does not read itself,
-    returning it unchanged when it cannot be read at all."""
+    returning it unchanged and counting it when it cannot be read at all."""
     try:
         parts = timestamp.split(' ')
 
-        # Ignore timezone abbreviation at the end as this is not included in json either
-        # and cannot be automatically parsed
-        if ':' not in parts[-1]:
-            parts.pop()
+        # The zone closes the line and carries no colon, unlike the time. dateutil cannot
+        # read an abbreviation, so it is taken off here and applied afterwards instead.
+        zone = parts.pop() if ':' not in parts[-1] else None
 
         # Translate month abbreviations to English
         nl_month_translations = {
@@ -788,9 +873,18 @@ def _convert_with_dateutil(timestamp):
                 parts[i] = nl_month_translations[parts[i].lower()]
 
         dt = parser.parse(' '.join(parts))
-        return dt.isoformat()
-    except (ValueError, TypeError) as e:
+    except (ValueError, TypeError, IndexError):
+        if errors is not None:
+            errors["TimestampParseError"] += 1
         return timestamp
+
+    # dateutil reads an offset itself where the timestamp spells one out numerically.
+    if dt.tzinfo is not None:
+        return eh.local_time_to_datetime_string(
+            dt.replace(tzinfo=None), dt.utcoffset() or timedelta(), errors=errors
+        )
+
+    return _from_local(dt, zone, errors)
 
 
 def _read(reader: ZipArchiveReader, key: str, ddp_locale: str):
@@ -819,6 +913,27 @@ def _read(reader: ZipArchiveReader, key: str, ddp_locale: str):
     return None, None
 
 
+def _normalise_json_times(records, errors: Counter | None = None):
+    """Write the timestamp of every record of the json export in the shared datetime format.
+
+    Takeout writes these as ``2026-06-15T18:30:41.123Z``, an absolute instant named exactly,
+    where the html export writes the local time of the account. Converting here, as the raw
+    records are read, is what keeps the two apart: by the time an extractor reads ``time``
+    off a record, both formats have met in one shape and neither has been converted twice.
+
+    Records that are not a list are handed back untouched — the Chrome history writes an
+    object keyed by section, and counts microseconds rather than naming a time."""
+
+    if not isinstance(records, list):
+        return records
+
+    for record in records:
+        if isinstance(record, dict) and "time" in record:
+            record["time"] = eh.utc_timestamp_to_datetime_string(record["time"], errors=errors)
+
+    return records
+
+
 def _read_activity(reader: ZipArchiveReader, errors: Counter, key: str, ddp_locale: str):
     """Reads an activity source in whichever format it was exported: JSON parsed
     whole (small), HTML parsed as a stream so a heavy user's multi-hundred-MB
@@ -830,12 +945,12 @@ def _read_activity(reader: ZipArchiveReader, errors: Counter, key: str, ddp_loca
             if extension == "json":
                 result = reader.json(f"{path}.json")
                 if result.found:
-                    return result.data
+                    return _normalise_json_times(result.data, errors)
             elif extension == "html":
                 try:
                     with reader.open_member(f"{path}.html") as stream:
                         if stream is not None:
-                            return _parse_activity_html(stream)
+                            return _parse_activity_html(stream, errors)
                 except Exception as e:
                     logger.error("Exception caught: %s", e)
                     errors[type(e).__name__] += 1
@@ -1415,7 +1530,7 @@ def chrome_history_to_df(reader: ZipArchiveReader, errors: Counter, ddp_locale: 
                 datapoints.append((
                     item.get("title", ""),
                     item.get("url", ""),
-                    _convert_usec_to_iso8601(item.get("time_usec", ""))
+                    _convert_usec_to_iso8601(item.get("time_usec", ""), errors)
                 ))
         else:
             for item in d:
