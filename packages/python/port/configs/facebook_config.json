@@ -85,10 +85,14 @@
         "nl": "Profielen die je recentelijk hebt bezocht"
       },
       "description": {
-        "en": "This table shows the Facebook profiles you have recently visited.",
-        "nl": "Deze tabel toont de Facebook-profielen die je recentelijk hebt bezocht."
+        "en": "This table shows the Facebook profiles, pages, groups and events you opened in roughly the last 90 days.",
+        "nl": "Deze tabel toont de Facebook-profielen, pagina's, groepen en evenementen die je in ongeveer de laatste 90 dagen hebt geopend."
       },
       "headers": {
+        "Category": {
+          "en": "Category",
+          "nl": "Categorie"
+        },
         "Name": {
           "en": "Name",
           "nl": "Naam"
@@ -100,10 +104,11 @@
       },
       "extractor": "profile_visits_to_df",
       "documentation": {
-        "summary": "Each row represents a Facebook profile the participant recently visited, including the name and timestamp.",
-        "source_file": "logged_information/interactions/profile_visits.json / profile_visits.html",
+        "summary": "Each row is a Facebook profile, page, group or event the participant opened in roughly the last 90 days. Read from the profile_visits file in the split layout or from the grouped recently_visited file (all exports seen so far). Marketplace visit counters that carry only a date are not rows.",
+        "source_file": "logged_information/interactions/profile_visits.json (split) or recently_visited.json (grouped); .html twins",
         "columns": {
-          "Name": "Name of the visited profile.",
+          "Category": "The export's section name for the visit (Profile visits, Page visits, Events visited, Groups visited); always Profile visits in the split layout.",
+          "Name": "Name of the visited profile, page, group or event.",
           "Timestamp": "ISO 8601 timestamp of when the visit occurred."
         }
       }

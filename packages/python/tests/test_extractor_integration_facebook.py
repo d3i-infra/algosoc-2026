@@ -81,6 +81,7 @@ EXPECT_NON_EMPTY: dict[str, set[str]] = {
         "ads_interests_to_df",
         "facebook_reels_usage_to_df",
         "content_shown_to_you_to_df",
+        "profile_visits_to_df",
         "your_activity_off_meta_to_df",
     },
     # Same account and day, HTML. No logged_information/search in this export:
@@ -95,10 +96,10 @@ EXPECT_NON_EMPTY: dict[str, set[str]] = {
     # 2,209 files, the format participants are instructed to request. Drive
     # delivery spells the follow / like files `who_you_ve_followed` (apostrophe
     # replaced); the reader resolves that spelling, so both are pinned. The
-    # grouped interaction layout (recently_viewed / recently_visited) is still
-    # unread by the registered tables (the held content-shown table reads it:
-    # 79 rows here). The qualified JSON search path does not collide, so search
-    # is pinned here. Reels usage is absent from this export although present
+    # grouped interaction layout (recently_viewed / recently_visited) is read
+    # by the held content-shown table (79 rows here) and by profile visits
+    # (recently_visited, its fallback when the split file is absent). The
+    # qualified JSON search path does not collide, so search is pinned here. Reels usage is absent from this export although present
     # eight days earlier — file presence varies between exports of one account.
     "facebook_json_self-alltime-2026-03": _ADS_TABLES | _ACTIVITY_TABLES | {
         "your_search_history_to_df",
@@ -108,6 +109,7 @@ EXPECT_NON_EMPTY: dict[str, set[str]] = {
         "who_youve_followed_to_df",
         "pages_youve_liked_to_df",
         "content_shown_to_you_to_df",
+        "profile_visits_to_df",
         "your_activity_off_meta_to_df",
     },
     # Real account, HTML, all time (registered 2005), delivered via Google
@@ -125,6 +127,7 @@ EXPECT_NON_EMPTY: dict[str, set[str]] = {
         "who_youve_followed_to_df",
         "pages_youve_liked_to_df",
         "content_shown_to_you_to_df",
+        "profile_visits_to_df",
         "your_activity_off_meta_to_df",
     },
     # Real account, device downloads, October 2025: a three-month JSON window
@@ -136,6 +139,7 @@ EXPECT_NON_EMPTY: dict[str, set[str]] = {
         "ads_interests_to_df",
         "facebook_reels_usage_to_df",
         "content_shown_to_you_to_df",
+        "profile_visits_to_df",
         "your_activity_off_meta_to_df",
     },
     "facebook_html_self-device-2025-10": _ADS_TABLES | {
@@ -143,6 +147,7 @@ EXPECT_NON_EMPTY: dict[str, set[str]] = {
         "ads_interests_to_df",
         "facebook_reels_usage_to_df",
         "content_shown_to_you_to_df",
+        "profile_visits_to_df",
         "your_activity_off_meta_to_df",
         "your_events_to_df",
         "your_group_membership_activity_to_df",
@@ -160,6 +165,7 @@ EXPECT_NON_EMPTY: dict[str, set[str]] = {
         "facebook_reels_usage_to_df",
         "link_history_to_df",
         "content_shown_to_you_to_df",
+        "profile_visits_to_df",
     },
     # Test account, HTML, June 2026 — clicked ads, follows/likes two pages,
     # no group or post activity.
@@ -171,12 +177,13 @@ EXPECT_NON_EMPTY: dict[str, set[str]] = {
         "pages_and_profiles_you_follow_to_df",
         "pages_youve_liked_to_df",
         "content_shown_to_you_to_df",
+        "profile_visits_to_df",
         "your_activity_off_meta_to_df",
     },
 }
 # Not pinned on facebook_html_self-2026-03: that Drive part carries no
-# logged_information/interactions folder, so the content-shown table is absent
-# there (absence, not error).
+# logged_information/interactions folder, so the content-shown and profile
+# visits tables are absent there (absence, not error).
 
 # Implemented and tested, deliberately outside EXTRACTOR_REGISTRY until the
 # researcher meeting (2026-09-02). To activate one: uncomment its registry line
@@ -209,7 +216,6 @@ _HELD_SMOKE_INPUTS: dict[str, list[tuple[str, str]]] = {
 }
 
 UNPINNED_KNOWN_GAPS: dict[str, str] = {
-    "profile_visits_to_df": "no local export contains logged_information/interactions/profile_visits.*",
     "items_viewed_to_df": "no local export contains logged_information/interactions/items_viewed.*",
     "news_your_locations_to_df": (
         "facebook_news/your_locations.json is absent from every 2026 export seen "

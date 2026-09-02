@@ -6,6 +6,7 @@ pin the specific defects found in the 2026-09-01 tester-feedback audit so CI
 catches a regression without real data (ADR-0014).
 """
 import io
+import json
 import zipfile
 from collections import Counter
 from types import SimpleNamespace
@@ -264,3 +265,158 @@ class TestHtmlClockIsPlacedInTheReferenceZone:
             "2025-06-04 18:46:10", "2024-11-14 10:21:53", "2024-01-05 13:00:00",
         ]
         assert errors["HtmlTimezoneUnknown"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Profile visits: the split file when present, else the grouped recently_visited
+# ---------------------------------------------------------------------------
+
+
+_PROFILE_VISITS_SPLIT_JSON = "export/logged_information/interactions/profile_visits.json"
+_PROFILE_VISITS_SPLIT_HTML = "export/logged_information/interactions/profile_visits.html"
+_RECENTLY_VISITED_JSON = "export/logged_information/interactions/recently_visited.json"
+_RECENTLY_VISITED_HTML = "export/logged_information/interactions/recently_visited.html"
+
+# Four days of epoch seconds, one day apart (22:13:20 UTC = 23:13:20 Amsterdam).
+_V1, _V2, _V3, _V4 = 1700000000, 1700086400, 1700172800, 1700259200
+
+# The split layout (not attested locally): one label/value record per visit.
+_SPLIT_VISITS_JSON = json.dumps([
+    {"timestamp": _V1, "label_values": [{"label": "Name", "value": "Split Older"}]},
+    {"timestamp": _V2, "label_values": [{"label": "Name", "value": "Split Newer"}]},
+])
+
+# The grouped layout as every local export writes it: one section per kind of
+# thing visited; the Marketplace section is a value-only date counter.
+_GROUPED_VISITS_JSON = json.dumps({"visited_things_v2": [
+    {"name": "Profile visits", "description": "People whose profiles you've visited", "entries": [
+        {"timestamp": _V1, "data": {"name": "A Person", "uri": "https://www.facebook.com/a.person"}},
+        {"timestamp": _V4, "data": {"name": "CafÃ© Owner", "uri": "https://www.facebook.com/cafe.owner"}},
+    ]},
+    {"name": "Page visits", "description": "Pages you've visited", "entries": [
+        {"timestamp": _V2, "data": {"name": "A Page", "uri": "https://facebook.com/apage"}},
+    ]},
+    {"name": "Events visited", "description": "Events you've visited", "entries": [
+        {"timestamp": _V3, "data": {"name": "An Event", "uri": "https://www.facebook.com/events/1/"}},
+    ]},
+    {"name": "Groups visited", "description": "Groups you've visited", "entries": [
+        {"timestamp": _V3, "data": {"name": "A Group", "uri": "https://www.facebook.com/groups/1/"}},
+    ]},
+    {"name": "Marketplace Visits", "description": "Days you visited Marketplace", "entries": [
+        {"data": {"value": "Jun 4, 2025"}},
+    ]},
+]})
+
+_GROUPED_VISITS_ROWS = [
+    ("Profile visits", "Café Owner", "2023-11-17 23:13:20"),
+    ("Events visited", "An Event", "2023-11-16 23:13:20"),
+    ("Groups visited", "A Group", "2023-11-16 23:13:20"),
+    ("Page visits", "A Page", "2023-11-15 23:13:20"),
+    ("Profile visits", "A Person", "2023-11-14 23:13:20"),
+]
+
+
+def _split_visits_page(*entries: tuple[str, str]) -> str:
+    """The split page as ``profile_visits.html`` writes it: one top-level
+    record section with a one-row table and a dated footer."""
+    sections = "".join(
+        f'<section class="_a6-g"><div class="_a6-p"><table><tr>'
+        f'<td class="_a6_q">Name</td><td class="_2piu _a6_r">{name}</td>'
+        f'</tr></table></div><footer><div class="_a72d">{when}</div></footer></section>'
+        for name, when in entries
+    )
+    return f"<html><body><main>{sections}</main></body></html>"
+
+
+def _visited_leaf(name: str, when: str) -> str:
+    """One record of the grouped page: the name in the first non-empty div
+    of the ``_a6-p`` body, the time in the footer's ``_a72d`` (empty for a
+    value-only Marketplace counter)."""
+    body = f'<div><div><div>{name}</div><div></div></div></div><div></div><div></div>'
+    footer = f'<footer class="_a6-o"><a target="_blank" href="https://www.facebook.com/dyi/l/?l=x"><div class="_a72d">{when}</div></a></footer>'
+    return f'<section class="_a6-g"><div class="_2ph_ _a6-p">{body}</div>{footer}</section>'
+
+
+def _visited_group(name: str, inner: str) -> str:
+    return f'<section class="_a6-g"><h2 class="_a6-h">{name}</h2><div class="_2ph_ _a6-p"><p>About.</p><div><div>{inner}</div></div></div></section>'
+
+
+_GROUPED_VISITS_PAGE = "<html><body><main>" + _visited_group(
+    "Profile visits",
+    _visited_leaf("A Person", "Nov 14, 2023 10:13:20 pm") + _visited_leaf("Another Person", "Nov 17, 2023 10:13:20 pm"),
+) + _visited_group(
+    "Page visits", _visited_leaf("A Page", "Nov 15, 2023 10:13:20 pm"),
+) + _visited_group(
+    "Events visited", _visited_leaf("An Event", "Nov 16, 2023 10:13:20 pm"),
+) + _visited_group(
+    "Groups visited", _visited_leaf("A Group", "Nov 16, 2023 10:13:20 pm"),
+) + _visited_group(
+    "Marketplace Visits", _visited_leaf("Jun 4, 2025", ""),
+) + "</main></body></html>"
+
+_GROUPED_VISITS_HTML_ROWS = [
+    ("Profile visits", "Another Person", "2023-11-17 22:13:20"),
+    ("Events visited", "An Event", "2023-11-16 22:13:20"),
+    ("Groups visited", "A Group", "2023-11-16 22:13:20"),
+    ("Page visits", "A Page", "2023-11-15 22:13:20"),
+    ("Profile visits", "A Person", "2023-11-14 22:13:20"),
+]
+
+
+class TestProfileVisitsFallsBackToRecentlyVisited:
+    def test_split_json_is_used_when_present(self):
+        errors: Counter = Counter()
+        reader = _reader(
+            (_PROFILE_VISITS_SPLIT_JSON, _SPLIT_VISITS_JSON),
+            (_RECENTLY_VISITED_JSON, _GROUPED_VISITS_JSON),
+            errors=errors,
+        )
+        df = facebook.profile_visits_to_df(reader, errors)
+        assert not errors
+        assert list(df.columns) == ["Category", "Name", "Timestamp"]
+        assert list(df.itertuples(index=False, name=None)) == [
+            ("Profile visits", "Split Newer", "2023-11-15 23:13:20"),
+            ("Profile visits", "Split Older", "2023-11-14 23:13:20"),
+        ]
+
+    def test_grouped_json_sections_become_rows_with_their_category(self):
+        errors: Counter = Counter()
+        reader = _reader((_RECENTLY_VISITED_JSON, _GROUPED_VISITS_JSON), errors=errors)
+        df = facebook.profile_visits_to_df(reader, errors)
+        assert not errors
+        assert list(df.columns) == ["Category", "Name", "Timestamp"]
+        assert list(df.itertuples(index=False, name=None)) == _GROUPED_VISITS_ROWS
+        assert "Marketplace Visits" not in df["Category"].tolist()
+
+    def test_split_html_is_used_when_present(self):
+        errors: Counter = Counter()
+        reader = _reader(
+            (_PROFILE_VISITS_SPLIT_HTML, _split_visits_page(
+                ("Split Older", "Nov 14, 2023 10:13:20 pm"), ("Split Newer", "Nov 15, 2023 10:13:20 pm"),
+            )),
+            (_RECENTLY_VISITED_HTML, _GROUPED_VISITS_PAGE),
+            errors=errors,
+        )
+        df = facebook.profile_visits_to_df(reader, errors, validation=_HTML_VALIDATION)
+        assert not errors
+        assert list(df.columns) == ["Category", "Name", "Timestamp"]
+        assert list(df.itertuples(index=False, name=None)) == [
+            ("Profile visits", "Split Newer", "2023-11-15 22:13:20"),
+            ("Profile visits", "Split Older", "2023-11-14 22:13:20"),
+        ]
+
+    def test_grouped_html_leaves_become_rows_with_the_nearest_heading(self):
+        errors: Counter = Counter()
+        reader = _reader((_RECENTLY_VISITED_HTML, _GROUPED_VISITS_PAGE), errors=errors)
+        df = facebook.profile_visits_to_df(reader, errors, validation=_HTML_VALIDATION)
+        assert not errors
+        assert list(df.columns) == ["Category", "Name", "Timestamp"]
+        assert list(df.itertuples(index=False, name=None)) == _GROUPED_VISITS_HTML_ROWS
+        assert "Marketplace Visits" not in df["Category"].tolist()
+
+    def test_absence_of_both_files_is_empty_and_not_an_error(self):
+        errors: Counter = Counter()
+        reader = _reader(("export/ads_information/ad_preferences.json", "{}"), errors=errors)
+        assert facebook.profile_visits_to_df(reader, errors).empty
+        assert facebook.profile_visits_to_df(reader, errors, validation=_HTML_VALIDATION).empty
+        assert not errors

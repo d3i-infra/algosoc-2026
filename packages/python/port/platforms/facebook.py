@@ -1423,85 +1423,6 @@ def _off_meta_page_html(tree, linked_name: str, errors: Counter) -> list[tuple[s
     return rows
 
 
-def recently_visited_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
-    """Extract Facebook profiles recently visited.
-
-    Parameters
-    ----------
-    reader:
-        Archive reader used to load JSON files from the DDP zip.
-    errors:
-        Mutable counter that accumulates error type counts encountered during
-        extraction.  Updated in-place.
-
-    Returns
-    -------
-    pd.DataFrame
-        Columns: ``Category``, ``Name``, ``Link``, ``Date``.
-        Empty DataFrame when the file is absent or parsing fails.
-
-    Table documentation::
-
-        {
-          "summary": "Each row represents a Facebook profile or page the participant recently visited, including the category, name, link, and date.",
-          "source_file": "recently_visited.json",
-          "columns": {
-            "Category": "Category of the visited item.",
-            "Name": "Name or title of the visited profile or page.",
-            "Link": "URL of the visited profile or page.",
-            "Date": "ISO 8601 timestamp of when the visit occurred."
-          }
-        }
-
-    Table config::
-
-        {
-          "id": "facebook_recently_visited",
-          "title": {
-            "en": "Profiles you visited recently",
-            "nl": "Profielen die je recentelijk hebt bezocht"
-          },
-          "description": {
-            "en": "This table lists the Facebook profiles you have visited most recently.",
-            "nl": "Deze tabel toont de Facebook-profielen die je recentelijk hebt bezocht."
-          },
-          "headers": {
-            "Category": {"en": "Category", "nl": "Categorie"},
-            "Name": {"en": "Name", "nl": "Naam"},
-            "Link": {"en": "Link", "nl": "Link"},
-            "Date": {"en": "Date", "nl": "Datum en tijd"}
-          }
-        }
-    """
-    result = reader.json("recently_visited.json")
-    if not result.found:
-        return pd.DataFrame()
-    d = result.data
-
-    out = pd.DataFrame()
-    datapoints = []
-
-    try:
-        items = d["visited_things_v2"]  # pyright: ignore
-        for item in items:
-            if "entries" in item:
-                for entry in item["entries"]:
-                    datapoints.append((
-                        item.get("name", ""),
-                        eh.fix_latin1_string(entry.get("data", {}).get("name", "")),
-                        entry.get("data", {}).get("uri", ""),
-                        eh.epoch_to_datetime_string(entry.get("timestamp", ""), errors=errors)
-                    ))
-
-        out = pd.DataFrame(datapoints, columns=["Category", "Name", "Link", "Date"]) #pyright: ignore
-
-    except Exception as e:
-        logger.error("Exception caught: %s", e)
-        errors[type(e).__name__] += 1
-
-    return _sort_by_date(out, "Date")
-
-
 def profile_update_history_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
     """Extract Facebook profile update history.
 
@@ -3117,30 +3038,53 @@ def controls_to_df(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 
 
+_PROFILE_VISITS_COLUMNS = ["Category", "Name", "Timestamp"]
+#: Category of every row of the split file, which holds profile visits only.
+_PROFILE_VISITS_SPLIT_CATEGORY = "Profile visits"
+_PROFILE_VISITS_SPLIT_JSON = "logged_information/interactions/profile_visits.json"
+_PROFILE_VISITS_SPLIT_HTML = "profile_visits.html"
+_RECENTLY_VISITED_JSON = "logged_information/interactions/recently_visited.json"
+_RECENTLY_VISITED_HTML = "logged_information/interactions/recently_visited.html"
+
+
 def profile_visits_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
-    """Extract profiles visited recently on Facebook.
+    """Extract the profiles, pages, groups and events the participant opened.
+
+    Facebook writes these visits in one of two layouts. The *split* layout
+    (not attested locally; shape assumed from the extractor spreadsheet)
+    writes profile visits as their own file of label/value records. Every
+    local export uses the *grouped* one: ``recently_visited`` holds sections
+    (Profile visits, Page visits, Events visited, Groups visited, Marketplace
+    Visits), each with ``entries``. A record is an entry with a
+    ``timestamp``; the section's ``name`` becomes the row's category, so
+    Meta's renamings between exports pass through unchanged. Marketplace
+    visit counters (entries that carry only a date ``value``) are not rows.
+    The split file is read when present, otherwise the grouped one.
 
     Parameters
     ----------
     reader:
-        Archive reader used to load JSON files from the DDP zip.
+        Archive reader used to load JSON or HTML files from the DDP zip.
     errors:
         Mutable counter that accumulates error type counts encountered during
         extraction.  Updated in-place.
+    validation:
+        Validation result; its DDP category selects the JSON or HTML path.
 
     Returns
     -------
     pd.DataFrame
-        Columns: ``Name``, ``Timestamp``.
-        Empty DataFrame when the file is absent or parsing fails.
+        Columns: ``Category``, ``Name``, ``Timestamp``, newest first.
+        Empty DataFrame when the files are absent or parsing fails.
 
     Table documentation::
 
         {
-          "summary": "Each row represents a Facebook profile the participant recently visited, including the name and timestamp.",
-          "source_file": "logged_information/interactions/profile_visits.json / profile_visits.html",
+          "summary": "Each row is a Facebook profile, page, group or event the participant opened in roughly the last 90 days. Read from the profile_visits file in the split layout or from the grouped recently_visited file (all exports seen so far). Marketplace visit counters that carry only a date are not rows.",
+          "source_file": "logged_information/interactions/profile_visits.json (split) or recently_visited.json (grouped); .html twins",
           "columns": {
-            "Name": "Name of the visited profile.",
+            "Category": "The export's section name for the visit (Profile visits, Page visits, Events visited, Groups visited); always Profile visits in the split layout.",
+            "Name": "Name of the visited profile, page, group or event.",
             "Timestamp": "ISO 8601 timestamp of when the visit occurred."
           }
         }
@@ -3154,10 +3098,11 @@ def profile_visits_to_df(reader: ZipArchiveReader, errors: Counter, validation=N
             "nl": "Profielen die je recentelijk hebt bezocht"
           },
           "description": {
-            "en": "This table shows the Facebook profiles you have recently visited.",
-            "nl": "Deze tabel toont de Facebook-profielen die je recentelijk hebt bezocht."
+            "en": "This table shows the Facebook profiles, pages, groups and events you opened in roughly the last 90 days.",
+            "nl": "Deze tabel toont de Facebook-profielen, pagina's, groepen en evenementen die je in ongeveer de laatste 90 dagen hebt geopend."
           },
           "headers": {
+            "Category": {"en": "Category", "nl": "Categorie"},
             "Name": {"en": "Name", "nl": "Naam"},
             "Timestamp": {"en": "Date", "nl": "Datum en tijd"}
           }
@@ -3170,56 +3115,118 @@ def profile_visits_to_df(reader: ZipArchiveReader, errors: Counter, validation=N
 
 
 def _profile_visits_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
-    result = reader.json("logged_information/interactions/profile_visits.json")
-    if not result.found:
-        return pd.DataFrame()
-    d = result.data
+    datapoints: list[tuple[str, str, str]] = []
 
-    out = pd.DataFrame()
-    datapoints = []
+    split = reader.json(_PROFILE_VISITS_SPLIT_JSON)
+    if split.found:
+        try:
+            datapoints = _profile_visits_split_json(split.data, errors)
+        except Exception as e:
+            logger.error("Exception caught: %s", e)
+            errors[type(e).__name__] += 1
+    else:
+        grouped = reader.json(_RECENTLY_VISITED_JSON)
+        if grouped.found:
+            try:
+                datapoints = _profile_visits_grouped_json(grouped.data, errors)
+            except Exception as e:
+                logger.error("Exception caught: %s", e)
+                errors[type(e).__name__] += 1
 
-    try:
-        for item in d:
-            denested_dict = eh.dict_denester(item)
-            datapoints.append((
-                eh.fix_latin1_string(eh.find_item(denested_dict, "-value")),
-                eh.epoch_to_datetime_string(item.get("timestamp", ""), errors=errors),
+    if datapoints:
+        return pd.DataFrame(datapoints, columns=_PROFILE_VISITS_COLUMNS)  # pyright: ignore
+
+    return pd.DataFrame()
+
+
+def _profile_visits_split_json(d, errors: Counter) -> list[tuple[str, str, str]]:
+    """Rows of the split file: a list of ``{timestamp, label_values:
+    [{label, value}]}`` records (assumed shape); the name is the first value."""
+    rows = []
+    for item in d:
+        denested_dict = eh.dict_denester(item)
+        rows.append((
+            _PROFILE_VISITS_SPLIT_CATEGORY,
+            eh.fix_latin1_string(eh.find_item(denested_dict, "-value")),
+            eh.epoch_to_datetime_string(item.get("timestamp", ""), errors=errors),
+        ))
+    return rows
+
+
+def _profile_visits_grouped_json(d, errors: Counter) -> list[tuple[str, str, str]]:
+    """Rows of the grouped ``recently_visited`` file: ``{"visited_things_v2":
+    [{name, description, entries}…]}``."""
+    rows = []
+    for section in d.get("visited_things_v2", []):
+        category = eh.fix_latin1_string(section.get("name", ""))
+        for entry in section.get("entries", []):
+            if "timestamp" not in entry:
+                continue  # a Marketplace visit counter: only a date value
+            rows.append((
+                category,
+                eh.fix_latin1_string(entry.get("data", {}).get("name", "")),
+                eh.epoch_to_datetime_string(entry["timestamp"], errors=errors),
             ))
-
-        out = pd.DataFrame(datapoints, columns=["Name", "Timestamp"]) #pyright: ignore
-
-    except Exception as e:
-        logger.error("Exception caught: %s", e)
-        errors[type(e).__name__] += 1
-
-    return out
+    return rows
 
 
 def _profile_visits_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
-    result = reader.raw("profile_visits.html")
-    if not result.found:
-        return pd.DataFrame()
+    datapoints: list[tuple[str, str, str]] = []
 
-    datapoints = []
+    split = reader.raw(_PROFILE_VISITS_SPLIT_HTML)
+    if split.found:
+        try:
+            datapoints = _profile_visits_split_html(etree.HTML(split.data.read()), errors)
+        except Exception as e:
+            logger.error("Exception caught: %s", e)
+            errors[type(e).__name__] += 1
+    else:
+        grouped = reader.raw(_RECENTLY_VISITED_HTML)
+        if grouped.found:
+            try:
+                datapoints = _profile_visits_grouped_html(etree.HTML(grouped.data.read()), errors)
+            except Exception as e:
+                logger.error("Exception caught: %s", e)
+                errors[type(e).__name__] += 1
 
-    try:
-        tree = etree.HTML(result.data.read())
-        sections = eh.xpath_nodes(tree, "//section[contains(@class, '_a6-g') and not(ancestor::section)]")
-        for section in sections:
-            name_td = section.xpath(".//td[contains(@class, '_a6_r')]")
-            name = name_td[0].text.strip() if name_td and name_td[0].text else ""
-            date = _section_timestamp(section, errors)
-            if name or date:
-                datapoints.append((name, date))
-
-        if datapoints:
-            return pd.DataFrame(datapoints, columns=["Name", "Timestamp"])  # pyright: ignore
-
-    except Exception as e:
-        logger.error("Exception caught: %s", e)
-        errors[type(e).__name__] += 1
+    if datapoints:
+        return pd.DataFrame(datapoints, columns=_PROFILE_VISITS_COLUMNS)  # pyright: ignore
 
     return pd.DataFrame()
+
+
+def _profile_visits_split_html(tree, errors: Counter) -> list[tuple[str, str, str]]:
+    """Rows of the split page (assumed shape): one top-level section per
+    record with the name in a ``_a6_r`` cell and a dated footer."""
+    rows = []
+    sections = eh.xpath_nodes(tree, "//section[contains(@class, '_a6-g') and not(ancestor::section)]")
+    for section in sections:
+        name_td = section.xpath(".//td[contains(@class, '_a6_r')]")
+        name = name_td[0].text.strip() if name_td and name_td[0].text else ""
+        date = _section_timestamp(section, errors)
+        if name or date:
+            rows.append((_PROFILE_VISITS_SPLIT_CATEGORY, name, date))
+    return rows
+
+
+def _profile_visits_grouped_html(tree, errors: Counter) -> list[tuple[str, str, str]]:
+    """Rows of the grouped ``recently_visited`` page. A record is a leaf
+    ``section._a6-g`` (no section inside it): the name is the first non-empty
+    div of its ``_a6-p`` body, the time the footer's ``_a72d``; the category
+    is the nearest enclosing section that owns an ``h2``. A Marketplace
+    counter leaf has an empty ``_a72d``."""
+    rows = []
+    leaves = eh.xpath_nodes(tree, "//section[contains(@class, '_a6-g') and not(.//section)]")
+    for leaf in leaves:
+        date = _section_timestamp(leaf, errors)
+        if not date:
+            continue
+        headings = eh.xpath_nodes(leaf, "ancestor::section[contains(@class, '_a6-g')][h2][1]/h2")
+        category = headings[0].text.strip() if headings and headings[0].text else ""
+        name_divs = eh.xpath_nodes(leaf, ".//div[contains(@class, '_a6-p')]//div[normalize-space(text()) != '']")
+        name = name_divs[0].text.strip() if name_divs and name_divs[0].text else ""
+        rows.append((category, name, date))
+    return rows
 
 
 def video_consumption_summary_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -> pd.DataFrame:
@@ -4310,7 +4317,6 @@ EXTRACTOR_REGISTRY: dict[str, Callable[..., pd.DataFrame]] = {
     # "content_sharing_you_have_created_to_df": content_sharing_you_have_created_to_df,
     # "last_28_days_to_df": last_28_days_to_df,
     # "your_friends_to_df": your_friends_to_df,
-    # "recently_visited_to_df": recently_visited_to_df,
     # "profile_update_history_to_df": profile_update_history_to_df,
     # "group_posts_and_comments_to_df": group_posts_and_comments_to_df,
     # "your_answers_to_membership_questions_to_df": your_answers_to_membership_questions_to_df,
