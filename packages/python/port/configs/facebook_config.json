@@ -722,46 +722,6 @@
           "Timestamp": "ISO 8601 timestamp of when the page was liked."
         }
       }
-    },
-    {
-      "id": "facebook_items_viewed",
-      "title": {
-        "en": "Facebook items recently viewed",
-        "nl": "Facebook-items die je recentelijk hebt bekeken"
-      },
-      "description": {
-        "en": "This table shows the Facebook items you have recently viewed.",
-        "nl": "Deze tabel toont de Facebook-items die je recentelijk hebt bekeken."
-      },
-      "headers": {
-        "Title": {
-          "en": "Title",
-          "nl": "Titel"
-        },
-        "Product Name": {
-          "en": "Product Name",
-          "nl": "Productnaam"
-        },
-        "Description": {
-          "en": "Description",
-          "nl": "Beschrijving"
-        },
-        "Date": {
-          "en": "Date",
-          "nl": "Datum en tijd"
-        }
-      },
-      "extractor": "items_viewed_to_df",
-      "documentation": {
-        "summary": "Each row represents a Facebook item the participant recently viewed, including the title, product name, description, and date.",
-        "source_file": "logged_information/interactions/items_viewed.json / items_viewed.html",
-        "columns": {
-          "Title": "Title of the viewed item.",
-          "Product Name": "Product name of the viewed item.",
-          "Description": "Description of the viewed item.",
-          "Date": "ISO 8601 timestamp of when the item was viewed."
-        }
-      }
     }
   ]
 }

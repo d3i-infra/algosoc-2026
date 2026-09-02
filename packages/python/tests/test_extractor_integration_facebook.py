@@ -216,14 +216,24 @@ EXPECT_NON_EMPTY: dict[str, set[str]] = {
 # in facebook.py, add the table to configs/facebook_config.json (rm +
 # `pnpm generate-config facebook`, ADR-0030), and move the name from here to the
 # registry side — the pins in EXPECT_NON_EMPTY stay as they are.
-HELD_EXTRACTORS: dict[str, Callable[..., pd.DataFrame]] = {}  # activated 2026-09-02 after the researcher meeting
+HELD_EXTRACTORS: dict[str, Callable[..., pd.DataFrame]] = {
+    # Marketplace listings the participant opened — dropped by the researchers
+    # (2026-09-02) but kept exercised, so reviving it is a registry line.
+    "items_viewed_to_df": facebook.items_viewed_to_df,
+}
 
 _ALL_EXTRACTORS: dict[str, Callable[..., pd.DataFrame]] = {**facebook.EXTRACTOR_REGISTRY, **HELD_EXTRACTORS}
 
 # Fixture-free smoke input per held extractor: the smallest archive that makes
 # it produce a non-empty frame, so its docstring headers can be checked against
 # the columns it actually emits without a real export present.
-_HELD_SMOKE_INPUTS: dict[str, list[tuple[str, str]]] = {}
+_HELD_SMOKE_INPUTS: dict[str, list[tuple[str, str]]] = {
+    "items_viewed_to_df": [(
+        "export/logged_information/interactions/items_viewed.json",
+        '[{"timestamp": 1700000000, "media": [], "label_values": [{"label": "Title", "value": "A listing"}, '
+        '{"label": "Product name", "value": "A product"}, {"label": "Description", "value": "A description"}], "fbid": "1"}]',
+    )],
+}
 
 UNPINNED_KNOWN_GAPS: dict[str, str] = {
 }

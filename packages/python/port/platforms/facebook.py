@@ -4394,8 +4394,9 @@ EXTRACTOR_REGISTRY: dict[str, Callable[..., pd.DataFrame]] = {
     "who_youve_followed_to_df": who_youve_followed_to_df,                                        # connections/followers/who_you've_followed.json
     "pages_and_profiles_you_follow_to_df": pages_and_profiles_you_follow_to_df,                   # your_facebook_activity/pages/pages_and_profiles_you_follow.json
     "pages_youve_liked_to_df": pages_youve_liked_to_df,                                          # your_facebook_activity/pages/pages_you've_liked.json
-    "items_viewed_to_df": items_viewed_to_df,                                                    # logged_information/interactions/items_viewed.json
     #"your_comment_active_days_to_df": your_comment_active_days_to_df,                            # PENDING — Days with active commenting
+    # --- Dropped by the researchers (2026-09-02): Marketplace listings the participant opened ---
+    # "items_viewed_to_df": items_viewed_to_df,                                                  # logged_information/interactions/items_viewed.json
     # --- Not in spreadsheet — commented out ---
     # "notifications_to_df": notifications_to_df,
     # "content_sharing_you_have_created_to_df": content_sharing_you_have_created_to_df,
