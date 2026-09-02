@@ -73,28 +73,34 @@ EXPECT_NON_EMPTY: dict[str, set[str]] = {
     # extractor currently picks up by bare basename — deliberately not pinned.
     "facebook_html_self-2026-03": _ADS_TABLES | _ACTIVITY_TABLES,
     # Real account, JSON, all time, delivered via Google Drive, March 2026 —
-    # 2,209 files, the format participants are instructed to request. Same two
-    # defects as the HTML twin (apostrophe, grouped interaction layout); the
-    # qualified JSON search path does not collide, so search is pinned here.
-    # Reels usage is absent from this export although present eight days
-    # earlier — file presence varies between exports of one account.
+    # 2,209 files, the format participants are instructed to request. Drive
+    # delivery spells the follow / like files `who_you_ve_followed` (apostrophe
+    # replaced); the reader resolves that spelling, so both are pinned. The
+    # grouped interaction layout (recently_viewed / recently_visited) is still
+    # unread. The qualified JSON search path does not collide, so search is
+    # pinned here. Reels usage is absent from this export although present
+    # eight days earlier — file presence varies between exports of one account.
     "facebook_json_self-alltime-2026-03": _ADS_TABLES | _ACTIVITY_TABLES | {
         "your_search_history_to_df",
         "ads_interests_to_df",
         "comments_to_df",
         "pages_and_profiles_you_follow_to_df",
+        "who_youve_followed_to_df",
+        "pages_youve_liked_to_df",
     },
     # Real account, HTML, all time (registered 2005), delivered via Google
     # Drive, March 2026 — 2,815 files. Search history is absent because the
-    # bare-basename lookup collides with the Marketplace file; the follow /
-    # like files are spelled `who_you_ve_followed` here (Drive delivery strips
-    # the apostrophe) and the extractors ask for the apostrophe form. Both are
-    # defects to fix, not pins to add.
+    # bare-basename lookup collides with the Marketplace file — a defect to
+    # fix, not a pin to add. The follow / like files are spelled
+    # `who_you_ve_followed` here (Drive delivery replaces the apostrophe) and
+    # the reader resolves that spelling.
     "facebook_html_self-alltime-2026-03": _ADS_TABLES | _ACTIVITY_TABLES | {
         "ads_interests_to_df",
         "facebook_reels_usage_to_df",
         "comments_to_df",
         "pages_and_profiles_you_follow_to_df",
+        "who_youve_followed_to_df",
+        "pages_youve_liked_to_df",
     },
     # Real account, device downloads, October 2025: a three-month JSON window
     # (57 files) and a one-year HTML window (980 files). Device downloads keep

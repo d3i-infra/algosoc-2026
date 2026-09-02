@@ -654,14 +654,30 @@ class ZipArchiveReader:
            if exactly 1, use it.
         3. 0 matches → return None.
         4. Multiple matches → return None, log warning,
-           increment errors["AmbiguousMemberMatch"].
+           increment errors["AmbiguousMemberMatch(<filename>)"].
+
+        Both steps also try the requested name with every apostrophe replaced
+        by an underscore: Meta exports delivered through Google Drive write
+        ``who_you_ve_followed.json`` where device downloads write
+        ``who_you've_followed.json``. That is one substitution on the request,
+        never a fuzzy match — two members differing only in that spelling are
+        still ambiguous.
+
+        The counter key embeds the *requested* name (a code literal), never a
+        member path from the archive: it reaches the host log.
         """
+        candidates = [filename]
+        if "'" in filename:
+            candidates.append(filename.replace("'", "_"))
+
         # 1. Exact match
-        if filename in self.archive_members:
-            return filename
+        for candidate in candidates:
+            if candidate in self.archive_members:
+                return candidate
 
         # 2. Path-boundary suffix match
-        matches = [m for m in self.archive_members if m.endswith("/" + filename)]
+        suffixes = tuple("/" + candidate for candidate in candidates)
+        matches = [m for m in self.archive_members if m.endswith(suffixes)]
 
         if len(matches) == 1:
             return matches[0]
@@ -672,7 +688,7 @@ class ZipArchiveReader:
                 "Ambiguous member match: '%s' matched %d members in archive",
                 filename, len(matches),
             )
-            self.errors["AmbiguousMemberMatch"] += 1
+            self.errors[f"AmbiguousMemberMatch({filename})"] += 1
             return None
 
     @contextmanager
