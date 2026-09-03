@@ -14,9 +14,11 @@ import io
 import json
 import zipfile
 from collections import Counter
+from pathlib import Path
 
 import pytest
 
+import extractor_integration_helpers as eih
 import port.api.props as props
 from port.helpers.archive_set import ArchiveSet
 from port.helpers.extraction_helpers import ZipArchiveReader
@@ -361,7 +363,7 @@ class TestLocaleDetection:
         folder but leaves the file called MyActivity."""
         members = ["Takeout/Mijn activiteit/YouTube/MyActivity.json"]
 
-        locale, sources_found = google._detect_locale(members)
+        locale, sources_found, _ = google._detect_locale(members)
 
         assert locale == "nl"
         assert sources_found > 0
@@ -379,7 +381,7 @@ class TestLocaleDetection:
             "Takeout/My Activity/Search/My Activity.html",
             "Takeout/Chrome/History.json",
         ]
-        locale, sources_found = google._detect_locale(members)
+        locale, sources_found, _ = google._detect_locale(members)
         assert locale == "en"
         assert sources_found > 0
 
@@ -393,7 +395,7 @@ class TestLocaleDetection:
             "Takeout/我的活动/Search/我的活动记录.html",
             "Takeout/Chrome/历史记录.json",
         ]
-        locale, sources_found = google._detect_locale(members)
+        locale, sources_found, _ = google._detect_locale(members)
         assert locale == "zh"
         assert sources_found > 0
 
@@ -1080,3 +1082,100 @@ class TestYoutubeCommentsMalformed:
 
         assert result.errors["ValueError"] == 1
         assert "youtube_subscriptions" in [t.id for t in result.tables]
+
+
+# ---------------------------------------------------------------------------
+# Task 4 (story 4): the product table and missing_products().
+# ---------------------------------------------------------------------------
+
+
+class TestUploadProducts:
+    """Real exports (9 sets, 2026-09-03) group Chrome + My Activity in one zip
+    and YouTube in another, so a single selected zip always lacks a product.
+    Presence is judged on the union member list, never on the part count."""
+
+    def _youtube_part(self):
+        return _named_part("takeout-2-001.zip", {
+            "Takeout/YouTube and YouTube Music/history/watch-history.json": WATCH_JSON,
+        })
+
+    def _activity_part(self):
+        return _named_part("takeout-1-001.zip", {
+            "Takeout/Chrome/History.json": "[]",
+            "Takeout/My Activity/Search/MyActivity.json": "[]",
+        })
+
+    def test_found_keys_lists_every_recognised_key(self):
+        validation = google.validate_ddp(ArchiveSet([self._youtube_part()]))
+        assert "youtube.watch_history" in validation.found_keys
+        assert "chrome.history" not in validation.found_keys
+
+    def test_complete_set_is_missing_nothing(self):
+        validation = google.validate_ddp(ArchiveSet([self._youtube_part(), self._activity_part()]))
+        assert google.missing_products(validation) == {}
+
+    def test_youtube_only_is_missing_activity_and_chrome(self):
+        validation = google.validate_ddp(ArchiveSet([self._youtube_part()]))
+        missing = google.missing_products(validation)
+        assert list(missing) == ["my_activity", "chrome"]
+        assert missing["chrome"].translations["en"] == "Chrome"
+
+    def test_activity_group_only_is_missing_youtube(self):
+        validation = google.validate_ddp(ArchiveSet([self._activity_part()]))
+        assert list(google.missing_products(validation)) == ["youtube"]
+
+    def test_youtube_activity_fallback_does_not_count_as_youtube(self):
+        """A real Chrome + My Activity zip carries ``My Activity/YouTube/My Activity``,
+        the fallback the youtube keys share — but that file lives under the My
+        Activity folder, not YouTube's own, so it must not let a Chrome-only upload
+        pass as complete for YouTube while it is still missing subscriptions,
+        comments and the YouTube folder's own histories."""
+        part = _named_part("takeout-1-001.zip", {
+            "Takeout/Chrome/History.json": "[]",
+            "Takeout/My Activity/Search/MyActivity.json": "[]",
+            "Takeout/My Activity/YouTube/MyActivity.json": WATCH_JSON,
+        })
+        validation = google.validate_ddp(ArchiveSet([part]))
+        assert list(google.missing_products(validation)) == ["youtube"]
+
+    def test_labels_cover_the_ui_locales(self):
+        for _keys, label in google.UPLOAD_PRODUCTS.values():
+            assert set(label.translations) >= {"en", "nl", "de", "it", "es"}
+
+
+LOCAL_SETS = sorted((Path(__file__).parent / "ddp").glob("google_set_*"))
+
+
+@pytest.mark.skipif(not LOCAL_SETS, reason="no local scrubbed Takeout sets under tests/ddp")
+@pytest.mark.parametrize("set_dir", LOCAL_SETS, ids=lambda d: d.name)
+class TestUploadProductsOnLocalSets:
+    """Metadata-only pass over the scrubbed real sets (git-ignored, ADR-0014):
+    the complete union lacks nothing, and every data part on its own lacks
+    something, because real exports never mix the YouTube group with the
+    Chrome + My Activity group. Guards the product table against drift in
+    ``TAKEOUT_PATHS`` that validation alone would not notice."""
+
+    def _parts(self, set_dir):
+        # A plain file object lacks the `.size` ArchiveSet's canonical
+        # (name, size) part ordering wants (archive_set.py), so local sets
+        # are wrapped the way test_extractor_integration_google.py does.
+        return [eih.DiskPart(part) for part in sorted(set_dir.glob("*.zip"))]
+
+    def test_complete_union_lacks_nothing(self, set_dir):
+        parts = self._parts(set_dir)
+        try:
+            assert google.missing_products(google.validate_ddp(ArchiveSet(parts))) == {}
+        finally:
+            for part in parts:
+                part.close()
+
+    def test_each_data_part_alone_lacks_a_product(self, set_dir):
+        for path in sorted(set_dir.glob("*.zip")):
+            part = eih.DiskPart(path)
+            try:
+                validation = google.validate_ddp(ArchiveSet([part]))
+                if validation.get_status_code_id() != 0:
+                    continue  # manifest-only part: no source, already rejected
+                assert google.missing_products(validation), path.name
+            finally:
+                part.close()
