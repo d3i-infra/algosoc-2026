@@ -84,6 +84,13 @@ class FlowBuilder:
                 "it": "Riprova",
                 "es": "Intentar de nuevo",
             }),
+            "incomplete_upload_header": props.Translatable({
+                "en": "Are all your files selected?",
+                "nl": "Heeft u alle bestanden geselecteerd?",
+                "de": "Haben Sie alle Dateien ausgewählt?",
+                "it": "Ha selezionato tutti i file?",
+                "es": "¿Ha seleccionado todos los archivos?",
+            }),
             "review_data_description": props.Translatable({
                 "en": f"Below you will find a curated selection of {self.platform_name} data.",
                 "nl": f"Hieronder ziet u de gegevens die uit uw {self.platform_name} datapakket gehaald worden. Op dit moment zijn er nog geen gegevens gedeeld met de onderzoekers van het Centerpanel. Voordat u deze gegevens deelt, kunt u ze bekijken en beslissen wat u wel of niet wilt delen. U kunt gegevens verwijderen door op het selectievakje ernaast te klikken en op Verwijder te klikken. Als u alles hebt gecontroleerd, klik dan op doneren onderaan de pagina.",
@@ -94,7 +101,7 @@ class FlowBuilder:
         }
 
     def start_flow(self):
-        """Main per-platform flow: file→materialize→safety→validate→retry→extract→consent→donate.
+        """Main per-platform flow: file→materialize→safety→validate→retry→confirm→extract→consent→donate.
 
         This is a generator. script.py calls it via `yield from flow.start_flow()`.
         Control flow rules:
@@ -217,6 +224,31 @@ class FlowBuilder:
                     continue  # loop back to step 1
                 yield from ph.emit_log("info", f"[{self.platform_name}] Retry declined")
                 raise TaskIncompleteError("abandoned")
+
+            # 4b. Soft confirmation when the upload lacks a product the study
+            # asks for. The hook is platform-specific (GoogleFlow reads the
+            # products off its validation); the default reports nothing.
+            # Reselecting loops back to the file prompt; continuing proceeds
+            # with the files as they are. Neither path ends the task.
+            missing = self.missing_products(validation)
+            if missing:
+                yield from ph.emit_log(
+                    "info", f"[{self.platform_name}] Upload incomplete: missing={','.join(missing)}"
+                )
+                prompt = ph.generate_incomplete_upload_prompt(self.platform_name, missing)
+                choice = yield ph.render_page(self.UI_TEXT["incomplete_upload_header"], prompt)
+                if choice.__type__ == "PayloadTrue":
+                    yield from ph.emit_log("info", f"[{self.platform_name}] Incomplete upload: reselecting")
+                    continue  # loop back to step 1
+                if choice.__type__ != "PayloadFalse":
+                    # Anything else is version skew, never a participant choice:
+                    # the same protocol-mismatch handling as the file prompt.
+                    yield from ph.emit_log(
+                        "info", f"[{self.platform_name}] Protocol mismatch: expected=PayloadFalse got={choice.__type__}"
+                    )
+                    _ = yield ph.render_protocol_error_page(self.platform_name)
+                    raise TaskIncompleteError("upload_rejected")
+                yield from ph.emit_log("info", f"[{self.platform_name}] Incomplete upload: continued")
 
             # 5. Extract
             logger.info("Extracting data for %s", self.platform_name)
@@ -349,3 +381,10 @@ class FlowBuilder:
             description=self.UI_TEXT["review_data_description"],
             table_list=table_list,
         )
+
+    def missing_products(self, validation) -> dict[str, props.Translatable]:
+        """Products the study asks for that the validated upload lacks, keyed
+        by a code-literal product key with the label the soft-confirm page
+        shows. Empty means no confirmation is shown. Override in a platform
+        whose validation can tell (GoogleFlow); the default reports nothing."""
+        return {}

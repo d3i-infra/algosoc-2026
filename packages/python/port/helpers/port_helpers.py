@@ -1,4 +1,5 @@
 import logging
+from typing import cast
 
 import port.api.d3i_props as d3i_props
 import port.api.props as props
@@ -94,6 +95,44 @@ def generate_retry_prompt(platform_name: str, multiple: bool = False) -> props.P
     cancel = props.Translatable(
         {"en": "Stop for now", "nl": "Voorlopig stoppen", "de": "Vorerst beenden", "it": "Interrompi per ora", "es": "Detener por ahora"}
     )
+    return props.PropsUIPromptConfirm(text, ok, cancel)
+
+
+def generate_incomplete_upload_prompt(
+    platform_name: str, missing: dict[str, props.Translatable]
+) -> props.PropsUIPromptConfirm:
+    """Soft confirmation shown after validation when the upload lacks one or
+    more of the products the study asks for (FlowBuilder.missing_products).
+
+    ok → PayloadTrue: back to the file prompt to select the files again.
+    cancel → PayloadFalse: continue with the files as they are. Neither path
+    ends the task; a participant who genuinely exported fewer products goes
+    on to consent.
+    """
+    templates = {
+        "en": "Your {platform} files do not seem to contain: {items}. A Google Takeout usually comes as several zip files. Make sure you downloaded every file from your Google Takeout page and select all of them. If you did not export these, you can continue with the files you selected.",
+        "nl": "Uw {platform}-bestanden lijken het volgende niet te bevatten: {items}. Een Google Takeout bestaat meestal uit meerdere zipbestanden. Controleer of u alle bestanden van uw Google Takeout-pagina heeft gedownload en selecteer ze allemaal. Als u deze niet heeft geëxporteerd, kunt u doorgaan met de geselecteerde bestanden.",
+        "de": "Ihre {platform}-Dateien scheinen Folgendes nicht zu enthalten: {items}. Ein Google Takeout besteht meist aus mehreren ZIP-Dateien. Stellen Sie sicher, dass Sie alle Dateien von Ihrer Google-Takeout-Seite heruntergeladen haben, und wählen Sie sie alle aus. Wenn Sie diese nicht exportiert haben, können Sie mit den ausgewählten Dateien fortfahren.",
+        "it": "I suoi file di {platform} non sembrano contenere: {items}. Un Google Takeout è di solito composto da più file ZIP. Si assicuri di aver scaricato tutti i file dalla sua pagina Google Takeout e li selezioni tutti. Se non ha esportato questi dati, può continuare con i file selezionati.",
+        "es": "Sus archivos de {platform} no parecen contener: {items}. Un Google Takeout suele constar de varios archivos zip. Asegúrese de haber descargado todos los archivos de su página de Google Takeout y selecciónelos todos. Si no exportó estos datos, puede continuar con los archivos seleccionados.",
+    }
+    text = props.Translatable(cast(props.Translations, {
+        locale: template.format(
+            platform=platform_name,
+            items=", ".join(label.translations.get(locale, label.translations["en"]) for label in missing.values()),
+        )
+        for locale, template in templates.items()
+    }))
+    ok = props.Translatable({
+        "en": "Select files again", "nl": "Bestanden opnieuw selecteren",
+        "de": "Dateien erneut auswählen", "it": "Seleziona di nuovo i file",
+        "es": "Seleccionar archivos de nuevo",
+    })
+    cancel = props.Translatable({
+        "en": "Continue with these files", "nl": "Doorgaan met deze bestanden",
+        "de": "Mit diesen Dateien fortfahren", "it": "Continua con questi file",
+        "es": "Continuar con estos archivos",
+    })
     return props.PropsUIPromptConfirm(text, ok, cancel)
 
 

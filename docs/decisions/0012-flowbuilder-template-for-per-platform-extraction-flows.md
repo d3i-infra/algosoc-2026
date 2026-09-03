@@ -24,7 +24,7 @@ Platform flows are `FlowBuilder` subclasses. `FlowBuilder.start_flow()` owns the
 
 - Do not reimplement file receipt, retry, consent, or donation in `platforms/`; that shared lifecycle lives in `FlowBuilder.start_flow()`.
 - Add a platform by subclassing `FlowBuilder` and implementing `validate_file()` and `extract_data()` (alongside the module's `EXTRACTOR_REGISTRY` / `process()` per the platform interface); `script.py` reaches it through the standard `process()` dispatch, which returns `<Platform>Flow(session_id).start_flow()`.
-- Narrow platform-specific overrides are fine — e.g. overriding `generate_file_prompt()` for a non-zip upload (TikTok), or yielding an intermediate selection UI inside `extract_data()` (Netflix's profile picker). The line is *reimplementing* the shared lifecycle, not extending at these hook points.
+- Narrow platform-specific overrides are fine — e.g. overriding `generate_file_prompt()` for a non-zip upload (TikTok), yielding an intermediate selection UI inside `extract_data()` (Netflix's profile picker), or `missing_products()` for a platform whose validation can tell which products the upload lacks (Google Takeout). The line is *reimplementing* the shared lifecycle, not extending at these hook points.
 - Put shared lifecycle and UI helpers in `helpers/`, not copied into platform modules.
 
 ## Why

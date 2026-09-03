@@ -2207,6 +2207,9 @@ class GoogleFlow(FlowBuilder):
     def extract_data(self, archive_set: ArchiveSet, validation: GoogleValidation) -> ExtractionResult:
         return extraction(archive_set, validation)
 
+    def missing_products(self, validation: GoogleValidation) -> dict[str, props.Translatable]:
+        return missing_products(validation)
+
 
 def process(session_id):
     flow = GoogleFlow(session_id)

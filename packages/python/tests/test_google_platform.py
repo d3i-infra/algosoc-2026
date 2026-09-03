@@ -239,10 +239,26 @@ def test_flow_donation_key_is_session_google():
     cmd = _advance_past_logs(gen, _payload_files({
         "Takeout/YouTube and YouTube Music/history/watch-history.json": WATCH_JSON,
     }))
+    # A YouTube-only upload is missing my_activity and chrome, so the soft
+    # confirm appears before consent — continue with these files as is.
+    assert isinstance(cmd, CommandUIRender)
+    assert isinstance(cmd.page.body, props.PropsUIPromptConfirm)
+
+    cmd = _advance_past_logs(gen, _make_payload("PayloadFalse"))
     assert isinstance(cmd, CommandUIRender)  # consent form
 
     cmd = _advance_past_logs(gen, _make_payload("PayloadJSON", value="{}"))
     assert cmd.key == "sess-1-google"
+
+
+def test_google_flow_reports_missing_products_from_validation():
+    validation = google.GoogleValidation(
+        status_code=0, ddp_locale="en",
+        found_keys=frozenset({"youtube.watch_history"}),
+        found_paths={"youtube.watch_history": "YouTube and YouTube Music/history/watch-history"},
+    )
+    missing = google.GoogleFlow("s").missing_products(validation)
+    assert list(missing) == ["my_activity", "chrome"]
 
 
 def test_single_zip_through_multi_file_flow_completes(monkeypatch):
@@ -278,6 +294,12 @@ def test_single_zip_through_multi_file_flow_completes(monkeypatch):
     cmd = _advance_past_logs(gen, _payload_files({
         "Takeout/YouTube and YouTube Music/history/watch-history.json": WATCH_JSON,
     }))
+
+    # A YouTube-only upload is missing my_activity and chrome, so the soft
+    # confirm appears before consent — continue with these files as is.
+    assert isinstance(cmd, CommandUIRender)
+    assert isinstance(cmd.page.body, props.PropsUIPromptConfirm)
+    cmd = _advance_past_logs(gen, _make_payload("PayloadFalse"))
 
     # Reaching the consent-form body (as opposed to a retry/error/no-data
     # page, which all render props.PropsUIPromptConfirm instead) proves

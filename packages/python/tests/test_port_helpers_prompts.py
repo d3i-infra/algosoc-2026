@@ -1,3 +1,4 @@
+import port.api.props as props
 from port.helpers import port_helpers as ph
 
 
@@ -119,3 +120,25 @@ def test_task_incomplete_copy_points_at_close():
     translations = prompt["text"]["translations"]
     assert "Close button" in translations["en"]
     assert "knop Sluiten" in translations["nl"]
+
+
+def _missing():
+    return {
+        "youtube": props.Translatable({"en": "YouTube", "nl": "YouTube", "de": "YouTube", "it": "YouTube", "es": "YouTube"}),
+        "chrome": props.Translatable({"en": "Chrome", "nl": "Chrome", "de": "Chrome", "it": "Chrome", "es": "Chrome"}),
+    }
+
+
+def test_incomplete_upload_prompt_lists_the_missing_products_per_locale():
+    d = ph.generate_incomplete_upload_prompt("Google", _missing()).toDict()
+    text = d["text"]["translations"]
+    assert set(text) >= {"en", "nl", "de", "it", "es"}
+    assert "YouTube, Chrome" in text["en"]
+    assert "YouTube, Chrome" in text["nl"]
+
+
+def test_incomplete_upload_prompt_buttons():
+    d = ph.generate_incomplete_upload_prompt("Google", _missing()).toDict()
+    assert d["ok"]["translations"]["en"] == "Select files again"
+    assert d["cancel"]["translations"]["en"] == "Continue with these files"
+    assert d["cancel"]["translations"]["nl"] == "Doorgaan met deze bestanden"
