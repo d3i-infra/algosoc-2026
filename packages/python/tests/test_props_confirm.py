@@ -5,6 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from port.api import props
 from port.api.props import PropsUIPromptConfirm, Translatable
 
 
@@ -27,3 +28,12 @@ def test_confirm_without_cancel_omits_cancel():
     assert d["__type__"] == "PropsUIPromptConfirm"
     assert d["ok"]["translations"]["en"] == "Try again"
     assert "cancel" not in d
+
+
+def test_notice_serializes_type_and_text():
+    from port.api import d3i_props
+    notice = d3i_props.PropsUIPromptNotice(text=props.Translatable({"en": "a", "nl": "b"}))
+    d = notice.toDict()
+    assert d["__type__"] == "PropsUIPromptNotice"
+    assert d["text"]["translations"] == {"en": "a", "nl": "b"}
+    assert "ok" not in d and "cancel" not in d
