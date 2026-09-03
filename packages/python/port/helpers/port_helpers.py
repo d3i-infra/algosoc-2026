@@ -510,11 +510,11 @@ def render_task_incomplete_page(platform_name: str) -> CommandUIRender:
     )
     body = d3i_props.PropsUIPromptNotice(
         text=props.Translatable({
-            "en": "This task could not be completed. Use the Close button to return to your tasks — from there you can try this task again. If the problem persists, please contact the researcher.",
-            "nl": "Deze taak kon niet worden voltooid. Gebruik de knop Sluiten om terug te keren naar uw taken — daar kunt u deze taak opnieuw proberen. Als het probleem aanhoudt, neem dan contact op met de onderzoeker.",
-            "de": "Diese Aufgabe konnte nicht abgeschlossen werden. Verwenden Sie die Schaltfläche Schließen, um zu Ihren Aufgaben zurückzukehren — dort können Sie diese Aufgabe erneut versuchen. Wenn das Problem weiterhin besteht, wenden Sie sich bitte an den Forscher.",
-            "it": "Non è stato possibile completare questa attività. Usi il pulsante Chiudi per tornare alle sue attività — da lì potrà riprovare questa attività. Se il problema persiste, contatti il ricercatore.",
-            "es": "Esta tarea no se pudo completar. Utilice el botón Cerrar para volver a sus tareas — desde allí podrá intentar esta tarea de nuevo. Si el problema persiste, póngase en contacto con el investigador.",
+            "en": "This task could not be completed. Use the Close button to return to the list of tasks, or to try this task again. If this problem persists, please contact the researcher.",
+            "nl": "Deze taak kon niet worden voltooid. Gebruik de knop Sluiten om terug te keren naar de lijst met taken, of om deze taak opnieuw te proberen. Als dit probleem aanhoudt, neem dan contact op met de onderzoeker.",
+            "de": "Diese Aufgabe konnte nicht abgeschlossen werden. Verwenden Sie die Schaltfläche Schließen, um zur Aufgabenliste zurückzukehren oder diese Aufgabe erneut zu versuchen. Wenn dieses Problem weiterhin besteht, wenden Sie sich bitte an den Forscher.",
+            "it": "Non è stato possibile completare questa attività. Usi il pulsante Chiudi per tornare all'elenco delle attività o per riprovare questa attività. Se il problema persiste, contatti il ricercatore.",
+            "es": "Esta tarea no se pudo completar. Utilice el botón Cerrar para volver a la lista de tareas o para intentar esta tarea de nuevo. Si este problema persiste, póngase en contacto con el investigador.",
         }),
     )
     page = props.PropsUIPageDataSubmission(platform_name, header, body)

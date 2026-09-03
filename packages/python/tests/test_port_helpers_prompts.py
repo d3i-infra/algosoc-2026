@@ -116,6 +116,8 @@ def test_task_incomplete_copy_points_at_close():
     translations = prompt["text"]["translations"]
     assert "Close button" in translations["en"]
     assert "knop Sluiten" in translations["nl"]
+    assert "list of tasks" in translations["en"]
+    assert "lijst met taken" in translations["nl"]
 
 
 def _missing():
