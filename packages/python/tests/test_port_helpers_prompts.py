@@ -93,3 +93,29 @@ def test_retry_prompt_multiple_ok_cancel_labels_unchanged():
     multi = ph.generate_retry_prompt("Google", multiple=True).toDict()
     assert single["ok"]["translations"] == multi["ok"]["translations"]
     assert single["cancel"]["translations"] == multi["cancel"]["translations"]
+
+
+def test_retry_prompt_cancel_is_stop_for_now():
+    for prompt in (ph.generate_retry_prompt("Instagram"), ph.generate_retry_prompt("Google", multiple=True)):
+        cancel = prompt.toDict()["cancel"]["translations"]
+        assert cancel["en"] == "Stop for now"
+        assert cancel["nl"] == "Voorlopig stoppen"
+        assert set(cancel) >= {"en", "nl", "de", "it", "es"}
+
+
+def test_retry_prompt_never_promises_the_file_will_be_accepted():
+    """Declining ends as participant-abandoned (ADR-0039), so the copy must
+    not suggest the file will be taken as is."""
+    for prompt in (ph.generate_retry_prompt("Instagram"), ph.generate_retry_prompt("Google", multiple=True)):
+        for text in prompt.toDict()["text"]["translations"].values():
+            assert "if you are sure" not in text
+            assert "Weet u zeker" not in text
+
+
+def test_task_incomplete_copy_points_at_close():
+    d = ph.render_task_incomplete_page("Google").toDict()
+    body = d["page"]["body"]
+    prompt = body[0] if isinstance(body, list) else body
+    translations = prompt["text"]["translations"]
+    assert "Close button" in translations["en"]
+    assert "knop Sluiten" in translations["nl"]
