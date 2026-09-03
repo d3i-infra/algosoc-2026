@@ -41,10 +41,10 @@ test('error flow donates report, shows task-incomplete page, and exits nonzero',
   expect(submittedData).toEqual(expect.stringContaining('error-report'));
   expect(submittedData).toEqual(expect.stringContaining('Intentional test error'));
 
-  // Terminal task-incomplete page instead of a stale error page
+  // Terminal task-incomplete page instead of a stale error page. The notice
+  // component resolves itself on mount, so the exit below fires with no click.
   await expect(page.getByText('Task not completed')).toBeVisible();
   await expect(page.getByText('This task could not be completed', { exact: false })).toBeVisible();
-  await page.getByText('OK', { exact: true }).click();
 
   // The flow must end with the nonzero (error-end) exit, never the success exit
   await expect
@@ -80,10 +80,10 @@ test('declining retry after an invalid file shows task-incomplete page and exits
   // lowercase — out of scope)
   await page.getByText('Stop for now', { exact: true }).click();
 
-  // Terminal task-incomplete page, not a silent completion
+  // Terminal task-incomplete page, not a silent completion. The notice
+  // component resolves itself on mount, so the exit below fires with no click.
   await expect(page.getByText('Task not completed')).toBeVisible();
   await expect(page.getByText('This task could not be completed', { exact: false })).toBeVisible();
-  await page.getByText('OK', { exact: true }).click();
 
   // Participant-abandoned exit; the success exit must never fire
   await expect

@@ -74,14 +74,15 @@ class TestRenderTaskIncompletePage:
         d = result.toDict()
         assert d["page"]["__type__"] == "PropsUIPageDataSubmission"
 
-    def test_confirm_prompt_has_no_cancel_button(self):
-        """The task-incomplete page is an acknowledge page: a single OK button."""
-        result = ph.render_task_incomplete_page("TikTok")
-        d = result.toDict()
+    def test_task_incomplete_page_is_a_notice_with_no_buttons(self):
+        """Display-only: the component resolves itself, the nonzero exit fires,
+        and the host's Close control is the only visible exit (ADR-0039)."""
+        d = ph.render_task_incomplete_page("TikTok").toDict()
         body = d["page"]["body"]
         prompts = body if isinstance(body, list) else [body]
-        confirm = next(p for p in prompts if p["__type__"] == "PropsUIPromptConfirm")
-        assert confirm.get("cancel") in (None, {})
+        notice = next(p for p in prompts if p["__type__"] == "PropsUIPromptNotice")
+        assert "ok" not in notice and "cancel" not in notice
+        assert "Close button" in notice["text"]["translations"]["en"]
 
 
 class TestHandleDonateResult:

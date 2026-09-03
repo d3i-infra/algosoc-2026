@@ -304,6 +304,26 @@ class PropsUIPromptRetry:
 
 
 @dataclass
+class PropsUIPromptNotice:
+    """Display-only prompt: text and no controls.
+
+    The data-collector component resolves the render promise itself on mount
+    with PayloadVoid, so the generator advances without a participant action.
+    Used for the terminal task-not-completed page: the nonzero exit (ADR-0039)
+    fires as soon as the page is shown, and the participant leaves through the
+    host's Close control.
+    """
+
+    text: props.Translatable
+
+    def toDict(self):
+        dict = {}
+        dict["__type__"] = "PropsUIPromptNotice"
+        dict["text"] = self.text.toDict()
+        return dict
+
+
+@dataclass
 class ExtractionResult:
     """Result of a platform extraction: tables for consent + aggregated error counts.
 

@@ -4,6 +4,7 @@ import { FileInputMultipleFactory } from "./components/file_input_multiple/facto
 import { ErrorPageFactory } from "./components/error_page/factory"
 import { QuestionnaireFactory } from "./components/questionnaire/factory"
 import { RetryPromptFactory } from "./components/retry_prompt/factory"
+import { NoticeFactory } from "./components/notice/factory"
 import { normalizeLocale, DEFAULT_UI_LOCALE } from "./locale/policy"
 
 // DEV-gated query param: the Playwright e2e injection point. Production locale
@@ -38,6 +39,7 @@ function App() {
                 new ErrorPageFactory(),
                 new QuestionnaireFactory(),
                 new RetryPromptFactory(),
+                new NoticeFactory(),
             ],
           }),
         ]}

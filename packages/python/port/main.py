@@ -76,7 +76,9 @@ def error_flow(platform: str | None, tb: str):
 
     # Terminal task-incomplete page: without it the participant would be left
     # on the stale error page after the nonzero exit halts the run cycle
-    # (#123). Its Confirm must resolve so the generator can exhaust (ADR-0025).
+    # (#123). The notice component resolves the render promise itself on
+    # mount, so the generator can exhaust with no participant action
+    # (ADR-0025).
     yield ph.render_task_incomplete_page(platform or "error")
 
 
@@ -84,8 +86,9 @@ def incomplete_flow(platform: str | None):
     """Terminal handler for TaskIncompleteError: a flow that ended without
     completion but with nothing to report — no error-report consent step.
 
-    Resolvable pre-exit acknowledgment (ADR-0039); must never become an
-    unresolved end page (the ADR-0025 EndPage hang).
+    Self-resolving pre-exit notice (ADR-0039): the component resolves the
+    render promise itself on mount, so this must never become an unresolved
+    end page (the ADR-0025 EndPage hang).
     """
     yield ph.render_task_incomplete_page(platform or "error")
 

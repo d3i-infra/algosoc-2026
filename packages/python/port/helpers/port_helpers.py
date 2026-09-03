@@ -17,6 +17,7 @@ def render_page(
         | d3i_props.PropsUIPromptFileInputMultiple
         | d3i_props.PropsUIPromptQuestionnaire
         | props.PropsUIPromptConfirm
+        | d3i_props.PropsUIPromptNotice
     ),
 ) -> CommandUIRender:
     """
@@ -444,6 +445,10 @@ def render_task_incomplete_page(platform_name: str) -> CommandUIRender:
     completed and the participant returns to the task list via the host's
     Close control (the task stays pending, so it can be retried from there).
 
+    Display-only. The notice component resolves the render promise on mount,
+    so the nonzero exit fires without a click and the participant leaves
+    through the host's Close control.
+
     The copy names the host's Close button because after the nonzero exit
     the host paints nothing itself (verified on live Next 2026-08-27) —
     Close is the participant's only visible way back. Shown after the
@@ -461,7 +466,7 @@ def render_task_incomplete_page(platform_name: str) -> CommandUIRender:
             "es": "Tarea no completada",
         })
     )
-    body = props.PropsUIPromptConfirm(
+    body = d3i_props.PropsUIPromptNotice(
         text=props.Translatable({
             "en": "This task could not be completed. Use the Close button to return to your tasks — from there you can try this task again. If the problem persists, please contact the researcher.",
             "nl": "Deze taak kon niet worden voltooid. Gebruik de knop Sluiten om terug te keren naar uw taken — daar kunt u deze taak opnieuw proberen. Als het probleem aanhoudt, neem dan contact op met de onderzoeker.",
@@ -469,7 +474,6 @@ def render_task_incomplete_page(platform_name: str) -> CommandUIRender:
             "it": "Non è stato possibile completare questa attività. Usi il pulsante Chiudi per tornare alle sue attività — da lì potrà riprovare questa attività. Se il problema persiste, contatti il ricercatore.",
             "es": "Esta tarea no se pudo completar. Utilice el botón Cerrar para volver a sus tareas — desde allí podrá intentar esta tarea de nuevo. Si el problema persiste, póngase en contacto con el investigador.",
         }),
-        ok=props.Translatable({"en": "OK", "nl": "OK", "de": "OK", "it": "OK", "es": "OK"}),
     )
     page = props.PropsUIPageDataSubmission(platform_name, header, body)
     return CommandUIRender(page)

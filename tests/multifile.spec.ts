@@ -298,8 +298,9 @@ test('too many files shows the safety error page and exits upload-rejected', asy
     // with the upload-rejected code (ADR-0039).
     await page.getByText('OK', { exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Select your e2etest_multifile file' })).not.toBeVisible();
+    // Terminal task-incomplete page: the notice component resolves itself on
+    // mount, so the exit below fires with no click.
     await expect(page.getByText('Task not completed')).toBeVisible();
-    await page.getByText('OK', { exact: true }).click();
     await expect
       .poll(() => consoleMessages.find((m) => m.includes('[FakeBridge] received exit')), { timeout: 30000 })
       .toContain('received exit: 4=Upload rejected');

@@ -5,11 +5,13 @@ category: Feldspar
 applies_to:
     - packages/python/port/main.py
     - packages/python/port/helpers/flow_builder.py
+    - packages/data-collector/src/components/notice/notice.tsx
 priority: invariant
 companions:
     - packages/python/tests/test_main_queue.py
     - packages/python/tests/test_flow_builder.py
     - tests/error-flow.spec.ts
+    - packages/data-collector/src/components/notice/types.test.ts
 checks:
     - desc: no interpolated text reaches TaskIncompleteError (reason keys only)
       grep: 'TaskIncompleteError\(f'
@@ -37,7 +39,7 @@ The exit code is the completion signal across the bridge: only genuine flow-end 
 - Never let the handler exhaustion branch in `ScriptWrapper.send()` fall back to exit 0 — hosts (mono's `crew_task_helpers.ex` `handle_tool_exited()`) treat exit 0 as unconditional completion with no donation check, so an incomplete-end exit 0 silently records the participant as a satisfied completion.
 - The exit `info` is always a fixed PII-free literal (`TaskIncompleteError.EXITS`, or `"Error flow completed"`) — never interpolate traceback, exception, or participant text; error detail leaves the iframe only through the consent-gated `error-report` donation inside `error_flow()`.
 - Nonzero codes are a fork-local convention (1 unhandled error, 2 participant abandoned, 3 donation delivery failed, 4 upload rejected) pending an agreed exit-code contract with Eyra: the host only distinguishes 0 from nonzero today, so codes may be re-mapped in coordination with mono, but 0 stays reserved for genuine completion.
-- Both handler flows (`error_flow()` and `incomplete_flow()` in `main.py`) terminate by yielding `ph.render_task_incomplete_page(platform)`, and that page must resolve its render promise so the generator can exhaust — an unresolved terminal page suppresses the exit signal entirely (the EndPage hang). Success paths still end by plain exhaustion with no terminal page.
+- Both handler flows terminate by yielding `ph.render_task_incomplete_page(platform)`, a display-only `PropsUIPromptNotice` whose component resolves the render promise on mount, so the generator exhausts and the nonzero exit fires without a click. The page then stays on screen and the participant leaves through the host's Close control. An unresolved terminal page would suppress the exit signal (the EndPage hang). Success paths still end by plain exhaustion with no terminal page.
 - Acceptance tests: `tests/error-flow.spec.ts` (crash path with `tests/error-trigger.zip`; retry-declined path with `tests/invalid.zip`), run via the e2etest platform — `VITE_PLATFORM=e2etest pnpm test:e2e`.
 
 ## Why
