@@ -66,25 +66,21 @@ def test_retry_prompt_single_file_wording_unchanged():
     assert "ALL" not in prompt["text"]["translations"]["en"]
 
 
-def test_retry_prompt_multiple_tells_participant_to_reselect_all_files():
-    """ITEM 2: a multi-file (Google-Takeout-style) retry must ask the
-    participant to select ALL the files, not just "a different file"."""
+def test_retry_prompt_multiple_points_at_different_files_not_all():
+    """Final copy (2026-09-03): with the soft-confirm in place, this page
+    fires only for unrecognised or corrupt files, never for missing parts —
+    so it points the participant at different files, not at reselecting
+    ALL of them."""
     prompt = ph.generate_retry_prompt("Google", multiple=True).toDict()
     translations = prompt["text"]["translations"]
     assert set(translations) >= {"en", "nl", "de", "it", "es"}
-    assert "ALL" in translations["en"]
-    assert "ALLE" in translations["nl"]
-
-
-def test_retry_prompt_multiple_does_not_double_the_retry_adverb():
-    """Copy-review fix: "Try again to select ALL the files again" (and the
-    nl/de/it/es equivalents) doubled the retry adverb — say it once."""
-    translations = ph.generate_retry_prompt("Google", multiple=True).toDict()["text"]["translations"]
-    assert "again to select ALL the files again" not in translations["en"]
-    assert "opnieuw om ALLE bestanden opnieuw" not in translations["nl"]
-    assert "erneut, um ALLE Dateien erneut" not in translations["de"]
-    assert "di nuovo TUTTI" not in translations["it"]
-    assert "TODOS los archivos de nuevo" not in translations["es"]
+    assert "different files" in translations["en"]
+    assert "andere bestanden" in translations["nl"]
+    assert "ALL" not in translations["en"]
+    assert "ALLE" not in translations["nl"]
+    assert "ALLE" not in translations["de"]
+    assert "TUTTI" not in translations["it"]
+    assert "TODOS" not in translations["es"]
 
 
 def test_retry_prompt_multiple_ok_cancel_labels_unchanged():

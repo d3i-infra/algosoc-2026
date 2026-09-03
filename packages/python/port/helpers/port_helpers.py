@@ -63,20 +63,24 @@ def generate_retry_prompt(platform_name: str, multiple: bool = False) -> props.P
         platform_name: The name of the platform whose file could not be processed.
         multiple (bool, optional): Whether the upload this retries is a
             multi-file (PayloadFiles) selection — mirrors generate_file_prompt's
-            `multiple` flag. When True, the retry copy tells the participant to
-            select ALL the files again, since a multi-part upload (e.g. Google
-            Takeout) must be resubmitted as a complete set, not one part.
+            `multiple` flag. When True, the retry copy points the participant
+            at different files rather than "a different file": this page
+            fires on a validation failure, i.e. no recognised source found in
+            the selection, or a corrupt part. A selection that validates but
+            is missing a product is instead handled by the soft-confirm step
+            (FlowBuilder.missing_products, see generate_incomplete_upload_prompt),
+            which is why this copy no longer asks for ALL the files again.
             Defaults to False.
     """
 
     if multiple:
         text = props.Translatable(
             {
-                "en": f"Unfortunately, we cannot process your {platform_name} files. They do not appear to be the files we expected. Try again to select ALL the files, or stop for now — you can return to this task later.",
-                "nl": f"Helaas kunnen we uw {platform_name}-bestanden niet verwerken. Het lijken niet de bestanden te zijn die we verwachtten. Probeer opnieuw om ALLE bestanden te selecteren, of stop voorlopig — u kunt later naar deze taak terugkeren.",
-                "de": f"Leider können wir Ihre {platform_name}-Dateien nicht verarbeiten. Es scheinen nicht die erwarteten Dateien zu sein. Versuchen Sie es erneut, um ALLE Dateien auszuwählen, oder beenden Sie vorerst — Sie können später zu dieser Aufgabe zurückkehren.",
-                "it": f"Purtroppo non possiamo elaborare i suoi file di {platform_name}. Non sembrano essere i file previsti. Riprovi per selezionare TUTTI i file, oppure interrompa per ora — potrà tornare a questa attività più tardi.",
-                "es": f"Lamentablemente, no podemos procesar sus archivos de {platform_name}. No parecen ser los archivos esperados. Intente de nuevo para seleccionar TODOS los archivos, o deténgase por ahora — podrá volver a esta tarea más tarde.",
+                "en": f"Unfortunately, we cannot process your {platform_name} file(s) because they don't look like we would expect. Try again with different files, or stop for now. You can return to this task later.",
+                "nl": f"Helaas kunnen we uw {platform_name}-bestand(en) niet verwerken, omdat ze er niet uitzien zoals we verwachten. Probeer het opnieuw met andere bestanden, of stop voorlopig. U kunt later naar deze taak terugkeren.",
+                "de": f"Leider können wir Ihre {platform_name}-Datei(en) nicht verarbeiten, weil sie nicht so aussehen, wie wir es erwarten. Versuchen Sie es erneut mit anderen Dateien, oder beenden Sie vorerst. Sie können später zu dieser Aufgabe zurückkehren.",
+                "it": f"Purtroppo non possiamo elaborare i suoi file di {platform_name}, perché non corrispondono a quanto ci aspettiamo. Riprovi con altri file, oppure interrompa per ora. Potrà tornare a questa attività più tardi.",
+                "es": f"Lamentablemente, no podemos procesar sus archivos de {platform_name}, porque no tienen el aspecto que esperamos. Inténtelo de nuevo con otros archivos, o deténgase por ahora. Podrá volver a esta tarea más tarde.",
             }
         )
     else:
