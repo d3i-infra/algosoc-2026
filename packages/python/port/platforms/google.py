@@ -35,7 +35,7 @@ Platform info::
         "name": "Google",
         "filetypes": ["json", "html", "csv", "txt"],
         "languages": ["en", "nl", "de", "es", "ar", "tr", "zh"],
-        "description": "Handles the Google Takeout archive, uploaded as one or more zip parts (a multi-zip archive-set, so the export never needs to fit in a single upload). Extracts the ten tables this study asks for: four from YouTube (watch history, search history, subscriptions, comments), one each from Search, Chrome, Video Search, Ads, Discover and Google News. The general area a search or Discover card was made from is not extracted; rows of the Search, Chrome, Video Search and Ads tables that carry explicit content are dropped, and email addresses are redacted in the title and details columns of every table. Each source is read as JSON, HTML, CSV or TXT, whichever format it was exported in, which may differ per source within one archive. Handles DDPs in English, Dutch, German, Spanish, Arabic, Turkish and Chinese (Simplified only); the seven locales' path tables for the core sources were verified against real Google Takeout exports in August 2026. A handful of lower-traffic sources still carry older, unverified path guesses: the News My-Activity folder in every locale, Discover outside English (its English path is real-export-verified), and subscriptions/comments outside English and Dutch. Tested against the project's synthetic/canary test suite as of the date below; a live browser run against real exports updates this note when performed. If you find anything wrong with this script, report to datadonation@uu.nl and it will be fixed!",
+        "description": "Handles the Google Takeout archive, uploaded as one or more zip parts (a multi-zip archive-set, so the export never needs to fit in a single upload). Extracts the nine tables this study asks for: four from YouTube (watch history, search history, subscriptions, comments), one each from Search, Chrome, Video Search, Ads and Discover. The general area a search or Discover card was made from is not extracted; rows of the Search, Chrome, Video Search and Ads tables that carry explicit content are dropped, and email addresses are redacted in the title and details columns of every table. Each source is read as JSON, HTML, CSV or TXT, whichever format it was exported in, which may differ per source within one archive. Handles DDPs in English, Dutch, German, Spanish, Arabic, Turkish and Chinese (Simplified only); the seven locales' path tables for the core sources were verified against real Google Takeout exports in August 2026. A handful of lower-traffic sources still carry older, unverified path guesses: the News My-Activity folder in every locale, Discover outside English (its English path is real-export-verified), and subscriptions/comments outside English and Dutch. Tested against the project's synthetic/canary test suite as of the date below; a live browser run against real exports updates this note when performed. If you find anything wrong with this script, report to datadonation@uu.nl and it will be fixed!",
         "time_last_tested": "30-08-2026"
     }
 
@@ -2048,7 +2048,8 @@ def _count_failed_files(reader: ZipArchiveReader) -> int:
 #: Study (algosoc-2026): the two News-product extractors are not part of this
 #: study's table set. They stay available above, but are not registered — the
 #: generated config, and the config the deployed selector regenerates from these
-#: docstrings, therefore offer exactly the study's ten tables.
+#: docstrings, therefore offer exactly the study's nine tables. Google News
+#: dropped from the study 2026-09-03.
 EXTRACTOR_REGISTRY: dict[str, Callable[..., pd.DataFrame]] = {
     "youtube_watch_history_to_df": youtube_watch_history_to_df,
     "youtube_search_history_to_df": youtube_search_history_to_df,
@@ -2059,7 +2060,7 @@ EXTRACTOR_REGISTRY: dict[str, Callable[..., pd.DataFrame]] = {
     "video_search_history_to_df": video_search_history_to_df,
     "ads_history_to_df": ads_history_to_df,
     "discover_history_to_df": discover_history_to_df,
-    "google_news_history_to_df": google_news_history_to_df,
+    # "google_news_history_to_df": google_news_history_to_df,  # not in this study's set
     # "news_history_to_df": news_history_to_df,  # not in this study's set
     # "news_items_to_df": news_items_to_df,      # not in this study's set
 }

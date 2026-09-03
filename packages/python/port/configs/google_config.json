@@ -16,7 +16,7 @@
       "tr",
       "zh"
     ],
-    "description": "Handles the Google Takeout archive, uploaded as one or more zip parts (a multi-zip archive-set, so the export never needs to fit in a single upload). Extracts the ten tables this study asks for: four from YouTube (watch history, search history, subscriptions, comments), one each from Search, Chrome, Video Search, Ads, Discover and Google News. The general area a search or Discover card was made from is not extracted; rows of the Search, Chrome, Video Search and Ads tables that carry explicit content are dropped, and email addresses are redacted in the title and details columns of every table. Each source is read as JSON, HTML, CSV or TXT, whichever format it was exported in, which may differ per source within one archive. Handles DDPs in English, Dutch, German, Spanish, Arabic, Turkish and Chinese (Simplified only); the seven locales' path tables for the core sources were verified against real Google Takeout exports in August 2026. A handful of lower-traffic sources still carry older, unverified path guesses: the News My-Activity folder in every locale, Discover outside English (its English path is real-export-verified), and subscriptions/comments outside English and Dutch. Tested against the project's synthetic/canary test suite as of the date below; a live browser run against real exports updates this note when performed. If you find anything wrong with this script, report to datadonation@uu.nl and it will be fixed!",
+    "description": "Handles the Google Takeout archive, uploaded as one or more zip parts (a multi-zip archive-set, so the export never needs to fit in a single upload). Extracts the nine tables this study asks for: four from YouTube (watch history, search history, subscriptions, comments), one each from Search, Chrome, Video Search, Ads and Discover. The general area a search or Discover card was made from is not extracted; rows of the Search, Chrome, Video Search and Ads tables that carry explicit content are dropped, and email addresses are redacted in the title and details columns of every table. Each source is read as JSON, HTML, CSV or TXT, whichever format it was exported in, which may differ per source within one archive. Handles DDPs in English, Dutch, German, Spanish, Arabic, Turkish and Chinese (Simplified only); the seven locales' path tables for the core sources were verified against real Google Takeout exports in August 2026. A handful of lower-traffic sources still carry older, unverified path guesses: the News My-Activity folder in every locale, Discover outside English (its English path is real-export-verified), and subscriptions/comments outside English and Dutch. Tested against the project's synthetic/canary test suite as of the date below; a live browser run against real exports updates this note when performed. If you find anything wrong with this script, report to datadonation@uu.nl and it will be fixed!",
     "time_last_tested": "30-08-2026"
   },
   "tables": [
@@ -457,41 +457,6 @@
           "Title": "The title of the Discover event.",
           "Details": "Additional details about the Discover event.",
           "Timestamp": "ISO 8601 timestamp of when the Discover event occurred."
-        }
-      }
-    },
-    {
-      "id": "google_news_history",
-      "title": {
-        "en": "Your Google News history",
-        "nl": "Je Google Nieuws-geschiedenis"
-      },
-      "description": {
-        "en": "Your Google News events with timestamps.",
-        "nl": "Je Google Nieuws-gebeurtenissen met tijdstippen."
-      },
-      "headers": {
-        "Title": {
-          "en": "Action",
-          "nl": "Actie"
-        },
-        "URL": {
-          "en": "URL",
-          "nl": "URL"
-        },
-        "Timestamp": {
-          "en": "Timestamp",
-          "nl": "Datum en tijd"
-        }
-      },
-      "extractor": "google_news_history_to_df",
-      "documentation": {
-        "summary": "Each row represents one event in Google News history.",
-        "source_file": "the Google News history, e.g. News/MyActivity.json",
-        "columns": {
-          "Title": "The title of the Google News event.",
-          "URL": "URL of the Google News event.",
-          "Timestamp": "ISO 8601 timestamp of when the Google News event occured."
         }
       }
     }

@@ -25,7 +25,8 @@ from port.helpers.study_redaction import (
 from port.helpers.table_extractor import load_port_config
 from port.platforms import google
 
-#: The study's Google tables, in consent-form order — the fork's ten.
+#: The study's Google tables, in consent-form order — nine; Google News dropped
+#: from the study 2026-09-03.
 STUDY_TABLE_IDS = [
     "youtube_watch_history",
     "youtube_search_history",
@@ -36,7 +37,6 @@ STUDY_TABLE_IDS = [
     "video_search_history",
     "ads_history",
     "discover_history",
-    "google_news_history",
 ]
 
 

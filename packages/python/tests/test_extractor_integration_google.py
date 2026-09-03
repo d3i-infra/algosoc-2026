@@ -86,7 +86,7 @@ EXPECTED_LOCALE: dict[str, str] = {
     "google_set_nl_vid": "nl",
 }
 
-#: The six extractors the UU study account (Chrome-less, subscription-less,
+#: The five extractors the UU study account (Chrome-less, subscription-less,
 #: no News/Discover activity) exercises, shared by every uu-acct* locale
 #: export and its fork counterparts.
 _UU_ACCOUNT_TABLES = {
@@ -95,10 +95,9 @@ _UU_ACCOUNT_TABLES = {
     "search_history_to_df",
     "video_search_history_to_df",
     "ads_history_to_df",
-    "google_news_history_to_df",
 }
 
-#: All ten registered extractors (the study's set) — the heavier gmail-acct/en_vid
+#: All nine registered extractors (the study's set) — the heavier gmail-acct/en_vid
 #: account (and only that account, among the local sets) exercises every one of them.
 _ALL_TABLES = set(google.EXTRACTOR_REGISTRY)
 
