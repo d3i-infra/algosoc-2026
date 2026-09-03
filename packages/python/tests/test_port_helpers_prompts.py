@@ -135,10 +135,12 @@ def test_incomplete_upload_prompt_lists_the_missing_products_per_locale():
     assert set(text) >= {"en", "nl", "de", "it", "es"}
     assert "YouTube, Chrome" in text["en"]
     assert "YouTube, Chrome" in text["nl"]
+    assert "multiple parts" in text["en"]
+    assert "meerdere delen" in text["nl"]
 
 
 def test_incomplete_upload_prompt_buttons():
     d = ph.generate_incomplete_upload_prompt("Google", _missing()).toDict()
-    assert d["ok"]["translations"]["en"] == "Select files again"
-    assert d["cancel"]["translations"]["en"] == "Continue with these files"
-    assert d["cancel"]["translations"]["nl"] == "Doorgaan met deze bestanden"
+    assert d["ok"]["translations"]["en"] == "No, I have more files"
+    assert d["cancel"]["translations"]["en"] == "Yes, I am sure"
+    assert d["cancel"]["translations"]["nl"] == "Ja, ik weet het zeker"
