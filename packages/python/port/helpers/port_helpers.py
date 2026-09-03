@@ -1,4 +1,5 @@
 import logging
+from typing import cast
 
 import port.api.d3i_props as d3i_props
 import port.api.props as props
@@ -98,6 +99,43 @@ def generate_retry_prompt(platform_name: str, multiple: bool = False) -> props.P
     cancel = props.Translatable(
         {"en": "Stop for now", "nl": "Voorlopig stoppen", "de": "Vorerst beenden", "it": "Interrompi per ora", "es": "Detener por ahora"}
     )
+    return props.PropsUIPromptConfirm(text, ok, cancel)
+
+
+def generate_incomplete_upload_prompt(
+    platform_name: str, missing: dict[str, props.Translatable]
+) -> props.PropsUIPromptConfirm:
+    """Soft confirmation shown after validation when the upload lacks one or
+    more of the products the study asks for (FlowBuilder.missing_products).
+
+    ok → PayloadTrue, "No, I have more files": back to the file prompt, the
+    participant has more parts to add. cancel → PayloadFalse, "Yes, I am
+    sure": proceed with the files as they are. Neither path ends the task;
+    a participant who genuinely exported fewer products goes on to consent.
+    """
+    templates = {
+        "en": "We don't see the following parts: {items}. A Google Takeout usually has multiple parts. Are you sure you have uploaded all parts available on the Google Takeout page?",
+        "nl": "We kunnen de volgende onderdelen niet vinden: {items}. Meestal bestaat een Google export uit meerdere delen. Weet u zeker dat u alle delen heeft geüpload die beschikbaar waren op de Google Takeout-pagina?",
+        "de": "Wir finden die folgenden Teile nicht: {items}. Ein Google-Takeout-Export besteht meist aus mehreren Teilen. Sind Sie sicher, dass Sie alle Teile hochgeladen haben, die auf der Google-Takeout-Seite verfügbar waren?",
+        "it": "Non troviamo le seguenti parti: {items}. Un'esportazione di Google Takeout è di solito composta da più parti. È sicuro di aver caricato tutte le parti disponibili nella pagina di Google Takeout?",
+        "es": "No encontramos las siguientes partes: {items}. Una exportación de Google Takeout suele constar de varias partes. ¿Está seguro de que ha subido todas las partes disponibles en la página de Google Takeout?",
+    }
+    text = props.Translatable(cast(props.Translations, {
+        locale: template.format(
+            items=", ".join(label.translations.get(locale, label.translations["en"]) for label in missing.values()),
+        )
+        for locale, template in templates.items()
+    }))
+    ok = props.Translatable({
+        "en": "No, I have more files", "nl": "Nee, ik heb meer bestanden",
+        "de": "Nein, ich habe weitere Dateien", "it": "No, ho altri file",
+        "es": "No, tengo más archivos",
+    })
+    cancel = props.Translatable({
+        "en": "Yes, I am sure", "nl": "Ja, ik weet het zeker",
+        "de": "Ja, ich bin sicher", "it": "Sì, sono sicuro",
+        "es": "Sí, estoy seguro",
+    })
     return props.PropsUIPromptConfirm(text, ok, cancel)
 
 

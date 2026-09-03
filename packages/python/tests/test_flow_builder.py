@@ -527,6 +527,67 @@ class TestMultiFileFlow:
         assert exc.value.exit_code == 2
 
 
+class IncompleteStubFlow(MultiStubFlow):
+    """Reports one missing product until told otherwise."""
+
+    def __init__(self, missing=None):
+        super().__init__()
+        self.missing = missing if missing is not None else {
+            "chrome": props.Translatable({"en": "Chrome", "nl": "Chrome", "de": "Chrome", "it": "Chrome", "es": "Chrome"})
+        }
+
+    def missing_products(self, validation):
+        return self.missing
+
+
+class TestIncompleteUploadPath:
+    def test_default_hook_reports_nothing_and_shows_no_prompt(self):
+        gen = MultiStubFlow().start_flow()
+        start_and_skip_logs(gen)
+        cmd = advance_past_logs(gen, make_payload_files(n=1))
+        assert isinstance(cmd.page.body, d3i_props.PropsUIPromptConsentFormViz)
+
+    def test_missing_product_shows_confirm_before_consent(self):
+        gen = IncompleteStubFlow().start_flow()
+        start_and_skip_logs(gen)
+        cmd = advance_past_logs(gen, make_payload_files(n=1))
+        assert isinstance(cmd, CommandUIRender)
+        assert isinstance(cmd.page.body, props.PropsUIPromptConfirm)
+        assert "Chrome" in cmd.page.body.text.translations["en"]
+
+    def test_reselect_loops_back_to_the_file_prompt(self):
+        gen = IncompleteStubFlow().start_flow()
+        start_and_skip_logs(gen)
+        advance_past_logs(gen, make_payload_files(n=1))
+        cmd = advance_past_logs(gen, make_payload("PayloadTrue"))
+        assert isinstance(cmd.page.body, d3i_props.PropsUIPromptFileInputMultiple)
+
+    def test_continue_proceeds_to_consent(self):
+        gen = IncompleteStubFlow().start_flow()
+        start_and_skip_logs(gen)
+        advance_past_logs(gen, make_payload_files(n=1))
+        cmd = advance_past_logs(gen, make_payload("PayloadFalse"))
+        assert isinstance(cmd.page.body, d3i_props.PropsUIPromptConsentFormViz)
+
+    def test_unexpected_answer_is_a_protocol_error_not_a_silent_continue(self):
+        gen = IncompleteStubFlow().start_flow()
+        start_and_skip_logs(gen)
+        advance_past_logs(gen, make_payload_files(n=1))
+        cmd = advance_past_logs(gen, make_payload("PayloadString", value="x"))
+        assert "out of sync" in cmd.page.body.text.translations["en"]
+        with pytest.raises(TaskIncompleteError) as exc:
+            advance_past_logs(gen, make_payload("PayloadTrue"))
+        assert exc.value.reason == "upload_rejected"
+
+    def test_invalid_upload_never_reaches_the_confirm(self):
+        flow = IncompleteStubFlow()
+        flow._validation_status = 1
+        gen = flow.start_flow()
+        start_and_skip_logs(gen)
+        cmd = advance_past_logs(gen, make_payload_files(n=1))
+        assert cmd.page.body.ok.translations["en"] == "Try again"
+
+
 class TestTooManyFilesSafetyPath:
     """A PayloadFiles set over uploads.MAX_UPLOAD_FILES hits the safety-error
     page — not an uncaught TooManyFilesError. Widens the flow_builder safety
