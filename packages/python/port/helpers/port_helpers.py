@@ -103,10 +103,17 @@ def generate_retry_prompt(platform_name: str, multiple: bool = False) -> props.P
 
 
 def generate_incomplete_upload_prompt(
-    platform_name: str, missing: dict[str, props.Translatable]
+    missing: dict[str, props.Translatable]
 ) -> props.PropsUIPromptConfirm:
     """Soft confirmation shown after validation when the upload lacks one or
     more of the products the study asks for (FlowBuilder.missing_products).
+
+    The copy is deliberately Google-Takeout-specific ("a Google Takeout
+    usually has multiple parts", "the Google Takeout page") rather than
+    taking a platform name: only GoogleFlow overrides missing_products()
+    and reports anything today (the FlowBuilder default returns `{}`, which
+    never reaches this prompt) — generalize the copy if a second platform
+    ever needs this soft confirmation.
 
     ok → PayloadTrue, "No, I have more files": back to the file prompt, the
     participant has more parts to add. cancel → PayloadFalse, "Yes, I am
@@ -120,6 +127,7 @@ def generate_incomplete_upload_prompt(
         "it": "Non troviamo le seguenti parti: {items}. Un'esportazione di Google Takeout è di solito composta da più parti. È sicuro di aver caricato tutte le parti disponibili nella pagina di Google Takeout?",
         "es": "No encontramos las siguientes partes: {items}. Una exportación de Google Takeout suele constar de varias partes. ¿Está seguro de que ha subido todas las partes disponibles en la página de Google Takeout?",
     }
+    # pyright cannot infer a TypedDict (props.Translations) from a dict comprehension.
     text = props.Translatable(cast(props.Translations, {
         locale: template.format(
             items=", ".join(label.translations.get(locale, label.translations["en"]) for label in missing.values()),
@@ -454,8 +462,9 @@ def render_safety_error_page(platform_name: str, error: Exception) -> CommandUIR
     raises TaskIncompleteError("upload_rejected") next, regardless of which
     button is pressed (start_flow's safety-check branch). A second button
     with the same effect would only invent a distinction that isn't there,
-    so this is a single acknowledging button (no `cancel`) — see the
-    task-incomplete page for the same pattern.
+    so this is a single acknowledging button (no `cancel`) — the raise that
+    follows takes the flow to render_task_incomplete_page, the actual
+    terminal, button-less notice page.
 
     Caller should yield and await response before returning.
     """
@@ -529,8 +538,9 @@ def render_donate_failure_page(platform_name: str) -> CommandUIRender:
     button is pressed (start_flow's donate-result branch) — donation is
     never retried from here. A second button with the same effect would
     only invent a distinction that isn't there, so this is a single
-    acknowledging button (no `cancel`) — see the task-incomplete page for
-    the same pattern.
+    acknowledging button (no `cancel`) — the raise that follows takes the
+    flow to render_task_incomplete_page, the actual terminal, button-less
+    notice page.
 
     Caller should yield and await response before returning.
     """
@@ -570,8 +580,9 @@ def render_protocol_error_page(platform_name: str) -> CommandUIRender:
     raises TaskIncompleteError("upload_rejected") next, regardless of which
     button is pressed (start_flow's protocol-mismatch branch). A second
     button with the same effect would only invent a distinction that isn't
-    there, so this is a single acknowledging button (no `cancel`) — see the
-    task-incomplete page for the same pattern.
+    there, so this is a single acknowledging button (no `cancel`) — the
+    raise that follows takes the flow to render_task_incomplete_page, the
+    actual terminal, button-less notice page.
     """
     header = props.Translatable({
         "en": "Something went wrong",

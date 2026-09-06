@@ -10,6 +10,7 @@ applies_to:
     - packages/python/port/main.py
     - packages/python/port/script.py
     - packages/python/port/helpers/flow_builder.py
+    - packages/python/port/helpers/port_helpers.py
     - packages/feldspar/src/framework/command_router.ts
     - packages/data-collector/src/components/notice/notice.tsx
 priority: invariant

@@ -84,7 +84,7 @@ def test_retry_prompt_multiple_points_at_different_files_not_all():
 
 
 def test_retry_prompt_multiple_ok_cancel_labels_unchanged():
-    """Only the body text is multi-aware; the Try again / Continue button
+    """Only the body text is multi-aware; the Try again / Stop for now button
     labels stay the same for both single- and multi-file retries."""
     single = ph.generate_retry_prompt("Instagram").toDict()
     multi = ph.generate_retry_prompt("Google", multiple=True).toDict()
@@ -128,7 +128,7 @@ def _missing():
 
 
 def test_incomplete_upload_prompt_lists_the_missing_products_per_locale():
-    d = ph.generate_incomplete_upload_prompt("Google", _missing()).toDict()
+    d = ph.generate_incomplete_upload_prompt(_missing()).toDict()
     text = d["text"]["translations"]
     assert set(text) >= {"en", "nl", "de", "it", "es"}
     assert "YouTube, Chrome" in text["en"]
@@ -138,7 +138,7 @@ def test_incomplete_upload_prompt_lists_the_missing_products_per_locale():
 
 
 def test_incomplete_upload_prompt_buttons():
-    d = ph.generate_incomplete_upload_prompt("Google", _missing()).toDict()
+    d = ph.generate_incomplete_upload_prompt(_missing()).toDict()
     assert d["ok"]["translations"]["en"] == "No, I have more files"
     assert d["cancel"]["translations"]["en"] == "Yes, I am sure"
     assert d["cancel"]["translations"]["nl"] == "Ja, ik weet het zeker"

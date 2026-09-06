@@ -100,6 +100,14 @@ logger = logging.getLogger(__name__)
 #: to a bare filename that occurs in more than one folder of the archive — that lookup
 #: is ambiguous and resolves to nothing.
 #:
+#: For every ``UPLOAD_PRODUCTS`` key, variant 0 is also load-bearing beyond "tried
+#: first": ``missing_products()`` (via ``_matched_under_own_folder``) treats a key as
+#: found under its own product only when the matched path's top segment equals variant
+#: 0's top segment. A key whose variant 0 were a shared fallback (e.g. under "My
+#: Activity" rather than its own product folder), or entries reordered so variant 0 is
+#: no longer the own-folder path, would silently break that check.
+#: ``TestTableConsistency`` pins this across every locale and key.
+#:
 #: Adding a locale is one block; nothing outside this file needs to change.
 #:
 #: Two eras of evidence sit in this table. The English and Dutch blocks come from a
@@ -412,9 +420,11 @@ class GoogleValidation(BaseValidation):
 
     archive_members: list[str] = field(default_factory=list)
     ddp_locale: str = ""
-    #: The ``TAKEOUT_PATHS[ddp_locale]`` keys found in the union member inventory.
-    #: Feeds ``missing_products()``, which reports which of the study's three
-    #: products (YouTube, My Activity, Chrome) this upload lacks.
+    #: The ``TAKEOUT_PATHS[ddp_locale]`` keys found in the union member inventory —
+    #: a convenience view of ``found_paths``' keys (``frozenset(found_paths)``).
+    #: Presence is judged by ``found_paths``, which ``missing_products()`` actually
+    #: reads (via ``_matched_under_own_folder``); this field itself has no reader
+    #: outside the tests.
     found_keys: frozenset[str] = frozenset()
     #: Each found key's first matching variant path (``TAKEOUT_PATHS`` order) — lets
     #: ``missing_products()`` tell a product's own folder apart from a fallback path.
