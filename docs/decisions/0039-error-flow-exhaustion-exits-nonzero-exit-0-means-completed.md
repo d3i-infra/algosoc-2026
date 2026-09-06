@@ -5,6 +5,7 @@ category: Feldspar
 applies_to:
     - packages/python/port/main.py
     - packages/python/port/helpers/flow_builder.py
+    - packages/python/port/helpers/port_helpers.py
     - packages/data-collector/src/components/notice/notice.tsx
 priority: invariant
 companions:

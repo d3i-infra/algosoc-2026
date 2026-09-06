@@ -269,6 +269,11 @@ def test_single_zip_through_multi_file_flow_completes(monkeypatch):
     multi-part set — ArchiveSet unions N>=1 parts identically (ADR-0040), so
     nothing in validate_file/extract_data branches on part count.
 
+    This YouTube-only fixture is also missing products, so the soft-confirm
+    step's PropsUIPromptConfirm appears first (see the body below) — it,
+    too, is reachable only once validate_file has already succeeded, so
+    reaching either it or the final consent form proves validation passed.
+
     Runs the real validate_file/extract_data (no monkeypatching of those,
     unlike test_flow_donation_key_is_session_google above, which stubs
     extract_data to isolate the ADR-0020 donate-key concern and may evolve

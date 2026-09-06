@@ -411,6 +411,33 @@ class TestTableConsistency:
             for path in paths:
                 assert not path.rsplit("/", 1)[-1].count(".")
 
+    @pytest.mark.parametrize("locale", list(google.TAKEOUT_PATHS))
+    def test_upload_products_variant_zero_is_own_folder(self, locale):
+        """Pins the invariant ``_matched_under_own_folder``/``missing_products()``
+        rely on: for every ``UPLOAD_PRODUCTS`` key, ``TAKEOUT_PATHS[locale][key][0]``
+        is folder-qualified and lives under that product's own top folder. Checked
+        per locale: every key of one product shares its variant-0 top segment, and
+        the three products' top segments are pairwise distinct — so a key resolved
+        under its own product's top folder can never be mistaken for another
+        product's, and a fallback path (which lives under a different top folder)
+        can never be confused with the product's own."""
+        product_top_folders: dict[str, str] = {}
+        for product, (keys, _label) in google.UPLOAD_PRODUCTS.items():
+            top_folders = set()
+            for key in keys:
+                variant_zero = google.TAKEOUT_PATHS[locale][key][0]
+                assert "/" in variant_zero, (
+                    f"{locale}/{key} variant 0 is not folder-qualified: {variant_zero!r}"
+                )
+                top_folders.add(variant_zero.split("/")[0])
+            assert len(top_folders) == 1, (
+                f"{locale}/{product}: keys disagree on variant-0 top folder: {top_folders}"
+            )
+            product_top_folders[product] = top_folders.pop()
+        assert len(set(product_top_folders.values())) == len(product_top_folders), (
+            f"{locale}: products share a variant-0 top folder: {product_top_folders}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # Task 4: the four YouTube extractors, called directly against a reader.

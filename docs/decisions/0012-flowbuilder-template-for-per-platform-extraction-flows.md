@@ -33,4 +33,4 @@ Every platform needs the same control loop — upload, retry on invalid, consent
 
 ## Checks
 
-- Review platform modules for a *reimplemented* shared lifecycle — file receipt, retry prompts, consent, or donation calls belong in `FlowBuilder.start_flow()`, not `platforms/`. Narrow hook overrides (`generate_file_prompt`, an in-`extract_data` selection UI) and the standard `process()` / `EXTRACTOR_REGISTRY` interface are expected, not violations.
+- Review platform modules for a *reimplemented* shared lifecycle — file receipt, retry prompts, consent, or donation calls belong in `FlowBuilder.start_flow()`, not `platforms/`. Narrow hook overrides (`generate_file_prompt`, an in-`extract_data` selection UI, `missing_products()`) and the standard `process()` / `EXTRACTOR_REGISTRY` interface are expected, not violations.

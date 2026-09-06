@@ -235,7 +235,7 @@ class FlowBuilder:
                 yield from ph.emit_log(
                     "info", f"[{self.platform_name}] Upload incomplete: missing={','.join(missing)}"
                 )
-                prompt = ph.generate_incomplete_upload_prompt(self.platform_name, missing)
+                prompt = ph.generate_incomplete_upload_prompt(missing)
                 choice = yield ph.render_page(self.UI_TEXT["incomplete_upload_header"], prompt)
                 if choice.__type__ == "PayloadTrue":
                     yield from ph.emit_log("info", f"[{self.platform_name}] Incomplete upload: reselecting")
@@ -369,7 +369,10 @@ class FlowBuilder:
 
         Mirrors generate_file_prompt's `multiple=` flag: a PayloadFiles
         flow (expected_file_payload == "PayloadFiles") gets the multi-aware
-        copy telling the participant to select ALL the files again.
+        copy pointing the participant at different files, rather than "a
+        different file" — it no longer asks for ALL the files again, since a
+        selection that validates but is missing a product is instead caught
+        by the soft-confirm step (missing_products/generate_incomplete_upload_prompt).
         """
         return ph.generate_retry_prompt(
             self.platform_name, multiple=self.expected_file_payload == "PayloadFiles"
