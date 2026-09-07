@@ -167,5 +167,19 @@ for PLATFORM in "${platforms[@]}"; do
     echo "Created: releases/${RELEASE_NAME}"
 done
 
+# Mobile TikTok task (packages/mobile-tiktok). It is not a platform in the
+# configs/ sense — no config file, no wheel, no VITE_PLATFORM — so it is built
+# here, after the loop, rather than inside it: outside the platform loop by
+# design (ADR-0041). ADR-0004's discovery rule is untouched by this; every
+# *_config.json still means study membership, and none of them names this task.
+# Its build runs the package's own Safari 12 syntax gate.
+echo "Building mobile-tiktok..."
+pnpm --filter @eyra/mobile-tiktok build
+MOBILE_RELEASE_NAME="${NAME}_mobile-tiktok_${BRANCH}_${TIMESTAMP}.zip"
+cd packages/mobile-tiktok/dist
+zip -r "../../../releases/${MOBILE_RELEASE_NAME}" .
+cd ../../..
+echo "Created: releases/${MOBILE_RELEASE_NAME}"
+
 echo ""
 echo "Done. ${#platforms[@]} platform release(s) created in releases/"
