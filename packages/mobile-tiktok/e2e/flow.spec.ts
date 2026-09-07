@@ -26,6 +26,10 @@ async function open(page: Page, query = ""): Promise<FrameLocator> {
   await page.goto("/fake-host.html" + query);
   const app = page.frameLocator("#app");
   await expect(page.locator("#state")).toHaveText("initialized");
+  // The fake host (like mono) keeps the iframe hidden for a beat after
+  // "initialized", so every flow below has to wait for it to show before it
+  // can interact with anything inside.
+  await expect(page.locator("#app")).toBeVisible();
   return app;
 }
 
@@ -46,18 +50,20 @@ async function iframeHeightPx(page: Page): Promise<number> {
 test("donate after removing one row", async ({ page }) => {
   const app = await open(page, "?locale=nl");
   await pick(page, app, "json_en.zip");
-  await expect(app.locator("h1")).toHaveText("Je TikTok-gegevens");
-  await expect(app.locator("[data-role=table-select] option").first()).toContainText("(");
+  await expect(app.locator("h1")).toHaveText("Uw TikTok-gegevens");
+  await expect(app.locator("[data-role=table-select] option").first()).toContainText("rijen)");
   // Tick one row and remove the selection: no confirm dialog on this path.
   // The input itself is visually hidden (iOS 12's own checkbox rendering is
   // too faint to notice); a participant taps the drawn .mt-box, which the
   // wrapping label forwards to the input exactly as a real device does.
   await app.locator(".mt-row").first().locator(".mt-box").click();
   await app.locator("[data-action=remove-selected]").click();
+  // Undo now lives on the summary line, beside the deleted count.
+  await expect(app.locator("[data-role=deleted]")).toContainText("verwijderd");
   await expect(app.locator("[data-action=undo]")).toBeVisible();
   await expect(app.locator("[data-action=remove-selected]")).toHaveCount(0);
   await app.locator("[data-action=proceed]").click();
-  await expect(app.locator("h1")).toHaveText("Klaar om te doneren?");
+  await expect(app.locator("h1")).toHaveText("Klaar om te delen?");
   await app.locator("[data-action=donate]").click();
   await expect(app.locator("h1")).toHaveText("Bedankt");
   await waitForExit(page);
@@ -71,27 +77,49 @@ test("donate after removing one row", async ({ page }) => {
   expect(h.logs.slice(0, 4)).toEqual(["file_selected", "archive_read", "extracted", "review_shown"]);
 });
 
-test("Next table steps through the tables via the dropdown", async ({ page }) => {
+test("the step buttons and the dropdown walk the tables together", async ({ page }) => {
   const app = await open(page);
   await pick(page, app, "json_en.zip");
   await expect(app.locator("[data-role=table-select]")).toHaveValue("0");
+  const total = await app.locator("[data-role=table-select] option").count();
+  await expect(app.locator("[data-role=table-position]")).toHaveText("1 of " + total);
+  await expect(app.locator("[data-action=prev-table]")).toBeDisabled();
   await app.locator("[data-action=next-table]").click();
   await expect(app.locator("[data-role=table-select]")).toHaveValue("1");
+  await expect(app.locator("[data-role=table-position]")).toHaveText("2 of " + total);
+  await app.locator("[data-role=table-select]").selectOption({ index: total - 1 });
+  await expect(app.locator("[data-role=table-position]")).toHaveText(total + " of " + total);
+  await expect(app.locator("[data-action=next-table]")).toBeDisabled();
+  await app.locator("[data-action=prev-table]").click();
+  await expect(app.locator("[data-role=table-select]")).toHaveValue(String(total - 2));
 });
 
-test("search and bulk delete", async ({ page }) => {
+test("search, select all, Delete and Undo", async ({ page }) => {
   const app = await open(page);
   await pick(page, app, "json_en.zip");
   await app.locator("[data-role=table-select]").selectOption({ index: 2 });
-  await expect(app.locator("[data-role=page-label]").first()).toHaveText("Page 1 of 1");
-  await expect(app.locator("[data-role=month-select]")).toBeVisible();
-  await app.locator("input[type=search]").fill("https://");
-  await expect(app.locator("[data-action=remove-matches]")).toBeVisible();
-  page.once("dialog", (d) => d.accept());
-  await app.locator("[data-action=remove-matches]").click();
-  await expect(app.locator("text=No rows to show.")).toBeVisible();
+  await expect(app.locator("[data-role=page-label]")).toHaveText("1/1");
+  const before = await app.locator(".mt-row").count();
+  // A search that narrows, so the summary line's "2 / 6 rows" is the signal
+  // that the debounced query has landed. Ticking select-all before it does
+  // would be thrown away by it: a new search clears the selection on purpose.
+  await app.locator("input[type=search]").fill("2026-10-25");
+  await expect(app.locator("[data-role=summary]")).toContainText("2 / 6 rows");
+  // The header tick box covers exactly the search result, and nothing else.
+  await app.locator("thead .mt-box").click();
+  await expect(app.locator("[data-action=remove-selected]")).toHaveText("Delete 2");
+  await app.locator("[data-action=remove-selected]").click();
+  await expect(app.locator("[data-role=rows] tbody td")).toHaveText("no data");
+  await expect(app.locator("[data-role=deleted]")).toContainText("2 deleted");
+  // Undo belongs to this table: a table with nothing deleted offers none.
+  await app.locator("[data-action=next-table]").click();
+  await expect(app.locator("[data-action=undo]")).toHaveCount(0);
+  await app.locator("[data-action=prev-table]").click();
   await app.locator("[data-action=undo]").click();
-  await expect(app.locator(".mt-row").first()).toBeVisible();
+  await expect(app.locator("[data-role=summary]")).toContainText("2 / 6 rows");
+  // Clearing the search brings every row back on screen.
+  await app.locator("input[type=search]").fill("");
+  await expect(app.locator(".mt-row")).toHaveCount(before);
 });
 
 test("decline records the literal", async ({ page }) => {
@@ -168,6 +196,17 @@ test("donation completes after a second live-init", async ({ page }) => {
   expect(h.inits).toBe(before + 1);
   expect(h.donations).toHaveLength(1);
   expect(h.exits).toEqual([{ code: 0, info: "completed" }]);
+});
+
+test("frame gets its real height once the host shows it", async ({ page }) => {
+  const app = await open(page);
+  // The intro screen has already rendered inside the (still-hiding-until-a-
+  // beat-ago) frame; its content height is what the posted resize should
+  // reflect once the host applies it.
+  const introHeight = await app.locator("#app").evaluate((el) => el.getBoundingClientRect().height);
+  await expect.poll(() => iframeHeightPx(page), { timeout: 2000 }).toBeGreaterThan(48);
+  const h = await iframeHeightPx(page);
+  expect(h).toBeGreaterThanOrEqual(Math.ceil(introHeight));
 });
 
 test("the iframe shrinks back after switching from a large table to a small one", async ({ page }) => {

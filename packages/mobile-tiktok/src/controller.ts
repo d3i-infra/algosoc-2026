@@ -45,20 +45,20 @@ export class Controller {
       // scrollTop (the true here) brings the top of the tables screen back
       // into view: a table switch or a page change moves the participant to
       // content they have not seen, a selection or search change does not.
-      // jumpToMonth ends in setPage (state.ts), so it counts as a page change
-      // here too, even though in practice the picker sits at the top of the
-      // screen already and the scroll is a no-op.
       onSelectTable: (i) => this.withState((s) => { s.activeIndex = i; this.showTables(true); }),
       onQuery: (i, q) => this.withState((s) => { s.setQuery(i, q); this.showTables(); }),
-      onDeleteMatches: (i) => this.withState((s) => { s.deleteMatches(i); this.showTables(); }),
       onToggleSelect: (i, row) => this.withState((s) => { s.toggleSelected(i, row); this.showTables(); }),
+      // The header tick box: all on, or all off, over whatever is visible now
+      // (the search result when there is one). Same rule as the desktop's.
+      onToggleSelectAll: (i) => this.withState((s) => {
+        if (s.allVisibleSelected(i)) s.clearSelection(i); else s.selectAllVisible(i);
+        this.showTables();
+      }),
       onDeleteSelected: (i) => this.withState((s) => { s.deleteSelected(i); this.showTables(); }),
       onPage: (i, page) => this.withState((s) => { s.setPage(i, page); this.showTables(true); }),
-      onJumpToMonth: (i, month) => this.withState((s) => { s.jumpToMonth(i, month); this.showTables(true); }),
-      onUndo: () => this.withState((s) => { s.undo(); this.showTables(); }),
+      onUndo: (i) => this.withState((s) => { s.undo(i); this.showTables(); }),
       onProceed: () => this.withState((s) => { this.phase = "confirm"; this.d.screens.confirm(s); }),
       onBack: () => this.withState(() => this.showTables()),
-      onRestart: () => this.onRestart(),
       onDonate: () => this.donate(false),
       onDecline: () => this.donate(true),
       onRetryDonate: () => this.send(),
@@ -81,16 +81,6 @@ export class Controller {
     if (!this.state) return;
     this.phase = "tables";
     this.d.screens.tables(this.state, scrollTop);
-  }
-
-  // No milestone exists for choosing another file mid-review and none is
-  // invented for it: the participant is just back at the file picker with a
-  // clean slate, the same as a fresh load.
-  private onRestart(): void {
-    this.state = null;
-    this.payload = null;
-    this.phase = "intro";
-    this.d.screens.intro();
   }
 
   private onFile(file: File): void {

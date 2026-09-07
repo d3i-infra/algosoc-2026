@@ -52,8 +52,9 @@ Safari 16.4.
 | `src/txt.ts` | Port of the desktop TXT export parser. |
 | `src/lookup.ts`, `src/timestamps.ts`, `src/redact.ts` | Nested lookup, timestamp conversion to Amsterdam time, email and own-username redaction. |
 | `src/config.ts`, `src/extract.ts` | The shared table config and the thirteen extractors, ported from `platforms/tiktok.py`. |
-| `src/review/state.ts` | Review state: deletions with undo, search, selection, pages of 50, month index. |
+| `src/review/state.ts` | Review state: deletions with undo, search, selection, pages of 25. |
 | `src/review/screens.ts`, `src/text.ts`, `src/styles.css` | Every screen as plain DOM, English and Dutch strings. |
+| `src/fonts/` | Nunito and Nunito Sans, copied from `feldspar` so the phone renders in the same faces as the desktop (`OFL.txt` is their licence). |
 | `src/payload.ts` | The donation payload in the desktop shape. |
 | `src/host.ts` | The Next host protocol over `postMessage` and a `MessageChannel`. |
 | `src/controller.ts`, `src/main.ts` | The participant flow and the entry point. |
@@ -76,7 +77,10 @@ changes.
 - `resize` messages carry the height of the app root plus 48 px, posted after each
   render. The desktop uses a `ResizeObserver` on the document, which Safari 12 lacks.
   The root is measured rather than the document because inside an iframe the document
-  is never shorter than the frame the host has already grown.
+  is never shorter than the frame the host has already grown. The app also re-measures
+  on the frame's own `resize` event, because the host hides the frame until
+  `initialized` and Safari 12 has no `ResizeObserver`; a hidden frame is never reported
+  as 48 px.
 - Donations are `CommandSystemDonate` with the key `<session id>-tiktok`, where the
   session id is `String(Date.now())` as on the desktop, and the app waits for mono's
   `DonateSuccess` or `DonateError` reply. A declined consent donates the literal
@@ -157,13 +161,18 @@ flow does no redaction.
 
 ### Review and payload
 
-Both sides keep the original rows and a set of deletions, count deleted rows, push one
-undo entry per action, and offer removing every row a search matches. The phone's undo
-is one stack across all tables; the desktop's is per table. The desktop has a select-all
-over the filtered rows; the phone has per-row checkboxes on pages of 50. Search is a
+Both sides keep the original rows and a set of deletions, count deleted rows, and push
+one undo entry per action. Both have per-row checkboxes and a select-all over whatever
+is on screen (the search result when there is one), and both delete the ticked rows
+from a footer button with the count on it. Undo is per table on both sides; on the
+phone it lives on the summary line beside that table's deleted count, and it appears
+only while that table has something to undo. The phone pages 25 rows at a time where
+the desktop pages 7, and its outer pagination arrows go to the first and last page
+where the desktop's jump ten. Search is a
 case-insensitive substring test on every cell; the desktop builds a regular expression.
 The phone shows one table at a time in config order; the desktop shows one table at a
-time in title order. The payload is byte-identical to the desktop's: every table in
+time in title order. The phone has no visualizations, no cell tooltip and no
+show/hide-table toggle. The payload is byte-identical to the desktop's: every table in
 config order, every non-deleted row keyed by the raw column names, and a "deleted row
 count" string per table, whatever the screen was showing.
 
@@ -173,10 +182,12 @@ A clean export that yields no tables is an extraction failure on the phone (exit
 task pending); on the desktop it shows a no-data page and completes the task. A failed
 donation offers Retry on the phone with the payload kept in memory; the desktop exits
 after showing a failure page. The invalid-file screen offers Choose another file and
-Stop, and Stop exits 4; the desktop's equivalent Continue exits 2. The tables screen
-has Choose another file, which returns to the start with nothing kept; the desktop has
-no equivalent once validation has passed. The error screen never shows exception text;
-the desktop shows the traceback. English and Dutch only.
+Stop, and Stop exits 4; the desktop's equivalent Continue exits 2. Once validation has
+passed there is no way back to the file picker, as on the desktop. The phone adds a
+summary screen between the tables and the donation, listing every table with its kept
+and removed counts; the desktop asks its donate question under the one table on screen.
+The error screen never shows exception text; the desktop shows the traceback. English
+and Dutch only.
 
 ## Known limits
 

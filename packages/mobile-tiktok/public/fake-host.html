@@ -12,7 +12,7 @@
 </head>
 <body>
 <div id="bar">fake host · <span id="state">waiting for app-loaded</span></div>
-<iframe id="app" src="./index.html"></iframe>
+<iframe id="app" src="./index.html" style="display:none"></iframe>
 <script>
 (function () {
   var params = new URLSearchParams(window.location.search);
@@ -21,7 +21,7 @@
   var iframe = document.getElementById("app");
   var state = document.getElementById("state");
   var channel = null;
-  window.__host = { donations: [], logs: [], exits: [], initialized: false, inits: 0 };
+  window.__host = { donations: [], logs: [], exits: [], initialized: false, inits: 0, shownAt: null };
 
   function reply(msg) { if (channel) channel.port1.postMessage(msg); }
 
@@ -55,6 +55,13 @@
     if (type === "CommandSystemEvent" && data.name === "initialized") {
       window.__host.initialized = true;
       state.textContent = "initialized";
+      // Mono keeps the app container `hidden` until the LiveView has handled
+      // this event; mirror that round-trip delay instead of showing the
+      // frame in the same tick the app renders its first screen into it.
+      setTimeout(function () {
+        iframe.style.display = "";
+        window.__host.shownAt = Date.now();
+      }, 150);
     } else if (type === "CommandSystemLog") {
       var parsed = JSON.parse(data.json_string);
       window.__host.logs.push(parsed.message);
