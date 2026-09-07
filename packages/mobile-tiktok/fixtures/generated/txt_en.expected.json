@@ -1,0 +1,53 @@
+{
+ "username": "synth_user_42",
+ "tables": [
+  {
+   "id": "tiktok_activity_summary",
+   "data_frame": "{\"Metric\":{\"0\":\"Video's die u volledig heeft bekeken sinds uw registratie\",\"1\":\"Video's waarop u heeft gereageerd sinds uw registratie\",\"2\":\"Video's die u heeft gedeeld sinds uw registratie\"},\"Count\":{\"0\":1234,\"1\":7,\"2\":0}}"
+  },
+  {
+   "id": "tiktok_watch_history",
+   "data_frame": "{\"Date\":{\"2\":\"2026-10-25 02:59:59\",\"3\":\"2026-10-25 02:00:00\",\"1\":\"2026-03-29 03:00:00\",\"0\":\"2026-03-29 01:59:59\",\"4\":\"2026-01-01 00:30:00\",\"5\":\"2024-06-15 14:00:00\"},\"Link\":{\"2\":\"https:\\/\\/www.tiktokv.com\\/share\\/video\\/2\\/\",\"3\":\"https:\\/\\/www.tiktokv.com\\/share\\/video\\/3\\/\",\"1\":\"https:\\/\\/www.tiktokv.com\\/share\\/video\\/1\\/\",\"0\":\"https:\\/\\/www.tiktokv.com\\/share\\/video\\/0\\/\",\"4\":\"https:\\/\\/www.tiktokv.com\\/share\\/video\\/4\\/\",\"5\":\"https:\\/\\/www.tiktokv.com\\/share\\/video\\/5\\/\"}}"
+  },
+  {
+   "id": "tiktok_favorite_videos",
+   "data_frame": "{\"Date\":{\"0\":\"2026-10-25 02:00:00\"},\"Link\":{\"0\":\"https:\\/\\/f\\/1\"}}"
+  },
+  {
+   "id": "tiktok_follower",
+   "data_frame": "{\"Date\":{\"0\":\"2026-03-29 01:59:59\",\"1\":\"2024-06-15 14:00:00\"},\"UserName\":{\"0\":\"fan_one\",\"1\":null}}"
+  },
+  {
+   "id": "tiktok_following",
+   "data_frame": "{\"Date\":{\"0\":\"2026-03-29 03:00:00\"},\"UserName\":{\"0\":\"creator_a\"}}"
+  },
+  {
+   "id": "tiktok_hashtag",
+   "data_frame": "{\"HashtagName\":{\"0\":\"fyp\"},\"HashtagLink\":{\"0\":\"https:\\/\\/h\\/fyp\"}}"
+  },
+  {
+   "id": "tiktok_like_list",
+   "data_frame": "{\"Date\":{\"0\":\"2026-01-01 00:30:00\"},\"Link\":{\"0\":\"https:\\/\\/l\\/1\"}}"
+  },
+  {
+   "id": "tiktok_searches",
+   "data_frame": "{\"Date\":{\"1\":\"2026-03-29 03:00:00\",\"0\":\"2026-03-29 01:59:59\"},\"SearchTerm\":{\"1\":\"contact [email]\",\"0\":\"[user] videos\"}}"
+  },
+  {
+   "id": "tiktok_share_history",
+   "data_frame": "{\"Date\":{\"0\":\"2026-10-25 02:59:59\"},\"SharedContent\":{\"0\":\"by [user]\"},\"Link\":{\"0\":\"https:\\/\\/s\\/1\"},\"Method\":{\"0\":\"copy\"}}"
+  },
+  {
+   "id": "tiktok_comments",
+   "data_frame": "{\"Date\":{\"0\":\"2026-10-25 02:00:00\"},\"Comment\":{\"0\":\"Hi [user], write [email]\"},\"Photo\":{\"0\":null},\"Url\":{\"0\":\"https:\\/\\/c\\/1\"}}"
+  },
+  {
+   "id": "tiktok_off_tiktok",
+   "data_frame": "{\"Date\":{\"0\":\"2026-10-25 02:59:59\"},\"Source\":{\"0\":\"shop.example\"},\"Event\":{\"0\":\"purchase\"}}"
+  }
+ ],
+ "errors": {
+  "UnboundLocalError": 1,
+  "ValueError": 1
+ }
+}
