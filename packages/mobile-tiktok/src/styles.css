@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* iOS sizes the task iframe to the width the content asks for, so one
+   unbreakable line anywhere drags the whole page sideways. */
+html, body { width: 100%; max-width: 100%; overflow-x: hidden; }
+/* The host measures #app's own height, not the body's: inside an iframe the
+   body is never shorter than the frame it was last grown to, so it must not
+   be held open by a min-height once the content shrinks back down. */
+html, body { height: auto; min-height: 0; }
+#app { min-height: 0; }
+
+/* feldspar's primary/primarylight (packages/feldspar/tailwind.config.js),
+   named here so the checkbox's fill, tick and focus ring below can share one
+   source instead of repeating the hex. Safari 12 supports custom properties. */
+:root { --mt-primary: #4272EF; --mt-primary-light: #E3EAFD; }
+
+/* Rows flow with the page: no windowing, no inner scroll container. */
+.mt-row { box-sizing: border-box; }
+/* A flex child only truncates once it is allowed to be narrower than its text. */
+.mt-rowbody { min-width: 0; }
+/* One line with an ellipsis, clamped rather than held on a single no-wrap line:
+   a long link must never be allowed to set the width of the page. */
+.mt-cell { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden; overflow-wrap: anywhere; word-break: break-all; }
+/* Tapped open: the clamp comes off and the whole link is readable. */
+.mt-row[data-expanded] .mt-cell { display: block; -webkit-line-clamp: unset; overflow: visible; }
+
+/* Visually hidden, still operable: Tailwind's sr-only carries a white-space:
+   nowrap this package will not ship. */
+.mt-visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
+/* A touch target the guidelines call the minimum, around a hidden checkbox. */
+.mt-check { min-width: 44px; min-height: 44px; }
+/* Drawn in place of the checkbox iOS 12 renders as a small grey square: a
+   24px box that fills and shows a tick, built with borders, once the hidden
+   input behind it is checked. Its border and rounding are Tailwind's own
+   border-primary/rounded utilities on the span in screens.ts; only the
+   sizing, the checked fill and the tick live here. */
+.mt-box { display: inline-block; box-sizing: border-box; flex: none; width: 24px; height: 24px; position: relative; }
+input:checked + .mt-box { background: var(--mt-primary); }
+input:checked + .mt-box::after { content: ""; position: absolute; left: 7px; top: 3px; width: 6px; height: 11px; border: solid var(--mt-primary-light); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+/* Hiding the input (.mt-visually-hidden clips it to 1px) removed the only
+   visible focus state a native checkbox had; this is what a keyboard,
+   external-keyboard or Switch Control user sees instead. No :focus-visible -
+   the Safari 12 build gate rejects it. */
+input:focus + .mt-box { box-shadow: 0 0 0 3px var(--mt-primary-light); }
+/* Native select styling iOS 12 draws too faintly to notice: a chevron drawn
+   as an inline SVG data-URI, no external asset, over the desktop-style
+   search-box border. Still a native <select> so iOS opens its own picker.
+   A data-URI cannot take a var(), so this one hex stays literal - it is
+   feldspar's primary (packages/feldspar/tailwind.config.js). */
+.mt-select {
+  -webkit-appearance: none;
+  appearance: none;
+  padding-right: 2.5rem;
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 12px 8px;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%234272EF' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+@keyframes mt-spin { to { transform: rotate(360deg); } }
+.mt-spinner { width: 32px; height: 32px; border: 3px solid #E3EAFD; border-top-color: #4272EF; border-radius: 50%; animation: mt-spin 0.8s linear infinite; }
