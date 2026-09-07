@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fake Next host</title>
+<style>
+  body { margin: 0; font-family: sans-serif; background: #eee; }
+  #bar { padding: 8px 12px; font-size: 13px; background: #ddd; }
+  iframe { display: block; width: 100%; border: 0; background: #fff; }
+</style>
+</head>
+<body>
+<div id="bar">fake host · <span id="state">waiting for app-loaded</span></div>
+<iframe id="app" src="./index.html"></iframe>
+<script>
+(function () {
+  var params = new URLSearchParams(window.location.search);
+  var locale = params.get("locale") || "en";
+  var fail = params.get("fail") === "1";
+  var iframe = document.getElementById("app");
+  var state = document.getElementById("state");
+  var channel = null;
+  window.__host = { donations: [], logs: [], exits: [], initialized: false, inits: 0 };
+
+  function reply(msg) { if (channel) channel.port1.postMessage(msg); }
+
+  // Mirrors feldspar_app.js: a fresh MessageChannel and a new live-init every
+  // time, with the guard on the iframe load path only. Replies always go to the
+  // newest channel's port1.
+  function onAppLoaded() {
+    channel = new MessageChannel();
+    channel.port1.onmessage = function (e) { handle(e.data || {}); };
+    iframe.contentWindow.postMessage({ action: "live-init", locale: locale }, "*", [channel.port2]);
+    window.__host.inits++;
+    state.textContent = "live-init sent (" + locale + ")";
+  }
+
+  iframe.addEventListener("load", function () {
+    if (channel) return;   // the onload guard, exactly as the host has it
+    onAppLoaded();
+  });
+
+  window.addEventListener("message", function (event) {
+    var data = event.data || {};
+    if (data.action === "resize") {
+      iframe.style.height = data.height + "px";
+    } else if (data.action === "app-loaded") {
+      onAppLoaded();       // no guard here, as in the host
+    }
+  });
+
+  function handle(data) {
+    var type = data.__type__;
+    if (type === "CommandSystemEvent" && data.name === "initialized") {
+      window.__host.initialized = true;
+      state.textContent = "initialized";
+    } else if (type === "CommandSystemLog") {
+      var parsed = JSON.parse(data.json_string);
+      window.__host.logs.push(parsed.message);
+    } else if (type === "CommandSystemDonate") {
+      window.__host.donations.push({ key: data.key, json_string: data.json_string });
+      setTimeout(function () {
+        if (fail) reply({ __type__: "DonateError", key: data.key, status: 500, error: "fake failure" });
+        else reply({ __type__: "DonateSuccess", key: data.key, status: 200 });
+      }, 50);
+    } else if (type === "CommandSystemExit") {
+      window.__host.exits.push({ code: data.code, info: data.info });
+      state.textContent = "exited " + data.code + " (" + data.info + ")";
+    }
+  }
+})();
+</script>
+</body>
+</html>
