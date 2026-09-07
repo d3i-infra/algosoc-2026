@@ -1,0 +1,103 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* The same three faces the desktop loads (packages/feldspar/src/framework/
+   fonts.css), copied into this package rather than imported: ADR-0003 allows
+   mobile-tiktok only a build-time read of the shared config from the other
+   packages. Safari 12 supports woff2 and variable fonts, so one file per
+   family carries every weight the preset asks for. The paths are relative so
+   vite emits them into dist/assets/ next to the stylesheet; public/ is not
+   copied into the release bundle (vite.config.ts copyPublicDir: false).
+   Licence: src/fonts/OFL.txt. */
+@font-face {
+  font-family: "Nunito";
+  src: url("./fonts/Nunito.woff2") format("woff2");
+  font-weight: 200 900;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Nunito Sans";
+  src: url("./fonts/NunitoSans-VariableFont_wght.woff2") format("woff2");
+  font-weight: 200 1000;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Nunito Sans";
+  src: url("./fonts/NunitoSans-Italic-VariableFont_wght.woff2") format("woff2");
+  font-weight: 200 1000;
+  font-style: italic;
+}
+
+/* iOS sizes the task iframe to the width the content asks for, so one
+   unbreakable line anywhere drags the whole page sideways. */
+html, body { width: 100%; max-width: 100%; overflow-x: hidden; }
+/* The host measures #app's own height, not the body's: inside an iframe the
+   body is never shorter than the frame it was last grown to, so it must not
+   be held open by a min-height once the content shrinks back down. */
+html, body { height: auto; min-height: 0; }
+#app { min-height: 0; }
+
+/* feldspar's primary/primarylight (packages/feldspar/tailwind.config.js),
+   named here so the checkbox's fill, tick and focus ring below can share one
+   source instead of repeating the hex. Safari 12 supports custom properties. */
+:root { --mt-primary: #4272EF; --mt-primary-light: #E3EAFD; }
+
+/* Rows flow with the page: no windowing, no inner scroll container. The table
+   itself scrolls sideways inside its card (overflow-x-auto in screens.ts). */
+.mt-row { box-sizing: border-box; }
+/* A cell only truncates once it is allowed to be narrower than its own text. */
+.mt-cell { min-width: 0; overflow: hidden; }
+/* One line with an ellipsis, as the desktop's Cell has it: the text needs a
+   block of its own to overflow into, not the flex box around it. A long link
+   must never be allowed to set the width of the page. */
+.mt-celltext { min-width: 0; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The Date column is the exception: a timestamp breaks at its own space, so it
+   is given two lines (date, then time) and the column is sized for the date
+   alone. That hands the rest of the row's width back to the column the
+   participant is actually reading. -webkit-line-clamp needs -webkit-box, which
+   is the pair Safari 12 has had since long before it. */
+.mt-cell--date .mt-celltext { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; }
+/* Tapped open: the clipping comes off and the whole link is readable. Safari 12
+   has no overflow-wrap: anywhere, so break-all is what actually breaks the
+   link there; the modern property is here for everything newer. display: block
+   also lifts the date cells' two-line clamp, which -webkit-line-clamp only
+   applies to a -webkit-box. */
+.mt-row[data-expanded] .mt-celltext { display: block; -webkit-line-clamp: none; white-space: normal; overflow-wrap: anywhere; word-break: break-all; }
+
+/* Visually hidden, still operable: Tailwind's sr-only carries a white-space:
+   nowrap this package will not ship. */
+.mt-visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
+/* A touch target the guidelines call the minimum, around a hidden checkbox. */
+.mt-check { min-width: 44px; min-height: 44px; }
+/* Drawn in place of the checkbox iOS 12 renders as a small grey square. The
+   two states are the desktop's check.svg and check_active.svg: unchecked a
+   24px box with a 2px grey3 border and a 3px radius, checked a filled primary
+   box with a 4px radius and a white tick. The tick is built from borders
+   rather than a second asset. */
+.mt-box { display: inline-block; box-sizing: border-box; flex: none; width: 24px; height: 24px; position: relative; border: 2px solid #CCCCCC; border-radius: 3px; }
+input:checked + .mt-box { background: var(--mt-primary); border-color: var(--mt-primary); border-radius: 4px; }
+input:checked + .mt-box::after { content: ""; position: absolute; left: 5px; top: 1px; width: 6px; height: 11px; border: solid #FFFFFF; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+/* Hiding the input (.mt-visually-hidden clips it to 1px) removed the only
+   visible focus state a native checkbox had; this is what a keyboard,
+   external-keyboard or Switch Control user sees instead. No :focus-visible -
+   the Safari 12 build gate rejects it. */
+input:focus + .mt-box { box-shadow: 0 0 0 3px var(--mt-primary-light); }
+/* Native select styling iOS 12 draws too faintly to notice: the desktop's own
+   20px chevron drawn as an inline SVG data-URI, no external asset, over the
+   desktop-style border the utilities on the element give it (pr-10 leaves the
+   room). Still a native <select> so iOS opens its own picker. A data-URI
+   cannot take a var(), so this one hex stays literal - it is feldspar's
+   primary (packages/feldspar/tailwind.config.js). */
+.mt-select {
+  -webkit-appearance: none;
+  appearance: none;
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 20px 20px;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6' fill='none' stroke='%234272EF' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+@keyframes mt-spin { to { transform: rotate(360deg); } }
+.mt-spinner { width: 32px; height: 32px; border: 3px solid #E3EAFD; border-top-color: #4272EF; border-radius: 50%; animation: mt-spin 0.8s linear infinite; }
