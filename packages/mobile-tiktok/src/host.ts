@@ -58,6 +58,22 @@ export function connectHost(win: Window, doc: Document, measure?: () => number):
     }
   }
 
+  function post(): void {
+    // Inside the iframe the body is never shorter than the frame's own
+    // viewport, so once the host has grown the frame the old measurement
+    // can only report the tall value back. A caller that can measure its
+    // own content (the app root) passes that instead.
+    const height = measure ? Math.ceil(measure()) : doc.body.scrollHeight;
+    // mono renders the app container `hidden` until it has handled
+    // `initialized`, so a render that lands before the container is shown
+    // measures a zero-height box. Posting that would tell mono to size the
+    // frame to 48 px; skip it and wait for a measurement that means
+    // something, whether that is the next render or the frame's own
+    // `resize` event below.
+    if (height === 0) return;
+    win.parent.postMessage({ action: "resize", height: height + 48 }, "*");
+  }
+
   win.addEventListener("message", (event: MessageEvent) => {
     const data = event.data as { action?: string; locale?: unknown } | null;
     if (!data || data.action !== "live-init" || !event.ports || !event.ports[0]) return;
@@ -73,6 +89,16 @@ export function connectHost(win: Window, doc: Document, measure?: () => number):
     if (replaced) failPending();
     resolveReady(toLocale(data.locale)); // idempotent: the first locale wins
   });
+
+  // Safari 12 has no ResizeObserver, so the app has no direct signal for the
+  // moment mono shows the container it renders `hidden` until `initialized`.
+  // The frame's own window gets a `resize` event when its viewport goes from
+  // 0x0 to real content (container shown), when the host applies a height we
+  // posted, and on rotation. Re-measuring there catches the "just became
+  // visible" case: the posted height is the content height, which does not
+  // depend on the frame height, so a second post carries the same number and
+  // the host's style set is a no-op, not a loop.
+  win.addEventListener("resize", () => post());
 
   win.parent.postMessage({ action: "app-loaded" }, "*");
 
@@ -91,13 +117,6 @@ export function connectHost(win: Window, doc: Document, measure?: () => number):
     log(milestone) {
       if (port) port.postMessage({ __type__: "CommandSystemLog", json_string: JSON.stringify({ level: "info", message: milestone }) });
     },
-    resize() {
-      // Inside the iframe the body is never shorter than the frame's own
-      // viewport, so once the host has grown the frame the old measurement
-      // can only report the tall value back. A caller that can measure its
-      // own content (the app root) passes that instead.
-      const height = measure ? Math.ceil(measure()) : doc.body.scrollHeight;
-      win.parent.postMessage({ action: "resize", height: height + 48 }, "*");
-    },
+    resize() { post(); },
   };
 }

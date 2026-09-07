@@ -140,39 +140,12 @@ test("tables handlers delegate to state and re-render", async () => {
   const { c, s } = make();
   c.handlers.onFile(file); await tick(); await tick();
   c.handlers.onQuery(0, "q");
-  c.handlers.onDeleteMatches(0);
-  c.handlers.onUndo();
+  c.handlers.onUndo(0);
   c.handlers.onSelectTable(0);
-  expect(s.calls.filter((x) => x.name === "tables").length).toBe(5);
+  expect(s.calls.filter((x) => x.name === "tables").length).toBe(4);
   c.handlers.onProceed();
   c.handlers.onBack();
   expect(s.calls[s.calls.length - 1].name).toBe("tables");
-});
-
-test("restart from the tables screen clears state and payload; onProceed and onRetryDonate are no-ops until a fresh file", async () => {
-  const { c, s, h } = make();
-  c.handlers.onFile(file); await tick(); await tick();
-  expect(s.calls[s.calls.length - 1].name).toBe("tables");
-  c.handlers.onRestart();
-  expect(s.calls[s.calls.length - 1]).toEqual({ name: "intro", args: [] });
-  expect(h.logs).not.toContain("exited");
-
-  // state is gone: onProceed reads it through withState, so with nothing
-  // there it renders nothing and the last screen stays intro.
-  const afterRestart = s.calls.length;
-  c.handlers.onProceed();
-  expect(s.calls.length).toBe(afterRestart);
-  expect(s.calls[s.calls.length - 1]).toEqual({ name: "intro", args: [] });
-
-  // payload is gone too: send() bails before ever showing "sending".
-  c.handlers.onRetryDonate();
-  await tick(); await tick();
-  expect(s.calls.some((x) => x.name === "sending")).toBe(false);
-  expect(h.donations).toEqual([]);
-
-  c.handlers.onFile(file); await tick(); await tick();
-  expect(s.calls.slice(-2).map((x) => x.name)).toEqual(["working", "tables"]);
-  expect(h.logs.filter((l) => l === "file_selected").length).toBe(2);
 });
 
 function datedExtraction(n: number): Extraction {
@@ -184,7 +157,7 @@ function datedExtraction(n: number): Extraction {
   return { tables: [{ id: "tiktok_watch_history", columns: ["Date", "Link"], rows }], errors: {} };
 }
 
-test("selection, paging and month handlers delegate to state and re-render", async () => {
+test("selection and paging handlers delegate to state and re-render", async () => {
   const { c, s } = make({ runExtraction: () => Promise.resolve(datedExtraction(60)) });
   c.handlers.onFile(file); await tick(); await tick();
   const before = s.calls.filter((x) => x.name === "tables").length;
@@ -197,9 +170,8 @@ test("selection, paging and month handlers delegate to state and re-render", asy
   c.handlers.onPage(0, 1);
   expect(state().tables[0].page).toBe(1);
   c.handlers.onPage(0, 99);
-  expect(state().tables[0].page).toBe(1);
-
-  c.handlers.onJumpToMonth(0, "2024-01");
+  expect(state().tables[0].page).toBe(2);
+  c.handlers.onPage(0, 0);
   expect(state().tables[0].page).toBe(0);
 
   // No confirm dialog on this path: the participant ticked the rows.
@@ -208,12 +180,68 @@ test("selection, paging and month handlers delegate to state and re-render", asy
   expect(state().selectedCount(0)).toBe(0);
   expect(state().visibleRows(0).indexOf(1)).toBe(-1);
 
-  c.handlers.onUndo();
+  c.handlers.onUndo(0);
   expect(state().keptCount(0)).toBe(60);
   expect(s.calls.filter((x) => x.name === "tables").length).toBe(before + 6);
 });
 
-test("onSelectTable, onPage and onJumpToMonth tell the tables screen to scroll to top; other table actions do not", async () => {
+test("onToggleSelectAll ticks everything visible, then clears it, re-rendering each time", async () => {
+  const { c, s } = make({ runExtraction: () => Promise.resolve(datedExtraction(60)) });
+  c.handlers.onFile(file); await tick(); await tick();
+  const before = s.calls.filter((x) => x.name === "tables").length;
+  const state = () => s.calls[s.calls.length - 1].args[0] as ReviewState;
+
+  c.handlers.onToggleSelectAll(0);
+  expect(state().selectedCount(0)).toBe(60);
+  expect(state().allVisibleSelected(0)).toBe(true);
+
+  c.handlers.onToggleSelectAll(0);
+  expect(state().selectedCount(0)).toBe(0);
+
+  // Under a search it covers the result and nothing else.
+  c.handlers.onQuery(0, "v5");
+  const matching = state().visibleCount(0);
+  c.handlers.onToggleSelectAll(0);
+  expect(state().selectedCount(0)).toBe(matching);
+  expect(s.calls.filter((x) => x.name === "tables").length).toBe(before + 4);
+});
+
+test("onUndo undoes the table it was given and no other", async () => {
+  const two: Extraction = {
+    tables: [
+      { id: "tiktok_watch_history", columns: ["Date", "Link"], rows: [["2024-01-01", "https://x/a"], ["2024-01-02", "https://x/b"]] },
+      { id: "tiktok_searches", columns: ["Date", "SearchTerm"], rows: [["2024-02-01", "q"]] },
+    ],
+    errors: {},
+  };
+  const { c, s } = make({ runExtraction: () => Promise.resolve(two) });
+  c.handlers.onFile(file); await tick(); await tick();
+  const state = () => s.calls[s.calls.length - 1].args[0] as ReviewState;
+
+  c.handlers.onToggleSelect(0, 0);
+  c.handlers.onDeleteSelected(0);
+  c.handlers.onToggleSelect(1, 0);
+  c.handlers.onDeleteSelected(1);
+  expect(state().keptCount(0)).toBe(1);
+  expect(state().keptCount(1)).toBe(0);
+
+  // Undo on the first table restores only the first table.
+  c.handlers.onUndo(0);
+  expect(state().keptCount(0)).toBe(2);
+  expect(state().keptCount(1)).toBe(0);
+  expect(state().canUndo(0)).toBe(false);
+  expect(state().canUndo(1)).toBe(true);
+});
+
+test("the handlers the desktop has no equivalent for are gone", () => {
+  const { c } = make();
+  const handlers = c.handlers as unknown as { [k: string]: unknown };
+  expect(handlers.onJumpToMonth).toBeUndefined();
+  expect(handlers.onDeleteMatches).toBeUndefined();
+  expect(handlers.onRestart).toBeUndefined();
+});
+
+test("onSelectTable and onPage tell the tables screen to scroll to top; other table actions do not", async () => {
   const { c, s } = make({ runExtraction: () => Promise.resolve(datedExtraction(60)) });
   c.handlers.onFile(file); await tick(); await tick();
   // Reads the scrollTop flag off the last render, but only once it has
@@ -236,11 +264,6 @@ test("onSelectTable, onPage and onJumpToMonth tell the tables screen to scroll t
   expect(lastScrollTop()).toBe(true);
 
   c.handlers.onPage(0, 0);
-  expect(lastScrollTop()).toBe(true);
-
-  // jumpToMonth ends in setPage (review/state.ts), so it is a page change too.
-  c.handlers.onQuery(0, "");
-  c.handlers.onJumpToMonth(0, "2024-01");
   expect(lastScrollTop()).toBe(true);
 });
 

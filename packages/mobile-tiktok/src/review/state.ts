@@ -1,10 +1,8 @@
 import type { Table } from "../extract";
 
-export const PAGE_SIZE = 50;
-
-// A month key is the "YYYY-MM" prefix of a Date cell; anything that does not
-// start like a date is left out of the index rather than guessed at.
-const MONTH_PREFIX = /^[0-9]{4}-[0-9]{2}/;
+// Pages of 25, as on the desktop consent screen: a page has to fit on a phone
+// screen without the participant losing where they are in it.
+export const PAGE_SIZE = 25;
 
 export interface TableState {
   table: Table;
@@ -15,14 +13,15 @@ export interface TableState {
   query: string;
   matches: number[] | null;
   page: number;
-  // Derived views over the rows, held until a mutation drops them. Every
-  // in-place render asks for these several times, and on a 65k-row watch
+  // A derived view over the rows, held until a mutation drops it. Every
+  // in-place render asks for it several times, and on a 65k-row watch
   // history each rebuild is a full pass over the table.
   visibleCache: number[] | null;
-  monthsCache: string[] | null;
+  // One stack per table, as on the desktop. A global stack would let the Undo
+  // beside this table's deleted count restore a different table's rows, with
+  // nothing on screen changing to say so.
+  undoStack: number[][];
 }
-
-export type UndoEntry = { tableIndex: number; rows: number[] };
 
 function rowMatches(row: string[], needle: string): boolean {
   for (let i = 0; i < row.length; i++) {
@@ -34,7 +33,6 @@ function rowMatches(row: string[], needle: string): boolean {
 export class ReviewState {
   readonly tables: TableState[];
   activeIndex = 0;
-  private undoStack: UndoEntry[] = [];
 
   constructor(tables: Table[]) {
     this.tables = tables.map((table) => ({
@@ -47,7 +45,7 @@ export class ReviewState {
       matches: null,
       page: 0,
       visibleCache: null,
-      monthsCache: null,
+      undoStack: [],
     }));
   }
 
@@ -55,6 +53,12 @@ export class ReviewState {
   // never leaves this class through here.
   visibleRows(tableIndex: number): number[] {
     return this.visible(tableIndex).slice();
+  }
+
+  // The summary line asks for this on every render; going through visibleRows
+  // would copy a 65k-element array to read its length.
+  visibleCount(tableIndex: number): number {
+    return this.visible(tableIndex).length;
   }
 
   private visible(t: number): number[] {
@@ -71,11 +75,10 @@ export class ReviewState {
     return out;
   }
 
-  // Anything that changes which rows are visible drops both derived views.
+  // Anything that changes which rows are visible drops the derived view.
   // Selection and paging deliberately do not: they change nothing here.
   private invalidate(t: TableState): void {
     t.visibleCache = null;
-    t.monthsCache = null;
   }
 
   setQuery(tableIndex: number, query: string): void {
@@ -114,46 +117,6 @@ export class ReviewState {
     this.setPage(tableIndex, this.tables[tableIndex].page);
   }
 
-  private dateColumn(tableIndex: number): number {
-    return this.tables[tableIndex].table.columns.indexOf("Date");
-  }
-
-  // The returned array is the cached one: read it, do not mutate it.
-  months(tableIndex: number): string[] {
-    const ts = this.tables[tableIndex];
-    if (ts.monthsCache !== null) return ts.monthsCache;
-    const col = this.dateColumn(tableIndex);
-    if (col < 0) { ts.monthsCache = []; return ts.monthsCache; }
-    const rows = ts.table.rows;
-    const visible = this.visible(tableIndex);
-    const seen: { [month: string]: boolean } = {};
-    const out: string[] = [];
-    for (const r of visible) {
-      const cell = rows[r][col];
-      if (cell === undefined || !MONTH_PREFIX.test(cell)) continue;
-      const month = cell.slice(0, 7);
-      if (seen[month]) continue;
-      seen[month] = true;
-      out.push(month);
-    }
-    ts.monthsCache = out;
-    return out;
-  }
-
-  jumpToMonth(tableIndex: number, month: string): void {
-    const col = this.dateColumn(tableIndex);
-    if (col < 0 || month === "") return;
-    const rows = this.tables[tableIndex].table.rows;
-    const visible = this.visible(tableIndex);
-    for (let i = 0; i < visible.length; i++) {
-      const cell = rows[visible[i]][col];
-      if (cell !== undefined && cell.indexOf(month) === 0) {
-        this.setPage(tableIndex, Math.floor(i / PAGE_SIZE));
-        return;
-      }
-    }
-  }
-
   private recompute(t: TableState): void {
     const needle = t.query.trim().toLowerCase();
     if (needle === "") { t.matches = null; return; }
@@ -182,6 +145,26 @@ export class ReviewState {
     return this.tables[tableIndex].selectedCount;
   }
 
+  // Ticks every row the participant can currently see: the search result when
+  // there is one, otherwise every row still in the table. Deleted rows are not
+  // visible, so they cannot be caught by it.
+  selectAllVisible(tableIndex: number): void {
+    const t = this.tables[tableIndex];
+    for (const r of this.visible(tableIndex)) {
+      if (!t.deleted[r] && !t.selected[r]) { t.selected[r] = 1; t.selectedCount++; }
+    }
+  }
+
+  // Drives the header tick box. An empty table (or an empty search result) is
+  // not "all selected": there would be nothing for the box to stand for.
+  allVisibleSelected(tableIndex: number): boolean {
+    const t = this.tables[tableIndex];
+    const visible = this.visible(tableIndex);
+    if (visible.length === 0) return false;
+    for (const r of visible) if (!t.selected[r]) return false;
+    return true;
+  }
+
   clearSelection(tableIndex: number): void {
     const t = this.tables[tableIndex];
     if (t.selectedCount === 0) return;
@@ -200,7 +183,7 @@ export class ReviewState {
     for (const r of rows) { t.deleted[r] = 1; }
     t.deletedCount += rows.length;
     // One entry, so a single Undo brings the whole batch back.
-    this.undoStack.push({ tableIndex, rows });
+    t.undoStack.push(rows);
     this.recompute(t);
     this.invalidate(t);
     this.clampPage(tableIndex);
@@ -213,7 +196,7 @@ export class ReviewState {
     t.deleted[row] = 1;
     t.deletedCount++;
     if (t.selected[row]) { t.selected[row] = 0; t.selectedCount--; }
-    this.undoStack.push({ tableIndex, rows: [row] });
+    t.undoStack.push([row]);
     if (t.matches !== null) {
       const idx = t.matches.indexOf(row);
       if (idx >= 0) t.matches.splice(idx, 1);
@@ -222,32 +205,18 @@ export class ReviewState {
     this.clampPage(tableIndex);
   }
 
-  deleteMatches(tableIndex: number): number {
+  canUndo(tableIndex: number): boolean { return this.tables[tableIndex].undoStack.length > 0; }
+
+  // Undoes the last deletion in this table and no other, so the control beside
+  // a table's deleted count only ever restores rows that count is about.
+  undo(tableIndex: number): boolean {
     const t = this.tables[tableIndex];
-    if (t.matches === null || t.matches.length === 0) return 0;
-    const rows = t.matches.slice();
-    for (const r of rows) {
-      t.deleted[r] = 1;
-      if (t.selected[r]) { t.selected[r] = 0; t.selectedCount--; }
-    }
-    t.deletedCount += rows.length;
-    this.undoStack.push({ tableIndex, rows });
+    const rows = t.undoStack.pop();
+    if (!rows) return false;
+    for (const r of rows) { if (t.deleted[r]) { t.deleted[r] = 0; t.deletedCount--; } }
     this.recompute(t);
     this.invalidate(t);
     this.clampPage(tableIndex);
-    return rows.length;
-  }
-
-  canUndo(): boolean { return this.undoStack.length > 0; }
-
-  undo(): boolean {
-    const entry = this.undoStack.pop();
-    if (!entry) return false;
-    const t = this.tables[entry.tableIndex];
-    for (const r of entry.rows) { if (t.deleted[r]) { t.deleted[r] = 0; t.deletedCount--; } }
-    this.recompute(t);
-    this.invalidate(t);
-    this.clampPage(entry.tableIndex);
     return true;
   }
 

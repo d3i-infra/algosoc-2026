@@ -3,13 +3,20 @@ import { connectHost } from "./host";
 type Listener = (e: { data: unknown; ports?: unknown[] }) => void;
 
 function fakeWindow() {
+  // "message" listeners go on `listeners`, exactly as before: `init()` below
+  // walks that array to deliver a fake live-init. "resize" listeners go on
+  // their own array so firing one does not also replay a live-init handler.
   const listeners: Listener[] = [];
+  const resizeListeners: (() => void)[] = [];
   const parentPosts: unknown[] = [];
   const win = {
-    addEventListener: (_: string, fn: Listener) => listeners.push(fn),
+    addEventListener: (type: string, fn: Listener | (() => void)) => {
+      if (type === "resize") resizeListeners.push(fn as () => void);
+      else listeners.push(fn as Listener);
+    },
     parent: { postMessage: (m: unknown) => parentPosts.push(m) },
   } as unknown as Window;
-  return { win, listeners, parentPosts };
+  return { win, listeners, resizeListeners, parentPosts };
 }
 
 function fakePort() {
@@ -145,6 +152,33 @@ test("a donation pending across the switch fails instead of hanging", async () =
   // The old port's reply is ignored: the donation is already settled.
   a.port.onmessage!({ data: { __type__: "DonateSuccess", key: "k", status: 200 } });
   expect(await p).toEqual({ ok: false, status: 0, error: "" });
+});
+
+test("a resize event on the frame's window posts the measured height", () => {
+  const { win, resizeListeners, parentPosts } = fakeWindow();
+  connectHost(win, fakeDoc(100), () => 200);
+  const before = parentPosts.length;
+  resizeListeners[0]();
+  expect(parentPosts.length).toBe(before + 1);
+  expect(parentPosts[parentPosts.length - 1]).toEqual({ action: "resize", height: 248 });
+});
+
+test("measure() returning 0 posts nothing, on a resize event or an explicit call", () => {
+  const { win, resizeListeners, parentPosts } = fakeWindow();
+  const host = connectHost(win, fakeDoc(100), () => 0);
+  const before = parentPosts.length;
+  resizeListeners[0]();
+  host.resize();
+  expect(parentPosts.length).toBe(before);
+});
+
+test("resize() posts explicitly when the measure is non-zero", () => {
+  const { win, parentPosts } = fakeWindow();
+  const host = connectHost(win, fakeDoc(100), () => 300);
+  const before = parentPosts.length;
+  host.resize();
+  expect(parentPosts.length).toBe(before + 1);
+  expect(parentPosts[parentPosts.length - 1]).toEqual({ action: "resize", height: 348 });
 });
 
 test("ready resolves once, with the first locale", async () => {
