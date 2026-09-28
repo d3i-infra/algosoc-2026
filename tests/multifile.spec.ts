@@ -2,6 +2,7 @@ import { test, expect, Page, Locator } from '@playwright/test';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
+import { dropFiles, fromDisk } from './drop_helper';
 
 /**
  * Helper to handle data submission and return the submitted data
@@ -62,33 +63,18 @@ function tableWithTitle(page: Page, title: string): Locator {
     .locator('xpath=ancestor::div[.//table][1]//table');
 }
 
-test('can select two zip parts and submit data sourced from both', async ({ page }) => {
-  await page.goto('http://localhost:3000/');
-  await expect(page.getByRole('heading', { name: 'Select your e2etest_multifile file' })).toBeVisible({ timeout: 90000 });
-
-  const fileChooserPromise = page.waitForEvent('filechooser');
-  await page.getByText('Choose file(s)').click();
-  const fileChooser = await fileChooserPromise;
-  await fileChooser.setFiles([
-    path.join(__dirname, 'test-split-1.zip'),
-    path.join(__dirname, 'test-split-2.zip'),
-  ]);
-
-  // Both filenames are listed, each with its own remove control.
-  await expect(page.getByText('test-split-1.zip', { exact: true })).toBeVisible();
-  await expect(page.getByText('test-split-2.zip', { exact: true })).toBeVisible();
-  await expect(page.locator('span.truncate')).toHaveCount(2);
-  await expect(page.locator('button:has(img)')).toHaveCount(2);
-
-  // Continue resolves the PayloadFiles prompt and proceeds to extraction.
-  await page.getByText('Continue').click();
-  await expect(page.getByRole('heading', { name: 'Review your data' })).toBeVisible({ timeout: 90000 });
-
-  // The consent tables' rows are sourced from members of BOTH uploaded
-  // parts — test-split-1.zip owns test_file_0001.txt/0003.json,
-  // test-split-2.zip owns test_file_0002.csv/0004.log (see
-  // tests/generate_test_zip.py --split).
-  //
+/**
+ * Asserts that both the consent tables and the submitted payload are
+ * sourced from BOTH uploaded parts — test-split-1.zip owns
+ * test_file_0001.txt/0003.json, test-split-2.zip owns
+ * test_file_0002.csv/0004.log (see tests/generate_test_zip.py --split).
+ * Call once the 'Review your data' heading is visible.
+ *
+ * Shared verbatim by the picker and drop variants of "can ... two zip parts
+ * and submit data sourced from both", so the two upload paths cannot drift
+ * apart on what "sourced from both parts" actually checks.
+ */
+async function expectDataFromBothParts(page: Page): Promise<void> {
   // Cell values, not free-text search: `<td>` maps to the ARIA "cell"
   // role, and `exact: true` is load-bearing here, not decorative —
   // 'test_file_0002.csv' is a substring of the content_preview table's
@@ -129,6 +115,31 @@ test('can select two zip parts and submit data sourced from both', async ({ page
   expect(submittedData).toEqual(expect.stringContaining('test_file_0001.txt'));
   expect(submittedData).toEqual(expect.stringContaining('test_file_0002.csv'));
   expect(submittedData).toEqual(expect.stringContaining('FILE:test_file_0002.csv'));
+}
+
+test('can select two zip parts and submit data sourced from both', async ({ page }) => {
+  await page.goto('http://localhost:3000/');
+  await expect(page.getByRole('heading', { name: 'Select your e2etest_multifile file' })).toBeVisible({ timeout: 90000 });
+
+  const fileChooserPromise = page.waitForEvent('filechooser');
+  await page.getByText('Choose file(s)').click();
+  const fileChooser = await fileChooserPromise;
+  await fileChooser.setFiles([
+    path.join(__dirname, 'test-split-1.zip'),
+    path.join(__dirname, 'test-split-2.zip'),
+  ]);
+
+  // Both filenames are listed, each with its own remove control.
+  await expect(page.getByText('test-split-1.zip', { exact: true })).toBeVisible();
+  await expect(page.getByText('test-split-2.zip', { exact: true })).toBeVisible();
+  await expect(page.locator('span.truncate')).toHaveCount(2);
+  await expect(page.locator('button:has(img)')).toHaveCount(2);
+
+  // Continue resolves the PayloadFiles prompt and proceeds to extraction.
+  await page.getByText('Continue').click();
+  await expect(page.getByRole('heading', { name: 'Review your data' })).toBeVisible({ timeout: 90000 });
+
+  await expectDataFromBothParts(page);
 });
 
 test('adding the same file twice shows the duplicate notice and keeps one entry', async ({ page }) => {
@@ -370,4 +381,52 @@ test('combined size over the limit shows the safety error page', async ({ page }
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
+});
+
+test('can drop two zip parts and submit data sourced from both', async ({ page }) => {
+  await page.goto('http://localhost:3000/');
+  await expect(page.getByRole('heading', { name: 'Select your e2etest_multifile file' })).toBeVisible({ timeout: 90000 });
+
+  await dropFiles(page, '#drop-zone', [
+    fromDisk(path.join(__dirname, 'test-split-1.zip'), 'application/zip'),
+    // Windows reports this type for a zip; it must be accepted all the same.
+    fromDisk(path.join(__dirname, 'test-split-2.zip'), 'application/x-zip-compressed'),
+  ]);
+
+  await expect(page.getByText('test-split-1.zip', { exact: true })).toBeVisible();
+  await expect(page.getByText('test-split-2.zip', { exact: true })).toBeVisible();
+  await expect(page.locator('span.truncate')).toHaveCount(2);
+
+  await page.getByText('Continue').click();
+  await expect(page.getByRole('heading', { name: 'Review your data' })).toBeVisible({ timeout: 90000 });
+
+  await expectDataFromBothParts(page);
+});
+
+test('a dropped file of the wrong type is refused and the rest of the drop is kept', async ({ page }) => {
+  await page.goto('http://localhost:3000/');
+  await expect(page.getByRole('heading', { name: 'Select your e2etest_multifile file' })).toBeVisible({ timeout: 90000 });
+
+  await dropFiles(page, '#drop-zone', [
+    fromDisk(path.join(__dirname, 'test-split-1.zip'), 'application/zip'),
+    { name: 'notes.pdf', type: 'application/pdf', content: Buffer.from('%PDF-1.4') },
+  ]);
+
+  await expect(page.getByText('Not added, because the file type does not match: notes.pdf')).toBeVisible();
+  await expect(page.getByText('test-split-1.zip', { exact: true })).toBeVisible();
+  await expect(page.locator('span.truncate')).toHaveCount(1);
+});
+
+test('dropping a file that is already selected shows the duplicate notice', async ({ page }) => {
+  await page.goto('http://localhost:3000/');
+  await expect(page.getByRole('heading', { name: 'Select your e2etest_multifile file' })).toBeVisible({ timeout: 90000 });
+
+  const part = fromDisk(path.join(__dirname, 'test-split-1.zip'), 'application/zip');
+  await dropFiles(page, '#drop-zone', [part]);
+  await expect(page.locator('span.truncate')).toHaveCount(1);
+
+  await dropFiles(page, '#drop-zone', [part]);
+
+  await expect(page.getByText('Already added: test-split-1.zip')).toBeVisible();
+  await expect(page.locator('span.truncate')).toHaveCount(1);
 });
