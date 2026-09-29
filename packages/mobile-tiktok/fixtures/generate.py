@@ -103,7 +103,7 @@ def txt_export(lang: str) -> dict[str, str]:
             f"{base}/Likes and Favorites/Like List.txt": records([{"Date": d[4], "Link": "https://l/1"}]),
             f"{base}/Your Activity/Searches.txt": records([{"Date": d[0], "Search Term": f"{USERNAME} videos"}, {"Date": d[1], "Search Term": "contact me@example.com"}]),
             f"{base}/Your Activity/Share History.txt": records([{"Date": d[2], "Shared Content": f"by {USERNAME}", "Link": "https://s/1", "Method": "copy"}]),
-            f"{base}/Comments/Comments.txt": records([{"Date": d[3], "Comment": f"Hi {USERNAME.upper()}, write a.b@c.de", "Photo": "N/A", "Url": "https://c/1"}]),
+            f"{base}/Comments/Comments.txt": records([{"Date": d[3], "Comment": f"Hi {USERNAME.upper()}, write a.b@c.de", "Sticker": "N/A", "Original Post Link": "https://c/1"}]),
             f"{base}/Ads and data/Off-TikTok Activities.txt": records([{"Date": d[2], "Source": "shop.example", "Event": "purchase"}]),
             f"{base}/Ads and data/Ad Interests.txt": "You have no data in this section\n",
             f"{base}/Direct Messages/Direct Messages.txt": "must never be read\n",

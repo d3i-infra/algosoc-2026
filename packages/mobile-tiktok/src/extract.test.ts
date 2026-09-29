@@ -115,3 +115,17 @@ test("Dutch TXT comments carry the post link", () => {
   const rows = extractTable("tiktok_comments", exp, counter()).rows;
   expect(rows).toEqual([["2026-05-02 12:09:50", "hoi", "", "https://www.tiktok.com/@x/video/1"]]);
 });
+
+test("Dutch TXT comments do not read the Sticker field as the photo", () => {
+  // TXT exports carry a Sticker field; JSON exports show it is a field of its
+  // own, next to photo and video. Stickers are not part of this study.
+  const exp = txtExport("nl", { "Reacties.txt": "Datum: 2026-05-02 10:09:50 UTC\nReactie: hoi\nSticker: https://s/1\nLink naar origineel bericht: https://www.tiktok.com/@x/video/1\n" });
+  const rows = extractTable("tiktok_comments", exp, counter()).rows;
+  expect(rows).toEqual([["2026-05-02 12:09:50", "hoi", "", "https://www.tiktok.com/@x/video/1"]]);
+});
+
+test("the refuted Dutch link guess is no longer read", () => {
+  const exp = txtExport("nl", { "Reacties.txt": "Datum: 2026-05-02 10:09:50 UTC\nReactie: hoi\nOriginele link naar bericht: https://www.tiktok.com/@x/video/1\n" });
+  const rows = extractTable("tiktok_comments", exp, counter()).rows;
+  expect(rows).toEqual([["2026-05-02 12:09:50", "hoi", "", ""]]);
+});

@@ -165,7 +165,12 @@ const extractors: { [name: string]: Extractor } = {
     const columns = ["Date", "Comment", "Photo", "Url"];
     const items = src.kind === "json" ? listItems(get(src.data, "Comment", "Comments", "CommentsList")) : txtItems(src, "Reacties.txt", "Comments.txt");
     if (!items) return { columns, rows: [] };
-    return { columns, rows: rowsOf(errors, () => items.map((item) => [itemDate(item, errors), itemGet(item, "Comment", "Reactie"), itemGet(item, "Photo", "Foto"), itemGet(item, "Url", "Link", "originalPostUrl", "Original Post Link", "Link naar origineel bericht", "Originele link naar bericht")])) };
+    // Link keys verified on real exports, 2026-09: JSON "originalPostUrl", English TXT
+    // "Original Post Link", Dutch TXT "Link naar origineel bericht". The photo is verified
+    // in JSON only ("photo"); no TXT export with a comment photo has been seen, so "Photo"
+    // and "Foto" are unverified guesses for TXT. TXT exports also carry a separate
+    // "Sticker" field, which is deliberately not read.
+    return { columns, rows: rowsOf(errors, () => items.map((item) => [itemDate(item, errors), itemGet(item, "Comment", "Reactie"), itemGet(item, "Photo", "Foto"), itemGet(item, "Url", "Link", "originalPostUrl", "Original Post Link", "Link naar origineel bericht")])) };
   },
 
   off_tiktok_to_df(src, errors) {
