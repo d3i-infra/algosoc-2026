@@ -109,3 +109,9 @@ test("runExtractionAsync yields once between tables and matches the sync result"
   expect(got.tables).toEqual(want.tables);
   expect(got.errors).toEqual(want.errors);
 });
+
+test("Dutch TXT comments carry the post link", () => {
+  const exp = txtExport("nl", { "Reacties.txt": "Datum: 2026-05-02 10:09:50 UTC\nReactie: hoi\nSticker: N.v.t.\nLink naar origineel bericht: https://www.tiktok.com/@x/video/1\n" });
+  const rows = extractTable("tiktok_comments", exp, counter()).rows;
+  expect(rows).toEqual([["2026-05-02 12:09:50", "hoi", "", "https://www.tiktok.com/@x/video/1"]]);
+});

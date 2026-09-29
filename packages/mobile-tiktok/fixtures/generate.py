@@ -121,7 +121,7 @@ def txt_export(lang: str) -> dict[str, str]:
         f"{base}/Likes en favorieten/Likelijst.txt": records([{"Datum": d[4], "Link": "https://l/1"}]),
         f"{base}/Je activiteit/Zoekopdrachten.txt": records([{"Datum": d[0], "Zoekterm": f"{USERNAME} videos"}, {"Datum": d[1], "Zoekterm": "contact me@example.com"}]),
         f"{base}/Je activiteit/Geschiedenis delen.txt": records([{"Datum": d[2], "Gedeelde inhoud": f"by {USERNAME}", "Link": "https://s/1", "Methode": "kopiëren"}]),
-        f"{base}/Reacties/Reacties.txt": records([{"Datum": d[3], "Reactie": f"Hoi {USERNAME}, mail a.b@c.de", "Foto": "n.v.t.", "Originele link naar bericht": "https://c/1"}]),
+        f"{base}/Reacties/Reacties.txt": records([{"Datum": d[3], "Reactie": f"Hoi {USERNAME}, mail a.b@c.de", "Sticker": "N.v.t.", "Link naar origineel bericht": "https://c/1"}]),
         f"{base}/Advertenties en gegevens/Activiteit buiten TikTok.txt": records([{"Datum": d[2], "Bron": "shop.example", "Evenement": "aankoop"}]),
         f"{base}/Berichten/Directe berichten.txt": "mag nooit gelezen worden\n",
     }

@@ -165,7 +165,7 @@ const extractors: { [name: string]: Extractor } = {
     const columns = ["Date", "Comment", "Photo", "Url"];
     const items = src.kind === "json" ? listItems(get(src.data, "Comment", "Comments", "CommentsList")) : txtItems(src, "Reacties.txt", "Comments.txt");
     if (!items) return { columns, rows: [] };
-    return { columns, rows: rowsOf(errors, () => items.map((item) => [itemDate(item, errors), itemGet(item, "Comment", "Reactie"), itemGet(item, "Photo", "Foto"), itemGet(item, "Url", "Link", "originalPostUrl", "Original Post Link", "Originele link naar bericht")])) };
+    return { columns, rows: rowsOf(errors, () => items.map((item) => [itemDate(item, errors), itemGet(item, "Comment", "Reactie"), itemGet(item, "Photo", "Foto"), itemGet(item, "Url", "Link", "originalPostUrl", "Original Post Link", "Link naar origineel bericht", "Originele link naar bericht")])) };
   },
 
   off_tiktok_to_df(src, errors) {

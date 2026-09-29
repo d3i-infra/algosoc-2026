@@ -47,7 +47,6 @@
   }
  ],
  "errors": {
-  "UnboundLocalError": 1,
-  "ValueError": 1
+  "UnboundLocalError": 1
  }
 }

@@ -35,7 +35,7 @@
   },
   {
    "id": "tiktok_comments",
-   "data_frame": "{\"Date\":{\"0\":\"2026-10-25 02:00:00\"},\"Comment\":{\"0\":\"Hoi [user], mail [email]\"},\"Photo\":{\"0\":null},\"Url\":{\"0\":\"https:\\/\\/c\\/1\"}}"
+   "data_frame": "{\"Date\":{\"0\":\"2026-10-25 02:00:00\"},\"Comment\":{\"0\":\"Hoi [user], mail [email]\"},\"Photo\":{\"0\":\"\"},\"Url\":{\"0\":\"https:\\/\\/c\\/1\"}}"
   },
   {
    "id": "tiktok_off_tiktok",
