@@ -85,6 +85,17 @@ describe('isAccepted', () => {
   it('accepts everything under an open rule', () => {
     expect(isAccepted(f('notes.pdf', 'application/pdf'), parseAccept(''))).toBe(true)
   })
+
+  it('treats a name that ends in a dot as having no extension', () => {
+    expect(isAccepted(f('archive.'), zip)).toBe(true)
+    expect(isAccepted(f('archive.', 'application/pdf'), zip)).toBe(true)
+    expect(isAccepted(f('archive.', 'application/zip'), zip)).toBe(true)
+  })
+
+  it('still judges the last real extension of a name with several dots', () => {
+    expect(isAccepted(f('export.2026.zip'), zip)).toBe(true)
+    expect(isAccepted(f('export.zip.pdf'), zip)).toBe(false)
+  })
 })
 
 describe('partitionAccepted', () => {

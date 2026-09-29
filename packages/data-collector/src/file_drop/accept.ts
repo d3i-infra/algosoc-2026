@@ -56,7 +56,10 @@ export function parseAccept (accept: string): AcceptRule {
 
 function extensionOf (name: string): string {
   const dot = name.lastIndexOf('.')
-  return dot <= 0 ? '' : name.slice(dot).toLowerCase()
+  // A dot at the start (".hidden") or at the end ("archive.") leaves nothing
+  // to judge by, so the name counts as having no extension.
+  if (dot <= 0 || dot === name.length - 1) return ''
+  return name.slice(dot).toLowerCase()
 }
 
 export function isAccepted (file: { name: string, type: string }, rule: AcceptRule): boolean {
