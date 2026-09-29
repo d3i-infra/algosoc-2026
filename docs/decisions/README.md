@@ -61,7 +61,7 @@ Load the ADR(s) whose filename matches the area you are touching.
 - [0032 — Visualization workers are ephemeral and column-scoped](./0032-visualization-workers-are-ephemeral-and-column-scoped.md)
 - [0033 — Consent-viz donation must not route through DataSubmissionPage's factory data path](./0033-consent-viz-donation-must-not-route-through-datasubmissionpage-s-factory-data-path.md)
 - [0035 — Per-row work over participant tables must not allocate](./0035-per-row-work-over-participant-tables-must-not-allocate.md)
-- [0041 — Refuse a file in the prompt only on a clear type mismatch](./0041-refuse-a-file-in-the-prompt-only-on-a-clear-type-mismatch.md)
+- [0042 — Refuse a file in the prompt only on a clear type mismatch](./0042-refuse-a-file-in-the-prompt-only-on-a-clear-type-mismatch.md)
 
 ### Performance
 
