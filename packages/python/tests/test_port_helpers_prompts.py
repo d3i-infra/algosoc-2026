@@ -9,9 +9,20 @@ def test_multi_prompt_copy_covers_required_locales():
     assert "file(s)" in translations["en"] or "files" in translations["en"]
 
 
-def test_single_prompt_copy_unchanged():
+def test_single_prompt_is_the_d3i_single_prompt():
+    """Every single-file flow renders the D3I prompt, which has the drop zone;
+    feldspar's PropsUIPromptFileInput is no longer sent by any flow."""
     prompt = ph.generate_file_prompt("application/zip")
-    assert prompt.toDict()["__type__"] == "PropsUIPromptFileInput"
+    d = prompt.toDict()
+    assert d["__type__"] == "PropsUIPromptFileInputSingle"
+    assert d["extensions"] == "application/zip"
+
+
+def test_single_prompt_copy_covers_required_locales():
+    prompt = ph.generate_file_prompt("application/zip")
+    translations = prompt.toDict()["description"]["translations"]
+    assert set(translations) >= {"en", "nl", "de", "it", "es"}
+    assert "choose the file" in translations["en"]
 
 
 def test_multi_prompt_includes_example_covering_required_locales():

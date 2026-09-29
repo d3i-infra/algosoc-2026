@@ -1,5 +1,6 @@
 import { test, expect, Page } from '@playwright/test';
 import * as path from 'path';
+import { dropFiles, fromDisk } from './drop_helper';
 
 /**
  * Common setup for tests: navigate to the page, upload a test file
@@ -112,4 +113,62 @@ test('can cancel submission', async ({ page }) => {
   expect(submittedData).not.toEqual(expect.stringContaining("hello_world.txt"));
   // The submitted data should contain the cancellation message
   expect(submittedData).toEqual(expect.stringContaining("data_submission declined"));
+});
+
+test('can donate a dropped file', async ({ page }) => {
+  await page.goto('http://localhost:3000/');
+  await expect(page.getByRole('heading', { name: 'Select your example file' })).toBeVisible({ timeout: 90000 });
+
+  await dropFiles(page, '#drop-zone', [
+    fromDisk(path.join(__dirname, 'test.zip'), 'application/zip'),
+  ]);
+  await expect(page.getByText('test.zip', { exact: true })).toBeVisible();
+  await page.getByText('Continue').click();
+
+  const submittedData = await submitDataAndGetResult(page);
+  expect(submittedData).toEqual(expect.stringContaining("hello_world.txt"));
+});
+
+test('a dropped file of the wrong type is refused', async ({ page }) => {
+  await page.goto('http://localhost:3000/');
+  await expect(page.getByRole('heading', { name: 'Select your example file' })).toBeVisible({ timeout: 90000 });
+
+  await dropFiles(page, '#drop-zone', [
+    { name: 'notes.pdf', type: 'application/pdf', content: Buffer.from('%PDF-1.4') },
+  ]);
+
+  await expect(page.getByText('Not added, because the file type does not match: notes.pdf')).toBeVisible();
+  // Nothing was selected, so the placeholder is still showing.
+  await expect(page.getByText('E.g. data.zip')).toBeVisible();
+});
+
+test('several files dropped on the single prompt: the first is kept, the rest are named', async ({ page }) => {
+  await page.goto('http://localhost:3000/');
+  await expect(page.getByRole('heading', { name: 'Select your example file' })).toBeVisible({ timeout: 90000 });
+
+  await dropFiles(page, '#drop-zone', [
+    fromDisk(path.join(__dirname, 'test.zip'), 'application/zip'),
+    fromDisk(path.join(__dirname, 'test_9999.zip'), 'application/zip'),
+  ]);
+
+  await expect(page.getByText('test.zip', { exact: true })).toBeVisible();
+  await expect(page.getByText('Only one file can be added. Not added: test_9999.zip')).toBeVisible();
+});
+
+test('a file dropped beside the zone does not leave the page', async ({ page }) => {
+  await page.goto('http://localhost:3000/');
+  await expect(page.getByRole('heading', { name: 'Select your example file' })).toBeVisible({ timeout: 90000 });
+
+  // dispatchEvent returns false when a listener cancelled the event, which is
+  // what stops the browser opening the file. This checks that the guard is
+  // installed; what the browser does without it is Task 8's manual check.
+  const cancelled = await page.evaluate(() => {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File(['x'], 'notes.pdf', { type: 'application/pdf' }));
+    const drop = new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: transfer });
+    return !document.body.dispatchEvent(drop);
+  });
+  expect(cancelled).toBe(true);
+
+  await expect(page.getByRole('heading', { name: 'Select your example file' })).toBeVisible();
 });

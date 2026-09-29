@@ -13,7 +13,7 @@ def render_page(
         props.PropsUIPromptRadioInput
         | props.PropsUIPromptConsentForm
         | d3i_props.PropsUIPromptConsentFormViz
-        | props.PropsUIPromptFileInput
+        | d3i_props.PropsUIPromptFileInputSingle
         | d3i_props.PropsUIPromptFileInputMultiple
         | d3i_props.PropsUIPromptQuestionnaire
         | props.PropsUIPromptConfirm
@@ -32,7 +32,7 @@ def render_page(
         body (
             props.PropsUIPromptRadioInput |
             props.PropsUIPromptConsentForm |
-            props.PropsUIPromptFileInput |
+            d3i_props.PropsUIPromptFileInputSingle |
             props.PropsUIPromptConfirm |
         ): The main content of the page. It must be compatible with `props.PropsUIPageDonation`.
 
@@ -95,7 +95,7 @@ def generate_retry_prompt(platform_name: str, multiple: bool = False) -> props.P
 
 def generate_file_prompt(
     extensions: str, multiple: bool = False
-) -> props.PropsUIPromptFileInput | d3i_props.PropsUIPromptFileInputMultiple:
+) -> d3i_props.PropsUIPromptFileInputSingle | d3i_props.PropsUIPromptFileInputMultiple:
     """
     Generates a file input prompt for selecting file(s) for a platform.
 
@@ -114,10 +114,12 @@ def generate_file_prompt(
             Defaults to False.
 
     Returns:
-        props.PropsUIPromptFileInput | d3i_props.PropsUIPromptFileInputMultiple:
+        d3i_props.PropsUIPromptFileInputSingle | d3i_props.PropsUIPromptFileInputMultiple:
             A file input prompt object containing the description text and
             allowed file extensions. If multiple=True, returns a
             PropsUIPromptFileInputMultiple object for selecting multiple files.
+            Both prompts accept files by drag and drop as well as by the
+            file picker.
     """
     # de/it/nl copy below: register standardized on formal Lei (it), Download-Anleitung
     # unified (de), Dutch compounds per Taalunie (nl) — reviewed 2026-08-27.
@@ -150,7 +152,7 @@ def generate_file_prompt(
         })
         return d3i_props.PropsUIPromptFileInputMultiple(description, extensions, example=example)
 
-    return props.PropsUIPromptFileInput(description, extensions)
+    return d3i_props.PropsUIPromptFileInputSingle(description, extensions)
 
 
 def generate_review_data_prompt(
