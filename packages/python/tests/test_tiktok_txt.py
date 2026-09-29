@@ -58,14 +58,46 @@ def test_dutch_comment_record_parses_with_the_link_key():
     assert parsed["Link naar origineel bericht"] == "https://www.tiktok.com/@x/video/1"
 
 
-def test_comments_to_df_fills_url_for_dutch_txt():
+def _dutch_txt_zip(comment_text: str) -> io.BytesIO:
+    # validate_zip accepts a category from 5% of its known file names. txt_nl
+    # lists 61, so Reacties.txt alone is not recognised; three sentinel-only
+    # members bring the zip to 4 of 61.
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as z:
-        z.writestr("TikTok/Reacties/Reacties.txt",
-                   "Datum: 2026-05-02 10:09:50 UTC\nReactie: hoi\nSticker: N.v.t.\nLink naar origineel bericht: https://www.tiktok.com/@x/video/1\n")
+        z.writestr("TikTok/Reacties/Reacties.txt", comment_text)
+        for member in (
+            "Profiel en instellingen/Volger.txt",
+            "Profiel en instellingen/Volgend.txt",
+            "Likes en favorieten/Likelijst.txt",
+        ):
+            z.writestr(f"TikTok/{member}", "Dit gedeelte bevat geen gegevens\n")
     buf.seek(0)
+    return buf
+
+
+def _comment_urls(comment_text: str) -> list[str]:
+    buf = _dutch_txt_zip(comment_text)
     validation = validate_zip(DDP_CATEGORIES, buf)
+    assert validation.get_status_code_id() == 0
+    assert validation.current_ddp_category.id == "txt_nl"
     buf.seek(0)
     errors = Counter()
     df = comments_to_df(ZipArchiveReader(buf, validation.archive_members, errors), errors, validation)
-    assert list(df["Url"]) == ["https://www.tiktok.com/@x/video/1"]
+    assert not errors
+    return list(df["Url"])
+
+
+def test_comments_to_df_fills_url_for_dutch_txt():
+    urls = _comment_urls(
+        "Datum: 2026-05-02 10:09:50 UTC\nReactie: hoi\nSticker: N.v.t.\n"
+        "Link naar origineel bericht: https://www.tiktok.com/@x/video/1\n"
+    )
+    assert urls == ["https://www.tiktok.com/@x/video/1"]
+
+
+def test_comments_to_df_still_reads_the_older_dutch_key():
+    urls = _comment_urls(
+        "Datum: 2026-05-02 10:09:50 UTC\nReactie: hoi\n"
+        "Originele link naar bericht: https://www.tiktok.com/@x/video/1\n"
+    )
+    assert urls == ["https://www.tiktok.com/@x/video/1"]
