@@ -170,10 +170,10 @@ class TestPathResolution:
         assert "Takeout/YouTube und YouTube Music/Verlauf/Wiedergabeverlauf.html" in validation.archive_members
 
     def test_next_variant_resolves_when_the_first_is_absent(self):
-        """The watch history falls back to the YouTube activity file, so an archive
-        exported without the history folder still yields recognition."""
+        """The watch history falls back to the YouTube history file, so an archive
+        exported without the My Activity folder still yields recognition."""
         validation = google.validate_ddp(make_set({
-            "Takeout/My Activity/YouTube/MyActivity.json": WATCH_JSON,
+            "Takeout/YouTube and YouTube Music/history/watch-history.json": WATCH_JSON,
         }))
 
         assert validation.get_status_code_id() == 0
@@ -438,7 +438,7 @@ def _reader_for(members: dict[str, str | bytes]) -> tuple[ZipArchiveReader, Coun
 
 class TestActivityFile:
     def test_views_and_searches_are_split_when_read_from_the_activity_file(self):
-        """Both YouTube histories fall back to the same activity file, which records
+        """Both YouTube histories read the same activity file first, which records
         views and searches together — each extractor must take only its own rows."""
         reader, errors, ddp_locale = _reader_for({
             "Takeout/My Activity/YouTube/MyActivity.json": ACTIVITY_JSON,
@@ -781,9 +781,17 @@ class TestChromeHistory:
         assert df.empty
 
 
+def _one_activity_file(extension: str, first: str, second: str) -> str:
+    """Joins the records of two activity sources the way one exported file holds
+    them: one list in json, one cell after the other in html."""
+    if extension == "json":
+        return f"[{first[1:-1]}, {second[1:-1]}]"
+    return first + second
+
+
 class TestEveryLocale:
-    """Builds a synthetic DDP from the CURRENT (index-0, translated-filename-first)
-    paths of each locale in the committed ``TAKEOUT_PATHS``, so a table entry that no
+    """Builds a synthetic DDP from the first-listed (index-0) path of each key, per
+    locale, in the committed ``TAKEOUT_PATHS``, so a table entry that no
     extractor can reach fails here instead of silently producing an empty table in the
     field. Extractors are called directly per key, not through ``extraction()`` — this
     class exercises path resolution in isolation from the config-driven wiring that
@@ -844,7 +852,13 @@ class TestEveryLocale:
             formats = google.KEY_FORMATS[key]
             extension = preferred_format if preferred_format in formats else formats[0]
             path = google.TAKEOUT_PATHS[locale][key][0]
-            members[f"Takeout/{path}.{extension}"] = self.CONTENT[(key, extension)]
+            member = f"Takeout/{path}.{extension}"
+            content = self.CONTENT[(key, extension)]
+            # Two keys may name one file first: both YouTube histories read the
+            # My Activity file, which records views and searches together.
+            if member in members:
+                content = _one_activity_file(extension, members[member], content)
+            members[member] = content
 
         reader, errors, ddp_locale = _reader_for(members)
         assert ddp_locale == locale

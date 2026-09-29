@@ -11,6 +11,7 @@ type Props = React.ComponentProps<typeof FileInput>
 // Wraps feldspar's own single-file prompt rather than forking it (ADR-0002):
 // intercepting `resolve` tells us the file was submitted, so the loading
 // notice can appear below the prompt while Python processes the archive.
+// eslint-disable-next-line react-refresh/only-export-components -- this file is removed together with the wrapper once the D3I single-file prompt carries the notice
 const FileInputWithNotice = (props: Props): React.JSX.Element => {
   const [submitted, setSubmitted] = React.useState<boolean>(false)
   const { resolve } = props
