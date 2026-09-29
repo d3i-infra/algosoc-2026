@@ -15,6 +15,7 @@ import {
   rejectedNotice
 } from "../../file_drop/copy"
 import { useFileDrop } from "../../file_drop/use_file_drop"
+import { LoadingNotice } from "../loading_notice/loading_notice"
 import { pickSingle } from "./select"
 import { PropsUIPromptFileInputSingle, Translatable } from "./types"
 
@@ -107,8 +108,9 @@ export const FileInputSingle = (props: Props): React.JSX.Element => {
         <div className={`${selectedFile === undefined ? 'opacity-30' : 'opacity-100'}`}>
           <BodySmall text={note} margin='' />
           <div className='mt-8' />
-          <div className='flex flex-row gap-4'>
+          <div className='flex flex-row gap-4 items-center'>
             <PrimaryButton label={continueButton} onClick={handleConfirm} enabled={selectedFile !== undefined} spinning={waiting} />
+            {waiting && <LoadingNotice locale={locale} />}
           </div>
         </div>
       </div>

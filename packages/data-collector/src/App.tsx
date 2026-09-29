@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { DataSubmissionPageFactory, ScriptHostComponent } from "@eyra/feldspar";
 import { ConsentFormVizFactory } from "./factories/consent_form_viz";
-import { FileInputFactory } from "./components/file_input/factory"
 import { FileInputMultipleFactory } from "./components/file_input_multiple/factory"
 import { FileInputSingleFactory } from "./components/file_input_single/factory"
 import { ErrorPageFactory } from "./components/error_page/factory"
@@ -43,7 +42,6 @@ function App() {
           new DataSubmissionPageFactory({
             promptFactories: [
                 new ConsentFormVizFactory(),
-                new FileInputFactory(),
                 new FileInputMultipleFactory(),
                 new FileInputSingleFactory(),
                 new ErrorPageFactory(),

@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import { dropFiles, fromDisk } from './drop_helper';
+import { LOADING_NOTICE, watchForNotice, noticeWasBesideContinue } from './notice_helper';
 
 /**
  * Helper to handle data submission and return the submitted data
@@ -429,4 +430,26 @@ test('dropping a file that is already selected shows the duplicate notice', asyn
 
   await expect(page.getByText('Already added: test-split-1.zip')).toBeVisible();
   await expect(page.locator('span.truncate')).toHaveCount(1);
+});
+
+test('the loading notice shows beside Continue while the parts are processed', async ({ page }) => {
+  await page.goto('http://localhost:3000/');
+  await expect(page.getByRole('heading', { name: 'Select your e2etest_multifile file' })).toBeVisible({ timeout: 90000 });
+
+  const fileChooserPromise = page.waitForEvent('filechooser');
+  await page.getByText('Choose file(s)').click();
+  const fileChooser = await fileChooserPromise;
+  await fileChooser.setFiles([
+    path.join(__dirname, 'test-split-1.zip'),
+    path.join(__dirname, 'test-split-2.zip'),
+  ]);
+  await expect(page.getByText('test-split-2.zip', { exact: true })).toBeVisible();
+
+  await expect(page.getByText(LOADING_NOTICE)).toHaveCount(0);
+
+  await watchForNotice(page);
+  await page.getByText('Continue').click();
+  await expect(page.getByRole('heading', { name: 'Review your data' })).toBeVisible({ timeout: 90000 });
+
+  expect(await noticeWasBesideContinue(page)).toBe(true);
 });

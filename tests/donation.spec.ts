@@ -1,6 +1,7 @@
 import { test, expect, Page } from '@playwright/test';
 import * as path from 'path';
 import { dropFiles, fromDisk } from './drop_helper';
+import { LOADING_NOTICE, watchForNotice, noticeWasBesideContinue } from './notice_helper';
 
 /**
  * Common setup for tests: navigate to the page, upload a test file
@@ -189,4 +190,23 @@ test('a file dropped on a later page does not leave the page', async ({ page }) 
   expect(cancelled).toBe(true);
 
   await expect(page.getByRole('heading', { name: 'Review your data' })).toBeVisible();
+});
+
+test('the loading notice shows beside Continue while the file is processed', async ({ page }) => {
+  await page.goto('http://localhost:3000/');
+  await expect(page.getByRole('heading', { name: 'Select your example file' })).toBeVisible({ timeout: 90000 });
+
+  const fileChooserPromise = page.waitForEvent('filechooser');
+  await page.getByText('Choose file').click();
+  const fileChooser = await fileChooserPromise;
+  await fileChooser.setFiles(path.join(__dirname, 'test.zip'));
+
+  // Not before Continue: the notice belongs to the wait, not to the prompt.
+  await expect(page.getByText(LOADING_NOTICE)).toHaveCount(0);
+
+  await watchForNotice(page);
+  await page.getByText('Continue').click();
+  await expect(page.getByRole('heading', { name: 'Review your data' })).toBeVisible({ timeout: 60000 });
+
+  expect(await noticeWasBesideContinue(page)).toBe(true);
 });
