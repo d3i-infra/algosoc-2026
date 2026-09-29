@@ -1,5 +1,5 @@
 import { Translator } from '@eyra/feldspar'
-import { DEFAULT_UI_LOCALE } from '../locale/policy'
+import { DEFAULT_UI_LOCALE, SUPPORTED_UI_LOCALES } from '../locale/policy'
 import {
   buildNotices,
   rejectedNotice,
@@ -14,7 +14,7 @@ beforeAll(() => {
   Translator.setDefaultLocale(DEFAULT_UI_LOCALE)
 })
 
-const LOCALES = ['de', 'en', 'es', 'it', 'nl']
+const LOCALES = [...SUPPORTED_UI_LOCALES].sort()
 
 describe('copy bundles', () => {
   const bundles = { rejectedNotice, folderNotice, extraFilesNotice }
