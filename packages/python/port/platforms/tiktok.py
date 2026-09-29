@@ -1576,8 +1576,8 @@ def off_tiktok_to_df(reader: ZipArchiveReader, errors: Counter, validation) -> p
           "id": "tiktok_off_tiktok",
           "title": {"en": "Your off-TikTok activities", "nl": "Je activiteiten buiten TikTok"},
           "description": {
-            "en": "Activities outside of TikTok that have been tracked by TikTok.",
-            "nl": "Activiteiten buiten TikTok die door TikTok zijn bijgehouden."
+            "en": "This is information TikTok receives from other companies and apps and uses to build a profile of your interests and activities. By viewing this information, researchers can gain insight into how TikTok sees you and how it uses that profile to determine what content you see. We only receive the information shown below, such as the company and the time of the interaction. We do not receive any information about what you do within these apps or websites.",
+            "nl": "Dit is informatie die TikTok van andere bedrijven en apps ontvangt en gebruikt om een profiel van je interesses en activiteiten op te bouwen. Door deze informatie te bekijken, kunnen onderzoekers een inkijkje krijgen in hoe TikTok jou ziet en hoe het dat profiel gebruikt om te bepalen welke content je te zien krijgt. We ontvangen alleen de informatie die hieronder wordt weergegeven, zoals het bedrijf en het tijdstip van de interactie. We ontvangen geen informatie over wat je binnen deze apps of websites doet."
           },
           "headers": {
             "Date": {"en": "Date", "nl": "Datum en tijd"},

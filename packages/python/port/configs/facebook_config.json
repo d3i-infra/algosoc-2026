@@ -415,8 +415,8 @@
         "nl": "Je activiteit buiten Meta"
       },
       "description": {
-        "en": "Businesses and apps share with Meta what you do on their websites and apps, such as page views, searches and purchases. This table lists what they reported about you.",
-        "nl": "Bedrijven en apps delen met Meta wat je op hun websites en apps doet, zoals paginaweergaven, zoekopdrachten en aankopen. Deze tabel toont wat zij over jou hebben doorgegeven."
+        "en": "This tables shows information that Facebook receives from other companies and apps to build a profile of your interests and activities. This information gives researchers an idea of how Facebook sees you and how it uses this profile to choose what content it shows to you. We only receive the information shown below, which includes the company and the time of the interaction. We do not receive information about what you do or purchase on those websites and applications.",
+        "nl": "Deze tabel laat informatie zien die Facebook van andere bedrijven en apps ontvangt om een profiel van je interesses en activiteiten op te bouwen. Deze informatie geeft onderzoekers een idee van hoe Facebook jou ziet en hoe het dat profiel gebruikt om te bepalen welke content je te zien krijgt. We ontvangen alleen de informatie die hieronder wordt weergegeven, zoals het bedrijf en het tijdstip van de interactie. We ontvangen geen informatie over wat je binnen deze apps of websites doet of koopt."
       },
       "headers": {
         "Business": {

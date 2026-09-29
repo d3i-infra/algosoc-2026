@@ -11,6 +11,7 @@ import { PropsUIPromptFileInputMultiple, Translatable } from "./types.ts"
 import { addFiles } from "./select"
 import { resolvePlaceholder } from "./placeholder"
 import CloseSvg  from "./assets/close.svg"
+import { LoadingNotice } from "../loading_notice/loading_notice"
 
 type Props = PropsUIPromptFileInputMultiple & ReactFactoryContext
 
@@ -106,8 +107,9 @@ export const FileInputMultiple = (props: Props): React.JSX.Element => {
         <div className={`${files[0] === undefined ? 'opacity-30' : 'opacity-100'}`}>
           <BodySmall text={note} margin='' />
           <div className='mt-8' />
-          <div className='flex flex-row gap-4'>
+          <div className='flex flex-row gap-4 items-center'>
             <PrimaryButton label={continueButton} onClick={handleConfirm} enabled={files[0] !== undefined} spinning={waiting} />
+            {waiting && <LoadingNotice locale={props.locale} />}
           </div>
         </div>
       </div>

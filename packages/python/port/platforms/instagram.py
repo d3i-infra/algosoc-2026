@@ -1736,8 +1736,8 @@ def stories_published_to_df(
             "nl": "Geplaatste stories"
           },
           "description": {
-            "en": "List of stories you have published on Instagram.",
-            "nl": "Lijst van stories die je op Instagram hebt geplaatst."
+            "en": "List of stories you have published on Instagram. No images or videos are shared, only the text of the story and the time it was posted.",
+            "nl": "Lijst van stories die je op Instagram hebt geplaatst. Er worden geen afbeeldingen of video's gedeeld, alleen de tekst van de story en het tijdstip waarop deze is geplaatst."
           },
           "headers": {
             "Text": {"en": "Text", "nl": "Tekst"},

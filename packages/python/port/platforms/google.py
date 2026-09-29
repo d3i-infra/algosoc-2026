@@ -171,8 +171,8 @@ logger = logging.getLogger(__name__)
 #: ``Nachrichten``) — all verified 2026-08-27. The older guesses are kept as fallbacks.
 TAKEOUT_PATHS: dict[str, dict[str, list[str]]] = {
     "en": {
-        "youtube.watch_history": ["YouTube and YouTube Music/history/watch-history", "My Activity/YouTube/MyActivity", "My Activity/YouTube/My Activity"],
-        "youtube.search_history": ["YouTube and YouTube Music/history/search-history", "My Activity/YouTube/MyActivity", "My Activity/YouTube/My Activity"],
+        "youtube.watch_history": ["My Activity/YouTube/MyActivity", "My Activity/YouTube/My Activity", "YouTube and YouTube Music/history/watch-history"],
+        "youtube.search_history": ["My Activity/YouTube/MyActivity", "My Activity/YouTube/My Activity", "YouTube and YouTube Music/history/search-history"],
         "youtube.subscriptions": ["YouTube and YouTube Music/subscriptions/subscriptions"],
         "youtube.comments": ["YouTube and YouTube Music/comments/comments"],
         "search.search_history": ["My Activity/Search/MyActivity", "My Activity/Search/My Activity"],
@@ -189,8 +189,8 @@ TAKEOUT_PATHS: dict[str, dict[str, list[str]]] = {
         "news.magazines": ["News/magazines"],
     },
     "nl": {
-        "youtube.watch_history": ["YouTube en YouTube Music/geschiedenis/kijkgeschiedenis", "Mijn activiteit/YouTube/MyActivity", "Mijn activiteit/YouTube/My Activity"],
-        "youtube.search_history": ["YouTube en YouTube Music/geschiedenis/zoekgeschiedenis", "Mijn activiteit/YouTube/MyActivity", "Mijn activiteit/YouTube/My Activity"],
+        "youtube.watch_history": ["Mijn activiteit/YouTube/MyActivity", "Mijn activiteit/YouTube/My Activity", "YouTube en YouTube Music/geschiedenis/kijkgeschiedenis"],
+        "youtube.search_history": ["Mijn activiteit/YouTube/MyActivity", "Mijn activiteit/YouTube/My Activity", "YouTube en YouTube Music/geschiedenis/zoekgeschiedenis"],
         "youtube.subscriptions": ["YouTube en YouTube Music/abonnementen/abonnementen"],
         "youtube.comments": ["YouTube en YouTube Music/reacties/reacties"],
         "search.search_history": ["Mijn activiteit/Zoeken/MyActivity", "Mijn activiteit/Zoeken/My Activity"],
@@ -207,8 +207,8 @@ TAKEOUT_PATHS: dict[str, dict[str, list[str]]] = {
         "news.magazines": ["Nieuws/magazines", "News/magazines"],
     },
     "de": {
-        "youtube.watch_history": ["YouTube und YouTube Music/Verlauf/Wiedergabeverlauf", "Meine Aktivitäten/YouTube/MeineAktivitäten", "Meine Aktivitäten/YouTube/MyActivity", "Meine Aktivitäten/YouTube/My Activity"],
-        "youtube.search_history": ["YouTube und YouTube Music/Verlauf/Suchverlauf", "Meine Aktivitäten/YouTube/MeineAktivitäten", "Meine Aktivitäten/YouTube/MyActivity", "Meine Aktivitäten/YouTube/My Activity"],
+        "youtube.watch_history": ["Meine Aktivitäten/YouTube/MeineAktivitäten", "Meine Aktivitäten/YouTube/MyActivity", "Meine Aktivitäten/YouTube/My Activity", "YouTube und YouTube Music/Verlauf/Wiedergabeverlauf"],
+        "youtube.search_history": ["Meine Aktivitäten/YouTube/MeineAktivitäten", "Meine Aktivitäten/YouTube/MyActivity", "Meine Aktivitäten/YouTube/My Activity", "YouTube und YouTube Music/Verlauf/Suchverlauf"],
         "youtube.subscriptions": ["YouTube und YouTube Music/Abos/Abos"],
         "youtube.comments": ["YouTube und YouTube Music/Kommentare/Kommentare"],
         "search.search_history": ["Meine Aktivitäten/Google Suche/MeineAktivitäten", "Meine Aktivitäten/Google Suche/MyActivity", "Meine Aktivitäten/Google Suche/My Activity", "Meine Aktivitäten/Suche/MyActivity", "Meine Aktivitäten/Suche/My Activity"],
@@ -225,8 +225,8 @@ TAKEOUT_PATHS: dict[str, dict[str, list[str]]] = {
         "news.magazines": ["Google News/magazines", "Nachrichten/magazines", "News/magazines"],
     },
     "es": {
-        "youtube.watch_history": ["YouTube y YouTube Music/historial/historial-de-reproducciones", "YouTube y YouTube Music/historial/historial de reproducciones", "Mi actividad/YouTube/MiActividad", "Mi actividad/YouTube/MyActivity", "Mi actividad/YouTube/My Activity"],
-        "youtube.search_history": ["YouTube y YouTube Music/historial/historial-de-búsqueda", "YouTube y YouTube Music/historial/historial de búsquedas", "Mi actividad/YouTube/MiActividad", "Mi actividad/YouTube/MyActivity", "Mi actividad/YouTube/My Activity"],
+        "youtube.watch_history": ["YouTube y YouTube Music/historial/historial de reproducciones", "Mi actividad/YouTube/MiActividad", "Mi actividad/YouTube/MyActivity", "Mi actividad/YouTube/My Activity", "YouTube y YouTube Music/historial/historial-de-reproducciones"],
+        "youtube.search_history": ["YouTube y YouTube Music/historial/historial de búsquedas", "Mi actividad/YouTube/MiActividad", "Mi actividad/YouTube/MyActivity", "Mi actividad/YouTube/My Activity", "YouTube y YouTube Music/historial/historial-de-búsqueda"],
         "youtube.subscriptions": ["YouTube y YouTube Music/suscripciones/suscripciones"],
         "youtube.comments": ["YouTube y YouTube Music/comentarios/comentarios"],
         "search.search_history": ["Mi actividad/Búsqueda/MiActividad", "Mi actividad/Búsqueda/MyActivity", "Mi actividad/Búsqueda/My Activity"],
@@ -252,8 +252,8 @@ TAKEOUT_PATHS: dict[str, dict[str, list[str]]] = {
         "news.magazines": ["Noticias/magazines", "News/magazines"],
     },
     "ar": {
-        "youtube.watch_history": ["YouTube وYouTube Music/السجلّ/سجل المشاهدة", "YouTube و YouTube Music/سجل/سجل المشاهدة", "نشاطي/YouTube/نشاطي", "نشاطي/YouTube/MyActivity", "نشاطي/YouTube/My Activity", "أنشطتي/YouTube/MyActivity", "أنشطتي/YouTube/My Activity"],
-        "youtube.search_history": ["YouTube وYouTube Music/السجلّ/سجلّ البحث", "YouTube و YouTube Music/سجل/سجل البحث", "نشاطي/YouTube/نشاطي", "نشاطي/YouTube/MyActivity", "نشاطي/YouTube/My Activity", "أنشطتي/YouTube/MyActivity", "أنشطتي/YouTube/My Activity"],
+        "youtube.watch_history": ["YouTube و YouTube Music/سجل/سجل المشاهدة", "نشاطي/YouTube/نشاطي", "نشاطي/YouTube/MyActivity", "نشاطي/YouTube/My Activity", "أنشطتي/YouTube/MyActivity", "أنشطتي/YouTube/My Activity", "YouTube وYouTube Music/السجلّ/سجل المشاهدة"],
+        "youtube.search_history": ["YouTube و YouTube Music/سجل/سجل البحث", "نشاطي/YouTube/نشاطي", "نشاطي/YouTube/MyActivity", "نشاطي/YouTube/My Activity", "أنشطتي/YouTube/MyActivity", "أنشطتي/YouTube/My Activity", "YouTube وYouTube Music/السجلّ/سجلّ البحث"],
         "youtube.subscriptions": ["YouTube وYouTube Music/اشتراكات/اشتراكات", "YouTube و YouTube Music/اشتراكات/اشتراكات"],
         "youtube.comments": ["YouTube وYouTube Music/تعليقات/تعليقات", "YouTube و YouTube Music/تعليقات/تعليقات"],
         "search.search_history": ["نشاطي/البحث/نشاطي", "نشاطي/البحث/MyActivity", "نشاطي/البحث/My Activity", "أنشطتي/بحث/MyActivity", "أنشطتي/بحث/My Activity"],
@@ -270,8 +270,8 @@ TAKEOUT_PATHS: dict[str, dict[str, list[str]]] = {
         "news.magazines": ["الأخبار/magazines", "News/magazines"],
     },
     "tr": {
-        "youtube.watch_history": ["YouTube ve YouTube Music/geçmiş/izleme geçmişi", "YouTube ve YouTube Music/geçmiş/İzleme geçmişi", "Etkinliğim/YouTube/Etkinliğim", "Etkinliğim/YouTube/MyActivity", "Etkinliğim/YouTube/My Activity"],
-        "youtube.search_history": ["YouTube ve YouTube Music/geçmiş/arama geçmişi", "YouTube ve YouTube Music/geçmiş/Arama geçmişi", "Etkinliğim/YouTube/Etkinliğim", "Etkinliğim/YouTube/MyActivity", "Etkinliğim/YouTube/My Activity"],
+        "youtube.watch_history": ["YouTube ve YouTube Music/geçmiş/İzleme geçmişi", "Etkinliğim/YouTube/Etkinliğim", "Etkinliğim/YouTube/MyActivity", "Etkinliğim/YouTube/My Activity", "YouTube ve YouTube Music/geçmiş/izleme geçmişi"],
+        "youtube.search_history": ["YouTube ve YouTube Music/geçmiş/Arama geçmişi", "Etkinliğim/YouTube/Etkinliğim", "Etkinliğim/YouTube/MyActivity", "Etkinliğim/YouTube/My Activity", "YouTube ve YouTube Music/geçmiş/arama geçmişi"],
         "youtube.subscriptions": ["YouTube ve YouTube Music/Abonelikler/Abonelikler"],
         "youtube.comments": ["YouTube ve YouTube Music/Yorumlar/Yorumlar"],
         "search.search_history": ["Etkinliğim/Arama/Etkinliğim", "Etkinliğim/Arama/MyActivity", "Etkinliğim/Arama/My Activity"],
@@ -288,8 +288,8 @@ TAKEOUT_PATHS: dict[str, dict[str, list[str]]] = {
         "news.magazines": ["Google Haberler/magazines", "Haberler/magazines", "News/magazines"],
     },
     "zh": {
-        "youtube.watch_history": ["YouTube 和 YouTube Music/历史记录/观看记录", "YouTube 和 YouTube Music/记录/观看记录", "我的活动/YouTube/我的活动记录", "我的活动/YouTube/MyActivity", "我的活动/YouTube/My Activity"],
-        "youtube.search_history": ["YouTube 和 YouTube Music/历史记录/搜索记录", "YouTube 和 YouTube Music/记录/搜索记录", "我的活动/YouTube/我的活动记录", "我的活动/YouTube/MyActivity", "我的活动/YouTube/My Activity"],
+        "youtube.watch_history": ["YouTube 和 YouTube Music/记录/观看记录", "我的活动/YouTube/我的活动记录", "我的活动/YouTube/MyActivity", "我的活动/YouTube/My Activity", "YouTube 和 YouTube Music/历史记录/观看记录"],
+        "youtube.search_history": ["YouTube 和 YouTube Music/记录/搜索记录", "我的活动/YouTube/我的活动记录", "我的活动/YouTube/MyActivity", "我的活动/YouTube/My Activity", "YouTube 和 YouTube Music/历史记录/搜索记录"],
         "youtube.subscriptions": ["YouTube 和 YouTube Music/订阅内容/订阅内容"],
         "youtube.comments": ["YouTube 和 YouTube Music/评论/评论"],
         "search.search_history": ["我的活动/Search/我的活动记录", "我的活动/Search/MyActivity", "我的活动/Search/My Activity", "我的活动/搜索/MyActivity", "我的活动/搜索/My Activity"],

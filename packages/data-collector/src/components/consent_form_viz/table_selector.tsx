@@ -151,23 +151,23 @@ const translations = {
   explanation: new TextBundle()
     .add(
       "en",
-      "Only one table is shown at a time. Use the menu below to view the others. Please check them all before sharing."
+      "Only one table is shown at a time. Use the menu below to explore the other tables. We recommend that you explore and view the tables before deciding which data you want to share."
     )
     .add(
       "nl",
-      "Er wordt steeds één tabel getoond. Gebruik het menu hieronder om de andere tabellen te bekijken. Bekijk ze alstublieft allemaal voordat u deelt."
+      "Er wordt steeds één tabel getoond. Gebruik het menu hieronder om de andere tabellen te verkennen. We raden u aan de tabellen te verkennen en te bekijken voordat u beslist welke gegevens u wilt delen."
     )
     .add(
       "de",
-      "Es wird jeweils nur eine Tabelle angezeigt. Über das Menü unten sehen Sie die übrigen. Bitte prüfen Sie alle, bevor Sie teilen."
+      "Es wird jeweils nur eine Tabelle angezeigt. Verwenden Sie das Menü unten, um die anderen Tabellen zu erkunden. Wir empfehlen Ihnen, die Tabellen zu erkunden und anzusehen, bevor Sie entscheiden, welche Daten Sie teilen möchten."
     )
     .add(
       "it",
-      "Viene mostrata una sola tabella alla volta. Usi il menu qui sotto per vedere le altre. La preghiamo di controllarle tutte prima di condividere."
+      "Viene mostrata una sola tabella alla volta. Utilizzare il menu sottostante per esplorare le altre tabelle. Si consiglia di esplorare e visualizzare le tabelle prima di decidere quali dati condividere."
     )
     .add(
       "es",
-      "Solo se muestra una tabla a la vez. Use el menú de abajo para ver las demás. Por favor, revíselas todas antes de compartir."
+      "Solo se muestra una tabla a la vez. Utilice el menú de abajo para explorar las otras tablas. Le recomendamos que explore y vea las tablas antes de decidir qué datos desea compartir."
     ),
   label: new TextBundle()
     .add("en", "Select a table")

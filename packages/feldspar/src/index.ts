@@ -29,3 +29,4 @@ export {
   isInstanceOf,
 } from './framework/helpers'
 export { DonateButtons } from './framework/visualization/react/ui/prompts/donate_buttons'
+export { FileInput } from './framework/visualization/react/ui/prompts/file_input'
