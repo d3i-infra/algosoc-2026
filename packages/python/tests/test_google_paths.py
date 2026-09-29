@@ -781,6 +781,14 @@ class TestChromeHistory:
         assert df.empty
 
 
+def _one_activity_file(extension: str, first: str, second: str) -> str:
+    """Joins the records of two activity sources the way one exported file holds
+    them: one list in json, one cell after the other in html."""
+    if extension == "json":
+        return f"[{first[1:-1]}, {second[1:-1]}]"
+    return first + second
+
+
 class TestEveryLocale:
     """Builds a synthetic DDP from the CURRENT (index-0, translated-filename-first)
     paths of each locale in the committed ``TAKEOUT_PATHS``, so a table entry that no
@@ -844,7 +852,13 @@ class TestEveryLocale:
             formats = google.KEY_FORMATS[key]
             extension = preferred_format if preferred_format in formats else formats[0]
             path = google.TAKEOUT_PATHS[locale][key][0]
-            members[f"Takeout/{path}.{extension}"] = self.CONTENT[(key, extension)]
+            member = f"Takeout/{path}.{extension}"
+            content = self.CONTENT[(key, extension)]
+            # Two keys may name one file first: both YouTube histories read the
+            # My Activity file, which records views and searches together.
+            if member in members:
+                content = _one_activity_file(extension, members[member], content)
+            members[member] = content
 
         reader, errors, ddp_locale = _reader_for(members)
         assert ddp_locale == locale

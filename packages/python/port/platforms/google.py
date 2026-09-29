@@ -112,7 +112,11 @@ logger = logging.getLogger(__name__)
 #: hyphenation choices had simply changed since that archive was taken. Rather than
 #: discard the older spellings, every corrected entry keeps its older-era variant as a
 #: trailing fallback — a participant exports fresh, but the old spelling costs nothing
-#: to keep trying. Ordering within a list is always current-verified-first.
+#: to keep trying. Ordering within a list is current-verified-first, with one
+#: exception: the two YouTube histories list the My Activity file before the YouTube
+#: history file (Erik van Haeringen, 2026-09), and only then the history file, its
+#: current spelling before its older one. The activity file records views and searches
+#: together; each extractor selects its own rows from it by url.
 #:
 #: Byte-exactness is load-bearing, not stylistic: matching is exact-string, so a
 #: diacritic, a casing choice, or an unusual Unicode character in a real folder or
@@ -225,8 +229,8 @@ TAKEOUT_PATHS: dict[str, dict[str, list[str]]] = {
         "news.magazines": ["Google News/magazines", "Nachrichten/magazines", "News/magazines"],
     },
     "es": {
-        "youtube.watch_history": ["YouTube y YouTube Music/historial/historial de reproducciones", "Mi actividad/YouTube/MiActividad", "Mi actividad/YouTube/MyActivity", "Mi actividad/YouTube/My Activity", "YouTube y YouTube Music/historial/historial-de-reproducciones"],
-        "youtube.search_history": ["YouTube y YouTube Music/historial/historial de búsquedas", "Mi actividad/YouTube/MiActividad", "Mi actividad/YouTube/MyActivity", "Mi actividad/YouTube/My Activity", "YouTube y YouTube Music/historial/historial-de-búsqueda"],
+        "youtube.watch_history": ["Mi actividad/YouTube/MiActividad", "Mi actividad/YouTube/MyActivity", "Mi actividad/YouTube/My Activity", "YouTube y YouTube Music/historial/historial-de-reproducciones", "YouTube y YouTube Music/historial/historial de reproducciones"],
+        "youtube.search_history": ["Mi actividad/YouTube/MiActividad", "Mi actividad/YouTube/MyActivity", "Mi actividad/YouTube/My Activity", "YouTube y YouTube Music/historial/historial-de-búsqueda", "YouTube y YouTube Music/historial/historial de búsquedas"],
         "youtube.subscriptions": ["YouTube y YouTube Music/suscripciones/suscripciones"],
         "youtube.comments": ["YouTube y YouTube Music/comentarios/comentarios"],
         "search.search_history": ["Mi actividad/Búsqueda/MiActividad", "Mi actividad/Búsqueda/MyActivity", "Mi actividad/Búsqueda/My Activity"],
@@ -252,8 +256,8 @@ TAKEOUT_PATHS: dict[str, dict[str, list[str]]] = {
         "news.magazines": ["Noticias/magazines", "News/magazines"],
     },
     "ar": {
-        "youtube.watch_history": ["YouTube و YouTube Music/سجل/سجل المشاهدة", "نشاطي/YouTube/نشاطي", "نشاطي/YouTube/MyActivity", "نشاطي/YouTube/My Activity", "أنشطتي/YouTube/MyActivity", "أنشطتي/YouTube/My Activity", "YouTube وYouTube Music/السجلّ/سجل المشاهدة"],
-        "youtube.search_history": ["YouTube و YouTube Music/سجل/سجل البحث", "نشاطي/YouTube/نشاطي", "نشاطي/YouTube/MyActivity", "نشاطي/YouTube/My Activity", "أنشطتي/YouTube/MyActivity", "أنشطتي/YouTube/My Activity", "YouTube وYouTube Music/السجلّ/سجلّ البحث"],
+        "youtube.watch_history": ["نشاطي/YouTube/نشاطي", "نشاطي/YouTube/MyActivity", "نشاطي/YouTube/My Activity", "أنشطتي/YouTube/MyActivity", "أنشطتي/YouTube/My Activity", "YouTube وYouTube Music/السجلّ/سجل المشاهدة", "YouTube و YouTube Music/سجل/سجل المشاهدة"],
+        "youtube.search_history": ["نشاطي/YouTube/نشاطي", "نشاطي/YouTube/MyActivity", "نشاطي/YouTube/My Activity", "أنشطتي/YouTube/MyActivity", "أنشطتي/YouTube/My Activity", "YouTube وYouTube Music/السجلّ/سجلّ البحث", "YouTube و YouTube Music/سجل/سجل البحث"],
         "youtube.subscriptions": ["YouTube وYouTube Music/اشتراكات/اشتراكات", "YouTube و YouTube Music/اشتراكات/اشتراكات"],
         "youtube.comments": ["YouTube وYouTube Music/تعليقات/تعليقات", "YouTube و YouTube Music/تعليقات/تعليقات"],
         "search.search_history": ["نشاطي/البحث/نشاطي", "نشاطي/البحث/MyActivity", "نشاطي/البحث/My Activity", "أنشطتي/بحث/MyActivity", "أنشطتي/بحث/My Activity"],
@@ -270,8 +274,8 @@ TAKEOUT_PATHS: dict[str, dict[str, list[str]]] = {
         "news.magazines": ["الأخبار/magazines", "News/magazines"],
     },
     "tr": {
-        "youtube.watch_history": ["YouTube ve YouTube Music/geçmiş/İzleme geçmişi", "Etkinliğim/YouTube/Etkinliğim", "Etkinliğim/YouTube/MyActivity", "Etkinliğim/YouTube/My Activity", "YouTube ve YouTube Music/geçmiş/izleme geçmişi"],
-        "youtube.search_history": ["YouTube ve YouTube Music/geçmiş/Arama geçmişi", "Etkinliğim/YouTube/Etkinliğim", "Etkinliğim/YouTube/MyActivity", "Etkinliğim/YouTube/My Activity", "YouTube ve YouTube Music/geçmiş/arama geçmişi"],
+        "youtube.watch_history": ["Etkinliğim/YouTube/Etkinliğim", "Etkinliğim/YouTube/MyActivity", "Etkinliğim/YouTube/My Activity", "YouTube ve YouTube Music/geçmiş/izleme geçmişi", "YouTube ve YouTube Music/geçmiş/İzleme geçmişi"],
+        "youtube.search_history": ["Etkinliğim/YouTube/Etkinliğim", "Etkinliğim/YouTube/MyActivity", "Etkinliğim/YouTube/My Activity", "YouTube ve YouTube Music/geçmiş/arama geçmişi", "YouTube ve YouTube Music/geçmiş/Arama geçmişi"],
         "youtube.subscriptions": ["YouTube ve YouTube Music/Abonelikler/Abonelikler"],
         "youtube.comments": ["YouTube ve YouTube Music/Yorumlar/Yorumlar"],
         "search.search_history": ["Etkinliğim/Arama/Etkinliğim", "Etkinliğim/Arama/MyActivity", "Etkinliğim/Arama/My Activity"],
@@ -288,8 +292,8 @@ TAKEOUT_PATHS: dict[str, dict[str, list[str]]] = {
         "news.magazines": ["Google Haberler/magazines", "Haberler/magazines", "News/magazines"],
     },
     "zh": {
-        "youtube.watch_history": ["YouTube 和 YouTube Music/记录/观看记录", "我的活动/YouTube/我的活动记录", "我的活动/YouTube/MyActivity", "我的活动/YouTube/My Activity", "YouTube 和 YouTube Music/历史记录/观看记录"],
-        "youtube.search_history": ["YouTube 和 YouTube Music/记录/搜索记录", "我的活动/YouTube/我的活动记录", "我的活动/YouTube/MyActivity", "我的活动/YouTube/My Activity", "YouTube 和 YouTube Music/历史记录/搜索记录"],
+        "youtube.watch_history": ["我的活动/YouTube/我的活动记录", "我的活动/YouTube/MyActivity", "我的活动/YouTube/My Activity", "YouTube 和 YouTube Music/历史记录/观看记录", "YouTube 和 YouTube Music/记录/观看记录"],
+        "youtube.search_history": ["我的活动/YouTube/我的活动记录", "我的活动/YouTube/MyActivity", "我的活动/YouTube/My Activity", "YouTube 和 YouTube Music/历史记录/搜索记录", "YouTube 和 YouTube Music/记录/搜索记录"],
         "youtube.subscriptions": ["YouTube 和 YouTube Music/订阅内容/订阅内容"],
         "youtube.comments": ["YouTube 和 YouTube Music/评论/评论"],
         "search.search_history": ["我的活动/Search/我的活动记录", "我的活动/Search/MyActivity", "我的活动/Search/My Activity", "我的活动/搜索/MyActivity", "我的活动/搜索/My Activity"],
