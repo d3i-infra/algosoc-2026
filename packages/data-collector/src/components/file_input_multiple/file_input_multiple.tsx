@@ -12,33 +12,48 @@ import { addFiles } from "./select"
 import { resolvePlaceholder } from "./placeholder"
 import CloseSvg  from "./assets/close.svg"
 import { LoadingNotice } from "../loading_notice/loading_notice"
+import { partitionAccepted } from "../../file_drop/accept"
+import { buildNotices, folderNotice, rejectedNotice } from "../../file_drop/copy"
+import { useFileDrop } from "../../file_drop/use_file_drop"
 
 type Props = PropsUIPromptFileInputMultiple & ReactFactoryContext
 
 export const FileInputMultiple = (props: Props): React.JSX.Element => {
   const [waiting, setWaiting] = React.useState<boolean>(false)
   const [files, setFiles] = React.useState<File[]>([])
-  const [duplicates, setDuplicates] = React.useState<string[]>([])
+  const [notices, setNotices] = React.useState<string[]>([])
   const input = React.useRef<HTMLInputElement>(null)
 
-  const { resolve } = props
-  const { description, note, placeholder, duplicatesNotice, extensions, selectButton, continueButton } = prepareCopy(props)
+  const { resolve, locale } = props
+  const { description, note, placeholder, extensions, selectButton, continueButton } = prepareCopy(props)
 
   function handleClick (): void {
     input.current?.click()
   }
 
   function removeFile(index: number): void {
-    setDuplicates([]);
+    setNotices([]);
     setFiles(prevFiles => prevFiles.filter((_, i) => i !== index));
   };
+
+  // The one way into the selection, for the picker and for a drop alike. The
+  // type check runs for picker selections too: a participant can switch the
+  // operating system's dialog to "All files".
+  function intake (incoming: File[], folders: string[]): void {
+    const { accepted, rejected } = partitionAccepted(incoming, extensions)
+    const { files: merged, duplicates } = addFiles(files, accepted)
+    setFiles(merged)
+    setNotices(buildNotices([
+      [duplicatesNoticeText(), duplicates],
+      [rejectedNotice(), rejected],
+      [folderNotice(), folders]
+    ], locale))
+  }
 
   function handleSelect (event: React.ChangeEvent<HTMLInputElement>): void {
     const selectedFiles = event.target.files
     if (selectedFiles != null && selectedFiles.length > 0) {
-      const { files: merged, duplicates: dupes } = addFiles(files, Array.from(selectedFiles))
-      setFiles(merged)
-      setDuplicates(dupes)
+      intake(Array.from(selectedFiles), [])
     } else {
       console.log('[FileInput] Error selecting file: ' + JSON.stringify(selectedFiles))
     }
@@ -50,6 +65,11 @@ export const FileInputMultiple = (props: Props): React.JSX.Element => {
     // triggering addFiles' duplicate-notice path above.
     event.target.value = ""
   }
+
+  const { active, zoneProps } = useFileDrop(
+    (drop) => intake(drop.files, drop.folders),
+    !waiting
+  )
 
   function handleConfirm (): void {
     if (files !== undefined && !waiting) {
@@ -65,7 +85,11 @@ export const FileInputMultiple = (props: Props): React.JSX.Element => {
           {description}
         </div>
         <div className='mt-8' />
-        <div className='p-6 border-grey4 border-2 rounded'>
+        <div
+          id='drop-zone'
+          {...zoneProps}
+          className={`p-6 border-2 rounded ${active ? 'border-primary bg-primarylight' : 'border-grey4'}`}
+        >
           <input ref={input} id='input' type='file' className='hidden' accept={extensions} onChange={handleSelect} multiple/>
           <div className='flex flex-col sm:flex-row gap-2 sm:gap-4 items-center'>
             {files.length === 0 && (
@@ -79,12 +103,12 @@ export const FileInputMultiple = (props: Props): React.JSX.Element => {
             </div>
           </div>
         </div>
-        {duplicates.length > 0 && (
-          <>
+        {notices.map((notice) => (
+          <React.Fragment key={notice}>
             <div className='mt-2' />
-            <BodySmall text={duplicatesNotice.replace('{names}', duplicates.join(', '))} margin='' />
-          </>
-        )}
+            <BodySmall text={notice} margin='' />
+          </React.Fragment>
+        ))}
         <div>
         {files.map((file, index) => (
             <div key={`${file.name} ${file.size} ${file.lastModified}`} className="w-64 md:w-full px-4">
@@ -121,7 +145,6 @@ interface Copy {
   description: string
   note: string
   placeholder: string
-  duplicatesNotice: string
   extensions: string
   selectButton: string
   continueButton: string
@@ -132,7 +155,6 @@ function prepareCopy ({ description, extensions, example, locale }: Props): Copy
     description: resolveText(description, locale),
     note: resolveText(note(), locale),
     placeholder: resolvePlaceholder(example, locale),
-    duplicatesNotice: resolveText(duplicatesNoticeText(), locale),
     extensions: extensions,
     selectButton: resolveText(selectButtonLabel(), locale),
     continueButton: resolveText(continueButtonLabel(), locale)

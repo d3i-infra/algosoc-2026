@@ -56,11 +56,12 @@ Load the ADR(s) whose filename matches the area you are touching.
 
 ### Data collector
 
-- [0016 — Prefer standard feldspar prompts; custom only when needed](./0016-prefer-standard-feldspar-prompts-custom-only-when-needed.md)
+- [0016 — Prefer standard feldspar prompts; drag-and-drop for file uploads](./0016-prefer-standard-feldspar-prompts-custom-only-when-needed.md)
 - [0031 — Consent-page memory work must never shrink the donated dataset](./0031-consent-page-memory-work-must-never-shrink-the-donated-dataset.md)
 - [0032 — Visualization workers are ephemeral and column-scoped](./0032-visualization-workers-are-ephemeral-and-column-scoped.md)
 - [0033 — Consent-viz donation must not route through DataSubmissionPage's factory data path](./0033-consent-viz-donation-must-not-route-through-datasubmissionpage-s-factory-data-path.md)
 - [0035 — Per-row work over participant tables must not allocate](./0035-per-row-work-over-participant-tables-must-not-allocate.md)
+- [0042 — Refuse a file in the prompt only on a clear type mismatch](./0042-refuse-a-file-in-the-prompt-only-on-a-clear-type-mismatch.md)
 
 ### Performance
 

@@ -166,6 +166,33 @@ class PropsUIPromptFileInputMultiple:
 
 
 @dataclass
+class PropsUIPromptFileInputSingle:
+    """
+    Prompt the user to submit one file, by choosing it or by dragging it onto
+    the prompt. The D3I counterpart of props.PropsUIPromptFileInput.
+
+    Attributes:
+        description (Translatable): Text with an explanation.
+        extensions (str): Accepted mime types, example: "application/zip, text/plain".
+    """
+    description: props.Translatable
+    extensions: str
+
+    def toDict(self):
+        """
+        Convert the object to a dictionary.
+
+        Returns:
+            dict: A dictionary representation of the object.
+        """
+        dict = {}
+        dict["__type__"] = "PropsUIPromptFileInputSingle"
+        dict["description"] = self.description.toDict()
+        dict["extensions"] = self.extensions
+        return dict
+
+
+@dataclass
 class PropsUIQuestionOpen:
     """
     Open-ended question.

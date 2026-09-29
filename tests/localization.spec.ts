@@ -164,7 +164,7 @@ test('unsupported locale ro falls back to English and donates', async ({ page })
 
   await expect(page.getByRole('heading', { name: 'Select your example file' }))
     .toBeVisible({ timeout: BOOT_TIMEOUT });
-  // feldspar's file_input bundle has a 'ro' entry; it must not be reachable.
+  // feldspar's own bundles have a 'ro' entry; none of it must be reachable.
   await expect(page.getByText('Alegeți fișier')).toHaveCount(0);
 
   const fileChooserPromise = page.waitForEvent('filechooser');
