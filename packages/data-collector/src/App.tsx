@@ -2,6 +2,7 @@ import { DataSubmissionPageFactory, ScriptHostComponent } from "@eyra/feldspar";
 import { ConsentFormVizFactory } from "./factories/consent_form_viz";
 import { FileInputFactory } from "./components/file_input/factory"
 import { FileInputMultipleFactory } from "./components/file_input_multiple/factory"
+import { FileInputSingleFactory } from "./components/file_input_single/factory"
 import { ErrorPageFactory } from "./components/error_page/factory"
 import { QuestionnaireFactory } from "./components/questionnaire/factory"
 import { RetryPromptFactory } from "./components/retry_prompt/factory"
@@ -37,6 +38,7 @@ function App() {
                 new ConsentFormVizFactory(),
                 new FileInputFactory(),
                 new FileInputMultipleFactory(),
+                new FileInputSingleFactory(),
                 new ErrorPageFactory(),
                 new QuestionnaireFactory(),
                 new RetryPromptFactory(),
