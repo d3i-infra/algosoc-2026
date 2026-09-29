@@ -1522,8 +1522,8 @@ def comments_to_df(reader: ZipArchiveReader, errors: Counter, validation) -> pd.
             (
                 _item_date(item, errors),
                 _item_get(item, "Comment", "Reactie"),
-                _item_get(item, "Photo", "Foto"),
-                _item_get(item, "Url", "Link", "originalPostUrl", "Original Post Link", "Link naar origineel bericht", "Originele link naar bericht") # "Link naar origineel bericht" verified against a real Dutch TXT export (2026-09); the older guess is kept last.
+                _item_get(item, "Photo", "Foto"),  # "photo" is verified in JSON exports only. No TXT export with a comment photo has been seen, so "Photo" (English TXT) and "Foto" (Dutch TXT) are unverified guesses. TXT exports also carry a separate "Sticker" field, which is deliberately not read.
+                _item_get(item, "Url", "Link", "originalPostUrl", "Original Post Link", "Link naar origineel bericht"),  # Verified on real exports, 2026-09: JSON "originalPostUrl", English TXT "Original Post Link", Dutch TXT "Link naar origineel bericht".
             )
             for item in items
         ]

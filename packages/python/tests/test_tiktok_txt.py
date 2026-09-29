@@ -48,7 +48,7 @@ DUTCH_COMMENT = {
 def test_dutch_comment_post_link_is_read():
     # Real Dutch TXT exports (2026-09) write the post link under this key.
     url = _item_get(DUTCH_COMMENT, "Url", "Link", "originalPostUrl", "Original Post Link",
-                    "Link naar origineel bericht", "Originele link naar bericht")
+                    "Link naar origineel bericht")
     assert url == "https://www.tiktok.com/@x/video/1"
 
 
@@ -75,7 +75,7 @@ def _dutch_txt_zip(comment_text: str) -> io.BytesIO:
     return buf
 
 
-def _comment_urls(comment_text: str) -> list[str]:
+def _comment_frame(comment_text: str):
     buf = _dutch_txt_zip(comment_text)
     validation = validate_zip(DDP_CATEGORIES, buf)
     assert validation.get_status_code_id() == 0
@@ -84,7 +84,11 @@ def _comment_urls(comment_text: str) -> list[str]:
     errors = Counter()
     df = comments_to_df(ZipArchiveReader(buf, validation.archive_members, errors), errors, validation)
     assert not errors
-    return list(df["Url"])
+    return df
+
+
+def _comment_urls(comment_text: str) -> list[str]:
+    return list(_comment_frame(comment_text)["Url"])
 
 
 def test_comments_to_df_fills_url_for_dutch_txt():
@@ -95,9 +99,11 @@ def test_comments_to_df_fills_url_for_dutch_txt():
     assert urls == ["https://www.tiktok.com/@x/video/1"]
 
 
-def test_comments_to_df_still_reads_the_older_dutch_key():
-    urls = _comment_urls(
-        "Datum: 2026-05-02 10:09:50 UTC\nReactie: hoi\n"
-        "Originele link naar bericht: https://www.tiktok.com/@x/video/1\n"
+def test_dutch_comment_sticker_is_not_read_as_the_photo():
+    # TXT exports carry a Sticker field; JSON exports show it is a field of its
+    # own, next to photo and video. Stickers are not part of this study.
+    df = _comment_frame(
+        "Datum: 2026-05-02 10:09:50 UTC\nReactie: hoi\nSticker: https://s/1\n"
+        "Link naar origineel bericht: https://www.tiktok.com/@x/video/1\n"
     )
-    assert urls == ["https://www.tiktok.com/@x/video/1"]
+    assert list(df["Photo"]) == [""]
