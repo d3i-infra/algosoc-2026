@@ -297,7 +297,7 @@ def _is_empty_sentinel(line: str) -> bool:
         "dit gedeelte bevat geen gegevens",
         "er staan geen gegevens in dit gedeelte",
         "je hebt geen informatie over platforms van derden",
-        "You have no data in this section",      
+        "you have no data in this section",
     }
     return line.strip().lower() in _EMPTY_SENTINELS
 
@@ -1523,7 +1523,7 @@ def comments_to_df(reader: ZipArchiveReader, errors: Counter, validation) -> pd.
                 _item_date(item, errors),
                 _item_get(item, "Comment", "Reactie"),
                 _item_get(item, "Photo", "Foto"),
-                _item_get(item, "Url", "Link", "originalPostUrl", "Original Post Link", "Originele link naar bericht") #Dutch translations are a guess for now, as I don't have a Dutch TikTok export with comments to verify against.
+                _item_get(item, "Url", "Link", "originalPostUrl", "Original Post Link", "Link naar origineel bericht", "Originele link naar bericht") # "Link naar origineel bericht" verified against a real Dutch TXT export (2026-09); the older guess is kept last.
             )
             for item in items
         ]
