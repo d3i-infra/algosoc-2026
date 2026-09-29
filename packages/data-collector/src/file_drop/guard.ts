@@ -1,7 +1,9 @@
-// A file dropped beside the drop zone gets the browser's default handling: it
-// opens the file in place of the page, which ends the participant's session.
-// This guard cancels that default for the task app's own document. It cannot
-// reach the host page around the iframe: drag events do not cross documents.
+// A file dropped anywhere except on a drop zone (beside it, or on a page that
+// has none) gets the browser's default handling: it opens the file in place of
+// the page, which ends the participant's session. This guard cancels that
+// default for the task app's own document. It cannot reach the host page
+// around the iframe: drag events do not cross documents. It is installed once,
+// for the whole app, by `App`.
 import { hasFiles } from './drop'
 
 export interface GuardEvent {

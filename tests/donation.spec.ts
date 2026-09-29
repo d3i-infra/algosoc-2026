@@ -161,7 +161,8 @@ test('a file dropped beside the zone does not leave the page', async ({ page }) 
 
   // dispatchEvent returns false when a listener cancelled the event, which is
   // what stops the browser opening the file. This checks that the guard is
-  // installed; what the browser does without it is Task 8's manual check.
+  // installed; what the browser does without the guard can only be checked
+  // by hand, with a real drag.
   const cancelled = await page.evaluate(() => {
     const transfer = new DataTransfer();
     transfer.items.add(new File(['x'], 'notes.pdf', { type: 'application/pdf' }));
@@ -171,4 +172,21 @@ test('a file dropped beside the zone does not leave the page', async ({ page }) 
   expect(cancelled).toBe(true);
 
   await expect(page.getByRole('heading', { name: 'Select your example file' })).toBeVisible();
+});
+
+test('a file dropped on a later page does not leave the page', async ({ page }) => {
+  await setupTestWithFileUpload(page);
+  await expect(page.getByRole('heading', { name: 'Review your data' })).toBeVisible({ timeout: 60000 });
+
+  // The file prompt is gone; the guard must still be there.
+  await expect(page.locator('#drop-zone')).toHaveCount(0);
+  const cancelled = await page.evaluate(() => {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File(['x'], 'notes.pdf', { type: 'application/pdf' }));
+    const drop = new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: transfer });
+    return !document.body.dispatchEvent(drop);
+  });
+  expect(cancelled).toBe(true);
+
+  await expect(page.getByRole('heading', { name: 'Review your data' })).toBeVisible();
 });

@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { DataSubmissionPageFactory, ScriptHostComponent } from "@eyra/feldspar";
 import { ConsentFormVizFactory } from "./factories/consent_form_viz";
 import { FileInputFactory } from "./components/file_input/factory"
@@ -7,6 +8,7 @@ import { ErrorPageFactory } from "./components/error_page/factory"
 import { QuestionnaireFactory } from "./components/questionnaire/factory"
 import { RetryPromptFactory } from "./components/retry_prompt/factory"
 import { normalizeLocale, DEFAULT_UI_LOCALE } from "./locale/policy"
+import { installDropGuard } from "./file_drop/guard"
 
 // DEV-gated query param: the Playwright e2e injection point. Production locale
 // comes only from mono's live-init (LiveBridge), never from the URL.
@@ -22,6 +24,11 @@ const isPreviewBuild = import.meta.env.VITE_STANDALONE === "true"
 const previewLocale = isPreviewBuild ? "nl" : undefined
 
 function App() {
+  // The drop guard lives for the whole app, not only while a file prompt is
+  // mounted: a file dropped on any page (the retry prompt, the consent page,
+  // a questionnaire) must leave the page in place.
+  useEffect(() => installDropGuard(window), []);
+
   return (
     <div className="App">
       <ScriptHostComponent

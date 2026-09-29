@@ -1,9 +1,11 @@
-// Applies a prompt's `accept` string to files that did not come through the
-// file picker. The browser enforces `accept` in the picker only; a drop
-// ignores it. The check is deliberately lenient: refusing a valid export
-// blocks a donation outright, while letting a wrong file through only costs
-// the participant the existing retry prompt. Python stays the authority on
-// what is rejected (the size guard, then zip and DDP validation); this is a courtesy, not a safety boundary.
+// Applies a prompt's `accept` string to every file that enters a prompt,
+// chosen in the picker or dropped. The browser applies `accept` in the picker
+// only as a filter the participant can switch off, and a drop ignores it. The
+// check is deliberately lenient: refusing a valid export blocks a donation
+// outright, while letting a wrong file through only costs the participant the
+// existing retry prompt. Python stays the authority on rejecting an upload
+// (the size guard, then zip and DDP validation); this is a courtesy, not a
+// safety boundary.
 
 interface Known {
   extensions: string[]
@@ -56,10 +58,15 @@ export function parseAccept (accept: string): AcceptRule {
 
 function extensionOf (name: string): string {
   const dot = name.lastIndexOf('.')
-  // A dot at the start (".hidden") or at the end ("archive.") leaves nothing
-  // to judge by, so the name counts as having no extension.
-  if (dot <= 0 || dot === name.length - 1) return ''
-  return name.slice(dot).toLowerCase()
+  // The part after the last dot is an extension only when it is 1 to 10 ASCII
+  // letters or digits; otherwise the name has no extension. So a user name
+  // with a dot ("facebook-john.doe-2026-01-01") has none, and neither has a
+  // name that ends in a dot ("archive."). A name whose only dot is its first
+  // character (".hidden") has none either, whatever follows the dot.
+  if (dot <= 0) return ''
+  const ending = name.slice(dot + 1)
+  if (!/^[A-Za-z0-9]{1,10}$/.test(ending)) return ''
+  return '.' + ending.toLowerCase()
 }
 
 export function isAccepted (file: { name: string, type: string }, rule: AcceptRule): boolean {

@@ -36,6 +36,9 @@ export const FileInputSingle = (props: Props): React.JSX.Element => {
     input.current?.click()
   }
 
+  // The one way to the selected file, for the picker and for a drop alike. The
+  // type check runs for picker selections too: a participant can switch the
+  // operating system's dialog to "All files".
   function intake (incoming: File[], folders: string[]): void {
     const { accepted, rejected } = partitionAccepted(incoming, extensions)
     const { file, extra } = pickSingle(selectedFile, accepted)

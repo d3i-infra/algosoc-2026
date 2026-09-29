@@ -1,6 +1,5 @@
 import * as React from 'react'
 import { DropResult, hasFiles, readDrop } from './drop'
-import { installDropGuard } from './guard'
 
 export interface ZoneProps {
   onDragEnter: (event: React.DragEvent<HTMLElement>) => void
@@ -23,8 +22,6 @@ export function useFileDrop (
   // dragenter and dragleave fire for every child element the pointer crosses,
   // so the zone is "left" only when the count of enters returns to zero.
   const depth = React.useRef<number>(0)
-
-  React.useEffect(() => installDropGuard(window), [])
 
   const zoneProps: ZoneProps = {
     onDragEnter: (event) => {

@@ -96,6 +96,26 @@ describe('isAccepted', () => {
     expect(isAccepted(f('export.2026.zip'), zip)).toBe(true)
     expect(isAccepted(f('export.zip.pdf'), zip)).toBe(false)
   })
+
+  it('counts the part after the last dot as an extension only if it looks like one', () => {
+    // A user name with a dot, in an export that lost its .zip ending.
+    expect(isAccepted(f('facebook-john.doe-2026-01-01'), zip)).toBe(true)
+    expect(isAccepted(f('facebook-john.doe-2026-01-01', 'application/pdf'), zip)).toBe(true)
+    expect(isAccepted(f('export.v2 final'), zip)).toBe(true)
+    expect(isAccepted(f('export.abcdefghijk'), zip)).toBe(true)
+  })
+
+  it('still refuses a name whose ending looks like another extension', () => {
+    expect(isAccepted(f('notes.pdf'), zip)).toBe(false)
+    expect(isAccepted(f('export.zip.crdownload'), zip)).toBe(false)
+    expect(isAccepted(f('export.abcdefghij'), zip)).toBe(false)
+    expect(isAccepted(f('photo.JPEG'), zip)).toBe(false)
+  })
+
+  it('still accepts a zip whose name holds dots before the ending', () => {
+    expect(isAccepted(f('instagram-user.name-2026-01-01.zip'), zip)).toBe(true)
+    expect(isAccepted(f('takeout-20260101T000000Z-001.zip'), zip)).toBe(true)
+  })
 })
 
 describe('partitionAccepted', () => {
