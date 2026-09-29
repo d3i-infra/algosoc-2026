@@ -114,9 +114,10 @@ logger = logging.getLogger(__name__)
 #: trailing fallback — a participant exports fresh, but the old spelling costs nothing
 #: to keep trying. Ordering within a list is current-verified-first, with one
 #: exception: the two YouTube histories list the My Activity file before the YouTube
-#: history file (Erik van Haeringen, 2026-09), and only then the history file, its
-#: current spelling before its older one. The activity file records views and searches
-#: together; each extractor selects its own rows from it by url.
+#: history file, because that is the record the researchers want to show participants
+#: (Erik van Haeringen, 2026-09), and only then the history file, its current spelling
+#: before its older one. The activity file records views and searches together; each
+#: extractor selects its own rows from it by url.
 #:
 #: Byte-exactness is load-bearing, not stylistic: matching is exact-string, so a
 #: diacritic, a casing choice, or an unusual Unicode character in a real folder or
@@ -1091,7 +1092,7 @@ def youtube_watch_history_to_df(reader: ZipArchiveReader, errors: Counter, ddp_l
     if not _validate_activity_shape(d, errors):
         return out
 
-    # The activity file this falls back to records views and searches together, and
+    # The activity file this reads first records views and searches together, and
     # neither format tells them apart by itself, so select on the url. Only dict
     # records qualify — a list entry of some other type (malformed export) is
     # dropped, never raised on, since ``.get`` only ever runs on a dict.
@@ -1191,7 +1192,7 @@ def youtube_search_history_to_df(reader: ZipArchiveReader, errors: Counter, ddp_
     if not _validate_activity_shape(d, errors):
         return out
 
-    # The activity file this falls back to records views and searches together, and
+    # The activity file this reads first records views and searches together, and
     # neither format tells them apart by itself, so select on the url. Only dict
     # records qualify — a list entry of some other type (malformed export) is
     # dropped, never raised on, since ``.get`` only ever runs on a dict.
