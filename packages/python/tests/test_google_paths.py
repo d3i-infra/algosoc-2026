@@ -993,6 +993,141 @@ class TestChromeHistory:
 
         assert df.empty
 
+    def _own(self, rows: int) -> str:
+        return json.dumps({
+            "Browser History": [
+                {"title": f"Own {number}", "url": f"https://example.org/{number}", "time_usec": 1750000000000000}
+                for number in range(rows)
+            ],
+            "Session": [{"tab_node_id": number, "padding": "x" * 500} for number in range(20)],
+        })
+
+    def _activity_html(self, monkeypatch, estimated_rows: float) -> str:
+        """The html activity file, padded and with the two constants set so that its
+        size comes out at exactly ``estimated_rows``: no page head, a thousand bytes
+        a row. Whole numbers, so that a tie is a tie and not a rounding."""
+        monkeypatch.setattr(google, "ACTIVITY_HTML_BOILERPLATE_BYTES", 0)
+        monkeypatch.setattr(google, "CHROME_ACTIVITY_HTML_BYTES_PER_ROW", 1000)
+        return _padded(CHROME_HTML, int(estimated_rows * 1000))
+
+    def test_the_own_file_is_read_when_it_holds_more_rows(self, monkeypatch):
+        reader, errors, ddp_locale = _reader_for({
+            "Takeout/Chrome/History.json": self._own(3),
+            "Takeout/My Activity/Chrome/My Activity.html": self._activity_html(monkeypatch, 2.0),
+        })
+        df = google.chrome_history_to_df(reader, errors, ddp_locale)
+        assert list(df["Title"]) == ["Own 0", "Own 1", "Own 2"]
+
+    def test_the_activity_file_is_read_when_its_estimate_is_higher(self, monkeypatch):
+        reader, errors, ddp_locale = _reader_for({
+            "Takeout/Chrome/History.json": self._own(3),
+            "Takeout/My Activity/Chrome/My Activity.html": self._activity_html(monkeypatch, 5.0),
+        })
+        df = google.chrome_history_to_df(reader, errors, ddp_locale)
+        assert list(df["Title"]) == ["Visited a page"]
+
+    def test_a_tie_keeps_the_own_file(self, monkeypatch):
+        reader, errors, ddp_locale = _reader_for({
+            "Takeout/Chrome/History.json": self._own(3),
+            "Takeout/My Activity/Chrome/My Activity.html": self._activity_html(monkeypatch, 3.0),
+        })
+        df = google.chrome_history_to_df(reader, errors, ddp_locale)
+        assert len(df) == 3
+
+    def test_the_session_section_does_not_count_as_history(self, monkeypatch):
+        """The own file holds no history rows, only open tabs. By its size it would
+        look like a full history."""
+        reader, errors, ddp_locale = _reader_for({
+            "Takeout/Chrome/History.json": self._own(0),
+            "Takeout/My Activity/Chrome/My Activity.html": self._activity_html(monkeypatch, 1.0),
+        })
+        df = google.chrome_history_to_df(reader, errors, ddp_locale)
+        assert list(df["Title"]) == ["Visited a page"]
+
+    def test_an_activity_file_in_json_is_counted_not_weighed(self):
+        """In json the activity file is small enough to parse, so its rows are counted
+        like the own file's. Here it is the smaller file in bytes and holds more
+        rows: the own file's bytes are mostly open tabs."""
+        own = self._own(2)
+        activity = json.dumps(json.loads(CHROME_JSON) * 5)
+        assert len(activity) < len(own)
+        reader, errors, ddp_locale = _reader_for({
+            "Takeout/Chrome/History.json": own,
+            "Takeout/My Activity/Chrome/MyActivity.json": activity,
+        })
+        df = google.chrome_history_to_df(reader, errors, ddp_locale)
+        assert list(df["Title"]) == ["Visited a page"] * 5
+
+    def test_an_activity_file_in_json_with_fewer_rows_is_not_chosen(self):
+        reader, errors, ddp_locale = _reader_for({
+            "Takeout/Chrome/History.json": self._own(3),
+            "Takeout/My Activity/Chrome/MyActivity.json": json.dumps(json.loads(CHROME_JSON) * 2),
+        })
+        df = google.chrome_history_to_df(reader, errors, ddp_locale)
+        assert list(df["Title"]) == ["Own 0", "Own 1", "Own 2"]
+
+    def test_two_json_files_with_equal_rows_keep_the_own_file(self):
+        reader, errors, ddp_locale = _reader_for({
+            "Takeout/Chrome/History.json": self._own(2),
+            "Takeout/My Activity/Chrome/MyActivity.json": json.dumps(json.loads(CHROME_JSON) * 2),
+        })
+        df = google.chrome_history_to_df(reader, errors, ddp_locale)
+        assert list(df["Title"]) == ["Own 0", "Own 1"]
+
+    def test_an_own_file_of_another_shape_counts_as_no_rows(self, monkeypatch):
+        reader, errors, ddp_locale = _reader_for({
+            "Takeout/Chrome/History.json": json.dumps({"Browser History": "not a list"}),
+            "Takeout/My Activity/Chrome/My Activity.html": self._activity_html(monkeypatch, 1.0),
+        })
+        df = google.chrome_history_to_df(reader, errors, ddp_locale)
+        assert list(df["Title"]) == ["Visited a page"]
+
+    def test_an_own_file_of_another_shape_alone_yields_no_rows_and_no_error(self):
+        """With no other source the extractor's own guards decide: a Browser History
+        that is not a list is no history, and not an error."""
+        reader, errors, ddp_locale = _reader_for({
+            "Takeout/Chrome/History.json": json.dumps({"Browser History": "not a list"}),
+        })
+        df = google.chrome_history_to_df(reader, errors, ddp_locale)
+        assert df.empty
+        assert errors == Counter()
+
+    def test_an_own_file_with_only_a_session_section_alone_yields_no_rows_and_no_error(self):
+        reader, errors, ddp_locale = _reader_for({
+            "Takeout/Chrome/History.json": json.dumps({"Session": [{"tab_node_id": 1}]}),
+        })
+        df = google.chrome_history_to_df(reader, errors, ddp_locale)
+        assert df.empty
+        assert errors == Counter()
+
+    def test_the_activity_file_alone_is_read(self, monkeypatch):
+        """One source alone is read without being compared."""
+        reader, errors, ddp_locale = _reader_for({
+            "Takeout/My Activity/Chrome/My Activity.html": self._activity_html(monkeypatch, 1.0),
+        })
+        df = google.chrome_history_to_df(reader, errors, ddp_locale)
+        assert list(df["Title"]) == ["Visited a page"]
+
+    @pytest.mark.parametrize("estimated_rows", [2.0, 3.0])
+    def test_a_losing_html_activity_file_is_not_opened(self, monkeypatch, estimated_rows):
+        """The estimate comes from the zip directory; the file is opened only when it
+        wins, and a tie is not a win."""
+        reader, errors, ddp_locale = _reader_for({
+            "Takeout/Chrome/History.json": self._own(3),
+            "Takeout/My Activity/Chrome/My Activity.html": self._activity_html(monkeypatch, estimated_rows),
+        })
+        opened: list[str] = []
+        real_open_member = reader.open_member
+
+        def spy(filename):
+            opened.append(filename)
+            return real_open_member(filename)
+
+        monkeypatch.setattr(reader, "open_member", spy)
+        df = google.chrome_history_to_df(reader, errors, ddp_locale)
+        assert len(df) == 3
+        assert not [name for name in opened if name.endswith(".html")]
+
 
 def _one_activity_file(extension: str, first: str, second: str) -> str:
     """Joins the records of two activity sources the way one exported file holds

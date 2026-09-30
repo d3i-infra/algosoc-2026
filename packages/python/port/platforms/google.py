@@ -472,6 +472,51 @@ def _youtube_history_paths(reader: ZipArchiveReader, key: str, ddp_locale: str) 
     return table_order
 
 
+#: Mean bytes of one record of ``My Activity/Chrome`` in html format, measured on
+#: 2026-09-29 over the 1064 records of one export, every one of which also stood in
+#: that export's ``Chrome/History.json``. There the same records took 517 bytes each,
+#: so html is 2.1 times json for this product.
+CHROME_ACTIVITY_HTML_BYTES_PER_ROW = 1_094
+
+
+def _read_chrome_history(reader: ZipArchiveReader, errors: Counter, ddp_locale: str):
+    """Reads the Chrome history from the source that holds more rows.
+
+    Chrome's own file is json and is parsed whole, so its rows are counted. Its size
+    would not do: the file also holds the open tabs of every device, a section that
+    was 7% of one export and all of another. The My Activity file is html and can be
+    large, so its rows are estimated from its size, and it is read only when that
+    estimate is higher than the count. A tie keeps the own file, as the order of the
+    table has it.
+
+    A My Activity file in json is small enough to parse, so its rows are counted
+    too, and the two counts are compared."""
+    key = "chrome.history"
+    own_side, activity_side = _split_sources(key, ddp_locale)
+
+    own = _read_activity(reader, errors, key, ddp_locale, paths=own_side)
+    activity = _first_member(reader, key, activity_side)
+    if activity is None:
+        return own
+    if own is None:
+        return _read_activity(reader, errors, key, ddp_locale, paths=activity_side)
+
+    rows = own.get("Browser History") if isinstance(own, dict) else own
+    own_rows = len(rows) if isinstance(rows, list) else 0
+    if activity[1] != "html":
+        counted = _read_activity(reader, errors, key, ddp_locale, paths=activity_side)
+        if isinstance(counted, list) and len(counted) > own_rows:
+            return counted
+        return own
+
+    estimate = _net_bytes(activity[2], "html") / CHROME_ACTIVITY_HTML_BYTES_PER_ROW
+    if estimate > own_rows:
+        chosen = _read_activity(reader, errors, key, ddp_locale, paths=activity_side)
+        if chosen is not None:
+            return chosen
+    return own
+
+
 def missing_products(validation: "GoogleValidation") -> dict[str, props.Translatable]:
     """The products of ``UPLOAD_PRODUCTS`` of which no file was found under the
     product's own top folder, keyed by product, in table order. Empty for a complete
@@ -1687,20 +1732,20 @@ def chrome_history_to_df(reader: ZipArchiveReader, errors: Counter, ddp_locale: 
         }
     """
     out = pd.DataFrame()
-    d = _read_activity(reader, errors, "chrome.history", ddp_locale)
+    d = _read_chrome_history(reader, errors, ddp_locale)
     if not _validate_activity_shape(d, errors, allow_dict=True):
         return out
 
     datapoints = []
     try:
-        if isinstance(d, dict) and "Browser History" in d:
+        if isinstance(d, dict) and isinstance(d.get("Browser History"), list):
             for item in d["Browser History"]:
                 datapoints.append((
                     item.get("title", ""),
                     item.get("url", ""),
                     _convert_usec_to_iso8601(item.get("time_usec", ""), errors)
                 ))
-        else:
+        elif isinstance(d, list):
             for item in d:
                 datapoints.append((
                     item.get("title", ""),
