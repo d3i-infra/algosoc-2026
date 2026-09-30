@@ -95,7 +95,9 @@ logger = logging.getLogger(__name__)
 #: Wiedergabeverlauf.html`` and cannot be confused with a file of the same name in
 #: another folder. Only as many trailing segments as are needed to be unambiguous.
 #:
-#: Each entry lists one or more variants, tried in order. Variants absorb uncertainty:
+#: Each entry lists one or more variants, tried in order — except that for the three keys
+#: that list two sources, which source is tried first is decided as described below.
+#: Variants absorb uncertainty:
 #: put the exact path first and a shorter, more forgiving one after it. Never fall back
 #: to a bare filename that occurs in more than one folder of the archive — that lookup
 #: is ambiguous and resolves to nothing.
@@ -410,12 +412,12 @@ def _split_sources(key: str, ddp_locale: str) -> tuple[list[str], list[str]]:
 
 #: Bytes of an activity file in html format that are not records: the page head and
 #: stylesheet before the first record and the closing tags after the last. Measured
-#: on 2026-09-29 at 141,738 and 20 in exports of 2026-08 made in English; exports in
-#: other languages differ from that by a few bytes, 141,757 to 141,767 in all over
-#: the seven languages held locally. Against records of about a thousand bytes that
-#: spread is a hundredth of one row. Subtracted once per file before sizes are
-#: compared, so that two small files do not outweigh one larger one by their page
-#: heads alone.
+#: on 2026-09-29 and 2026-09-30 on exports of 2026-08 in seven languages, on the My
+#: Activity files and on the YouTube folder's own history files alike: 141,754 to
+#: 141,767 in all, differing by a few bytes with the language of the export. Against
+#: records of about a thousand bytes that spread is a hundredth of one row.
+#: Subtracted once per file before sizes are compared, so that two small files do not
+#: outweigh one larger one by their page heads alone.
 ACTIVITY_HTML_BOILERPLATE_BYTES = 141_758
 
 _YOUTUBE_HISTORY_KEYS = ("youtube.watch_history", "youtube.search_history")

@@ -406,6 +406,17 @@ class TestTableConsistency:
         assert set(google.TAKEOUT_PATHS[locale]) == set(google.KEY_FORMATS)
 
     @pytest.mark.parametrize("locale", list(google.TAKEOUT_PATHS))
+    def test_the_two_youtube_histories_share_their_activity_paths(self, locale):
+        """Each of the two YouTube extractors chooses its source on its own. They choose
+        alike only because both keys list the same My Activity paths and the same
+        formats; a change to one list alone would let views and searches come from
+        different sources."""
+        _own_watch, activity_watch = google._split_sources("youtube.watch_history", locale)
+        _own_search, activity_search = google._split_sources("youtube.search_history", locale)
+        assert activity_watch == activity_search
+        assert google.KEY_FORMATS["youtube.watch_history"] == google.KEY_FORMATS["youtube.search_history"]
+
+    @pytest.mark.parametrize("locale", list(google.TAKEOUT_PATHS))
     def test_paths_are_extension_less(self, locale):
         for paths in google.TAKEOUT_PATHS[locale].values():
             for path in paths:
@@ -651,14 +662,15 @@ def test_the_page_head_of_real_html_files_has_the_measured_size(set_dir):
                 segments = info.filename.split("/")
                 if not info.filename.endswith(".html") or len(segments) != 4:
                     continue
-                if segments[2] not in ("YouTube", "Chrome"):
+                if segments[2] not in ("YouTube", "Chrome") and not segments[1].startswith("YouTube"):
                     continue
                 raw = zf.read(info.filename)
                 if marker not in raw:
                     continue
                 head = raw.index(marker)
                 tail = len(closing) if raw.endswith(closing) else 0
-                assert abs(head + tail - google.ACTIVITY_HTML_BOILERPLATE_BYTES) <= PAGE_HEAD_TOLERANCE_BYTES, info.filename
+                size = head + tail
+                assert abs(size - google.ACTIVITY_HTML_BOILERPLATE_BYTES) <= PAGE_HEAD_TOLERANCE_BYTES, info.filename
                 checked += 1
     if not checked:
         pytest.skip("no html activity file for YouTube or Chrome in this set")
