@@ -966,7 +966,7 @@ class TestDetailsColumn:
 
 class TestChromeHistory:
     """Chrome's own export (``Chrome/History.json``) writes a dict of ``{"Browser
-    History": [...]}`` with microsecond timestamps; the fallback My-Activity file
+    History": [...]}`` with microsecond timestamps; the My Activity file, the other source of the same history,
     writes the ordinary activity-list shape with a ``time`` field like every other
     source. Both must read into the same three columns."""
 
@@ -1014,13 +1014,15 @@ class TestChromeHistory:
             "Session": [{"tab_node_id": number, "padding": "x" * 500} for number in range(20)],
         })
 
-    def _activity_html(self, monkeypatch, estimated_rows: float) -> str:
+    def _activity_html(self, monkeypatch, estimated_rows: float, records: int = 1) -> str:
         """The html activity file, padded and with the two constants set so that its
         size comes out at exactly ``estimated_rows``: no page head, a thousand bytes
-        a row. Whole numbers, so that a tie is a tie and not a rounding."""
+        a row. Whole numbers, so that a tie is a tie and not a rounding. It holds
+        ``records`` records, which is what is counted once it is read."""
         monkeypatch.setattr(google, "ACTIVITY_HTML_BOILERPLATE_BYTES", 0)
         monkeypatch.setattr(google, "CHROME_ACTIVITY_HTML_BYTES_PER_ROW", 1000)
-        return _padded(CHROME_HTML, int(estimated_rows * 1000))
+        content = CHROME_HTML if records == 1 else "<body>" + CHROME_HTML * records + "</body>"
+        return _padded(content, int(estimated_rows * 1000))
 
     def test_the_own_file_is_read_when_it_holds_more_rows(self, monkeypatch):
         reader, errors, ddp_locale = _reader_for({
@@ -1033,10 +1035,30 @@ class TestChromeHistory:
     def test_the_activity_file_is_read_when_its_estimate_is_higher(self, monkeypatch):
         reader, errors, ddp_locale = _reader_for({
             "Takeout/Chrome/History.json": self._own(3),
+            "Takeout/My Activity/Chrome/My Activity.html": self._activity_html(monkeypatch, 5.0, records=5),
+        })
+        df = google.chrome_history_to_df(reader, errors, ddp_locale)
+        assert list(df["Title"]) == ["Visited a page"] * 5
+
+    def test_an_html_activity_file_with_fewer_rows_than_estimated_is_not_chosen(self, monkeypatch):
+        """The estimate rests on the size of an average record. Records with long
+        urls make a file large without making it fuller: by its size this one holds
+        five rows, and it holds one. Once read, its rows are counted, and the own
+        file with three is kept."""
+        reader, errors, ddp_locale = _reader_for({
+            "Takeout/Chrome/History.json": self._own(3),
             "Takeout/My Activity/Chrome/My Activity.html": self._activity_html(monkeypatch, 5.0),
         })
         df = google.chrome_history_to_df(reader, errors, ddp_locale)
-        assert list(df["Title"]) == ["Visited a page"]
+        assert list(df["Title"]) == ["Own 0", "Own 1", "Own 2"]
+
+    def test_an_own_file_of_zero_bytes_yields_to_the_activity_file(self):
+        reader, errors, ddp_locale = _reader_for({
+            "Takeout/Chrome/History.json": "",
+            "Takeout/My Activity/Chrome/MyActivity.json": json.dumps(json.loads(CHROME_JSON) * 2),
+        })
+        df = google.chrome_history_to_df(reader, errors, ddp_locale)
+        assert list(df["Title"]) == ["Visited a page"] * 2
 
     def test_a_tie_keeps_the_own_file(self, monkeypatch):
         reader, errors, ddp_locale = _reader_for({

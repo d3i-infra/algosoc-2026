@@ -478,7 +478,8 @@ def _youtube_history_paths(reader: ZipArchiveReader, key: str, ddp_locale: str) 
 #: Mean bytes of one record of ``My Activity/Chrome`` in html format, measured on
 #: 2026-09-29 over the 1064 records of one export, every one of which also stood in
 #: that export's ``Chrome/History.json``. There the same records took 517 bytes each,
-#: so html is 2.1 times json for this product.
+#: so html is 2.1 times json for this product. The mean is not stable: a second copy
+#: of the same 1064 records measured 954 bytes a record, 13% less.
 CHROME_ACTIVITY_HTML_BYTES_PER_ROW = 1_094
 
 
@@ -489,11 +490,13 @@ def _read_chrome_history(reader: ZipArchiveReader, errors: Counter, ddp_locale: 
     would not do: the file also holds the open tabs of every device, a section that
     was 7% of one export and all of another. The My Activity file is html and can be
     large, so its rows are estimated from its size, and it is read only when that
-    estimate is higher than the count. A tie keeps the own file, as the order of the
-    table has it.
+    estimate is higher than the count. Once read, its rows are counted, and it is used
+    only if it holds more than the own file: the estimate decides whether the read is
+    worth it, the count decides which source is shown. A tie keeps the own file, as
+    the order of the table has it.
 
-    A My Activity file in json is small enough to parse, so its rows are counted
-    too, and the two counts are compared."""
+    A My Activity file in json is small enough to parse, so it is always read and
+    counted, and the two counts are compared."""
     key = "chrome.history"
     own_side, activity_side = _split_sources(key, ddp_locale)
 
@@ -506,17 +509,14 @@ def _read_chrome_history(reader: ZipArchiveReader, errors: Counter, ddp_locale: 
 
     rows = own.get("Browser History") if isinstance(own, dict) else own
     own_rows = len(rows) if isinstance(rows, list) else 0
-    if activity[1] != "html":
-        counted = _read_activity(reader, errors, key, ddp_locale, paths=activity_side)
-        if isinstance(counted, list) and len(counted) > own_rows:
-            return counted
-        return own
+    if activity[1] == "html":
+        estimate = _net_bytes(activity[2], "html") / CHROME_ACTIVITY_HTML_BYTES_PER_ROW
+        if estimate <= own_rows:
+            return own
 
-    estimate = _net_bytes(activity[2], "html") / CHROME_ACTIVITY_HTML_BYTES_PER_ROW
-    if estimate > own_rows:
-        chosen = _read_activity(reader, errors, key, ddp_locale, paths=activity_side)
-        if chosen is not None:
-            return chosen
+    counted = _read_activity(reader, errors, key, ddp_locale, paths=activity_side)
+    if isinstance(counted, list) and len(counted) > own_rows:
+        return counted
     return own
 
 
