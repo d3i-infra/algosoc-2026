@@ -974,6 +974,14 @@ class ZipArchiveReader:
         with self._source.open_member(member_path) as stream:
             yield stream
 
+    def member_size(self, filename: str) -> int | None:
+        """Uncompressed size of the resolved member, or None when the lookup fails.
+        Metadata only. Resolution and error counting mirror the read paths."""
+        member_path = self.resolve_member(filename)
+        if member_path is None:
+            return None
+        return self._source.member_size(member_path)
+
     def _read_member_bytes(self, member_path: str) -> io.BytesIO:
         """Read a specific member via the archive source (single archive or
         ArchiveSet), by exact path."""

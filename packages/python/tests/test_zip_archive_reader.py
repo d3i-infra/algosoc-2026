@@ -258,6 +258,14 @@ class TestArchiveSetSource:
         result = reader.raw("Takeout/archive_browser.html")
         assert result.data.getvalue() == b"ONE"
 
+    def test_member_size_resolves_like_a_read(self):
+        archive_set = ArchiveSet([_named_part("takeout-001.zip", [("Takeout/Chrome/History.json", "[]")])])
+        errors: Counter = Counter()
+        reader = ZipArchiveReader(archive_set, archive_set.members, errors)
+        assert reader.member_size("Chrome/History.json") == 2
+        assert reader.member_size("Chrome/Absent.json") is None
+        assert errors == Counter()
+
 
 class TestMemberGuardIntegration:
     """An oversized member is a counted error, not an exception escaping

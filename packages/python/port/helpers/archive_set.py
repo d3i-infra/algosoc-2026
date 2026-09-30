@@ -26,6 +26,7 @@ class ArchiveSource(Protocol):
     def members(self) -> list[str]: ...
     def read_member(self, path: str) -> bytes: ...
     def open_member(self, path: str) -> AbstractContextManager[IO[bytes]]: ...
+    def member_size(self, path: str) -> int: ...
 
 
 def _guarded_read(zf: zipfile.ZipFile, path: str) -> bytes:
@@ -58,6 +59,12 @@ class SingleArchiveSource:
             with zf.open(path) as stream:
                 yield stream
 
+    def member_size(self, path: str) -> int:
+        """Uncompressed size of `path`, from the zip's central directory. Reads no
+        member bytes."""
+        with zipfile.ZipFile(self._archive, "r") as zf:
+            return zf.getinfo(path).file_size
+
 
 class ArchiveSet:
     """N uploaded parts presented as one archive. Raises zipfile.BadZipFile if
@@ -88,6 +95,7 @@ class ArchiveSet:
         )
         self.duplicates: Counter = Counter()
         self._owner: dict[str, int] = {}
+        self._sizes: dict[str, int] = {}
         members: list[str] = []
         for index, part in enumerate(self._parts):
             seen_in_part: set[str] = set()
@@ -101,6 +109,7 @@ class ArchiveSet:
                         self.duplicates["DuplicateMemberAcrossParts"] += 1
                         continue
                     self._owner[path] = index
+                    self._sizes[path] = zf.getinfo(path).file_size
                     members.append(path)
         self.members = sorted(members)
 
@@ -128,3 +137,10 @@ class ArchiveSet:
         with zipfile.ZipFile(part, "r") as zf:
             with zf.open(path) as stream:
                 yield stream
+
+    def member_size(self, path: str) -> int:
+        """Uncompressed size of `path` in its owning part, from the zip's central
+        directory, recorded when the inventory was built. Reads no member bytes. For
+        a path declared twice in one part this is the last entry's size, the entry
+        `read_member` returns."""
+        return self._sizes[path]

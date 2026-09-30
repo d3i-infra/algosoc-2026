@@ -14,9 +14,11 @@ import io
 import json
 import zipfile
 from collections import Counter
+from pathlib import Path
 
 import pytest
 
+import extractor_integration_helpers as eih
 import port.api.props as props
 from port.helpers.archive_set import ArchiveSet
 from port.helpers.extraction_helpers import ZipArchiveReader
@@ -404,10 +406,47 @@ class TestTableConsistency:
         assert set(google.TAKEOUT_PATHS[locale]) == set(google.KEY_FORMATS)
 
     @pytest.mark.parametrize("locale", list(google.TAKEOUT_PATHS))
+    def test_the_two_youtube_histories_share_their_activity_paths(self, locale):
+        """Each of the two YouTube extractors chooses its source on its own. They choose
+        alike only because both keys list the same My Activity paths and the same
+        formats; a change to one list alone would let views and searches come from
+        different sources."""
+        _own_watch, activity_watch = google._split_sources("youtube.watch_history", locale)
+        _own_search, activity_search = google._split_sources("youtube.search_history", locale)
+        assert activity_watch == activity_search
+        assert google.KEY_FORMATS["youtube.watch_history"] == google.KEY_FORMATS["youtube.search_history"]
+
+    @pytest.mark.parametrize("locale", list(google.TAKEOUT_PATHS))
     def test_paths_are_extension_less(self, locale):
         for paths in google.TAKEOUT_PATHS[locale].values():
             for path in paths:
                 assert not path.rsplit("/", 1)[-1].count(".")
+
+    @pytest.mark.parametrize("locale", list(google.TAKEOUT_PATHS))
+    def test_every_product_key_has_a_path_in_its_own_folder(self, locale):
+        """Presence and the choice between sources both ask which paths of a key lie
+        under the product's own top folder. That must hold for every key of every
+        product, whatever the order of the list."""
+        for product, (keys, _label) in google.UPLOAD_PRODUCTS.items():
+            for key in keys:
+                own_side, _activity_side = google._split_sources(key, locale)
+                assert own_side, f"{locale}/{key}: no path under the own folder of {product}"
+
+    @pytest.mark.parametrize("locale", list(google.TAKEOUT_PATHS))
+    def test_own_folders_do_not_overlap_the_activity_folder(self, locale):
+        """A path of the two YouTube histories or of the Chrome history is either
+        under the product's own folder or under the My Activity folder, and the My
+        Activity folder is the one the four activity-only keys live in."""
+        activity_folders = {
+            path.split("/")[0]
+            for key in google.UPLOAD_PRODUCTS["my_activity"][0]
+            for path in google.TAKEOUT_PATHS[locale][key]
+        }
+        for key in ("youtube.watch_history", "youtube.search_history", "chrome.history"):
+            own_side, activity_side = google._split_sources(key, locale)
+            assert activity_side, f"{locale}/{key}: no My Activity path"
+            assert {path.split("/")[0] for path in activity_side} <= activity_folders
+            assert not {path.split("/")[0] for path in own_side} & activity_folders
 
 
 # ---------------------------------------------------------------------------
@@ -449,6 +488,192 @@ class TestActivityFile:
 
         assert len(watched) == 1
         assert len(searched) == 1
+
+
+def _watched(count: int, tag: str) -> str:
+    return json.dumps([
+        {
+            "title": f"Watched {tag} {number}",
+            "titleUrl": f"https://www.youtube.com/watch?v={tag}{number}",
+            "time": "2026-06-15T20:30:41Z",
+        }
+        for number in range(count)
+    ])
+
+
+def _searched(count: int, tag: str) -> str:
+    return json.dumps([
+        {
+            "title": f"Searched for {tag} {number}",
+            "titleUrl": f"https://www.youtube.com/results?search_query={tag}{number}",
+            "time": "2026-06-15T20:30:41Z",
+        }
+        for number in range(count)
+    ])
+
+
+def _padded(content: str, total: int) -> str:
+    """``content`` followed by an html comment, ``total`` bytes in all."""
+    filler = total - len(content.encode()) - len("<!---->")
+    assert filler >= 0
+    return content + "<!--" + "x" * filler + "-->"
+
+
+ACTIVITY = "Takeout/My Activity/YouTube/MyActivity"
+OWN_WATCH = "Takeout/YouTube and YouTube Music/history/watch-history"
+OWN_SEARCH = "Takeout/YouTube and YouTube Music/history/search-history"
+
+
+class TestYoutubeSourceChoice:
+    """The two YouTube histories exist twice in a complete upload: in the My Activity
+    file and in the YouTube folder's own two files. One of the two is read, the one
+    that holds more, judged for both tables together so that views and searches come
+    from the same source."""
+
+    def test_the_own_files_are_read_when_they_hold_more(self):
+        reader, errors, ddp_locale = _reader_for({
+            f"{ACTIVITY}.json": _watched(1, "activity"),
+            f"{OWN_WATCH}.json": _watched(3, "own"),
+            f"{OWN_SEARCH}.json": _searched(1, "own"),
+        })
+        watched = google.youtube_watch_history_to_df(reader, errors, ddp_locale)
+        assert list(watched["Title"]) == ["Watched own 0", "Watched own 1", "Watched own 2"]
+
+    def test_the_activity_file_is_read_when_it_holds_more(self):
+        reader, errors, ddp_locale = _reader_for({
+            f"{ACTIVITY}.json": _watched(5, "activity"),
+            f"{OWN_WATCH}.json": _watched(1, "own"),
+        })
+        watched = google.youtube_watch_history_to_df(reader, errors, ddp_locale)
+        assert len(watched) == 5
+        assert watched.iloc[0]["Title"] == "Watched activity 0"
+
+    def test_watch_and_search_are_added_together(self):
+        """The watch file alone is smaller than the activity file; with the search
+        file it is larger. Both tables then come from the own files."""
+        reader, errors, ddp_locale = _reader_for({
+            f"{ACTIVITY}.json": _watched(3, "activity"),
+            f"{OWN_WATCH}.json": _watched(2, "own"),
+            f"{OWN_SEARCH}.json": _searched(2, "own"),
+        })
+        watched = google.youtube_watch_history_to_df(reader, errors, ddp_locale)
+        searched = google.youtube_search_history_to_df(reader, errors, ddp_locale)
+        assert list(watched["Title"]) == ["Watched own 0", "Watched own 1"]
+        assert list(searched["Title"]) == ["Searched for own 0", "Searched for own 1"]
+
+    def test_a_tie_keeps_the_order_of_the_table(self):
+        activity, own = _watched(2, "aaa"), _watched(2, "bbb")
+        assert len(activity) == len(own)
+        reader, errors, ddp_locale = _reader_for({
+            f"{ACTIVITY}.json": activity,
+            f"{OWN_WATCH}.json": own,
+        })
+        watched = google.youtube_watch_history_to_df(reader, errors, ddp_locale)
+        assert watched.iloc[0]["Title"] == "Watched aaa 0"
+
+    def test_different_formats_keep_the_order_of_the_table(self, monkeypatch):
+        """Size says nothing across formats: html takes about twice the bytes of json
+        for the same record. The own file here is far the larger one even without its
+        page head, so a comparison of sizes would pick it."""
+        monkeypatch.setattr(google, "ACTIVITY_HTML_BOILERPLATE_BYTES", 0)
+        activity = _watched(1, "activity")
+        own = _padded(WATCH_HTML, 5000)
+        assert len(own.encode()) > len(activity.encode())
+        reader, errors, ddp_locale = _reader_for({
+            f"{ACTIVITY}.json": activity,
+            f"{OWN_WATCH}.html": own,
+        })
+        watched = google.youtube_watch_history_to_df(reader, errors, ddp_locale)
+        assert list(watched["Title"]) == ["Watched activity 0"]
+
+    def test_the_page_head_is_subtracted_once_per_html_file(self, monkeypatch):
+        """Two own files carry two page heads. Without subtracting them the own side
+        would win on bytes (1200 against 1000) while holding less (600 against 700)."""
+        monkeypatch.setattr(google, "ACTIVITY_HTML_BOILERPLATE_BYTES", 300)
+        reader, errors, ddp_locale = _reader_for({
+            f"{ACTIVITY}.html": _padded(WATCH_HTML.replace("A video", "From activity"), 1000),
+            f"{OWN_WATCH}.html": _padded(WATCH_HTML, 600),
+            f"{OWN_SEARCH}.html": _padded(SEARCH_HTML, 600),
+        })
+        watched = google.youtube_watch_history_to_df(reader, errors, ddp_locale)
+        assert list(watched["Title"]) == ["Watched From activity"]
+
+    def test_a_file_smaller_than_the_page_head_counts_as_nothing(self):
+        assert google._net_bytes(10, "html") == 0
+        assert google._net_bytes(google.ACTIVITY_HTML_BOILERPLATE_BYTES + 5, "html") == 5
+        assert google._net_bytes(10, "json") == 10
+
+    def test_a_table_the_chosen_source_lacks_comes_from_the_other(self):
+        """The own side wins on its search file and has no watch file, as in an
+        account with the watch history switched off. The views in the activity file
+        must still reach the table."""
+        reader, errors, ddp_locale = _reader_for({
+            f"{ACTIVITY}.json": _watched(1, "activity"),
+            f"{OWN_SEARCH}.json": _searched(9, "own"),
+        })
+        watched = google.youtube_watch_history_to_df(reader, errors, ddp_locale)
+        searched = google.youtube_search_history_to_df(reader, errors, ddp_locale)
+        assert list(watched["Title"]) == ["Watched activity 0"]
+        assert len(searched) == 9
+
+    def test_one_source_alone_is_read_as_before(self):
+        reader, errors, ddp_locale = _reader_for({f"{OWN_WATCH}.json": _watched(2, "own")})
+        assert len(google.youtube_watch_history_to_df(reader, errors, ddp_locale)) == 2
+        reader, errors, ddp_locale = _reader_for({f"{ACTIVITY}.json": _watched(2, "activity")})
+        assert len(google.youtube_watch_history_to_df(reader, errors, ddp_locale)) == 2
+
+    def test_an_unknown_locale_yields_an_empty_table(self):
+        reader, errors, _ddp_locale = _reader_for({f"{OWN_WATCH}.json": _watched(2, "own")})
+        assert google._youtube_history_paths(reader, "youtube.watch_history", "xx") == []
+        assert google.youtube_watch_history_to_df(reader, errors, "xx").empty
+
+    def test_the_choice_reads_no_member(self, monkeypatch):
+        reader, _errors, ddp_locale = _reader_for({
+            f"{ACTIVITY}.json": _watched(1, "activity"),
+            f"{OWN_WATCH}.json": _watched(3, "own"),
+        })
+
+        def no_read(*args, **kwargs):
+            raise AssertionError("the choice must rest on sizes alone")
+
+        monkeypatch.setattr(zipfile.ZipFile, "read", no_read)
+        monkeypatch.setattr(zipfile.ZipFile, "open", no_read)
+        paths = google._youtube_history_paths(reader, "youtube.watch_history", ddp_locale)
+        assert paths[0] == "YouTube and YouTube Music/history/watch-history"
+
+
+PAGE_HEAD_TOLERANCE_BYTES = 100
+LOCAL_ACTIVITY_SETS = sorted((Path(__file__).parent / "ddp").glob("google_set_*"))
+
+
+@pytest.mark.skipif(not LOCAL_ACTIVITY_SETS, reason="no local scrubbed Takeout sets under tests/ddp")
+@pytest.mark.parametrize("set_dir", LOCAL_ACTIVITY_SETS, ids=lambda d: d.name)
+def test_the_page_head_of_real_html_files_has_the_measured_size(set_dir):
+    """The page head and the closing tags of an html activity file, measured on real
+    exports (git-ignored, ADR-0014). Reads structure only. The head differs by a few
+    bytes between export languages; a difference of more than a tenth of a record
+    means Google changed the page, and the constant needs measuring again."""
+    marker = b'<div class="outer-cell'
+    closing = b"</div></body></html>"
+    checked = 0
+    for zip_path in sorted(set_dir.glob("*.zip")):
+        with zipfile.ZipFile(zip_path) as zf:
+            for info in zf.infolist():
+                segments = info.filename.split("/")
+                if not info.filename.endswith(".html") or len(segments) != 4:
+                    continue
+                if segments[2] not in ("YouTube", "Chrome") and not segments[1].startswith("YouTube"):
+                    continue
+                raw = zf.read(info.filename)
+                if marker not in raw:
+                    continue
+                head = raw.index(marker)
+                tail = len(closing) if raw.endswith(closing) else 0
+                size = head + tail
+                assert abs(size - google.ACTIVITY_HTML_BOILERPLATE_BYTES) <= PAGE_HEAD_TOLERANCE_BYTES, info.filename
+                checked += 1
+    if not checked:
+        pytest.skip("no html activity file for YouTube or Chrome in this set")
 
 
 class TestWatchHistoryRow:
@@ -741,7 +966,7 @@ class TestDetailsColumn:
 
 class TestChromeHistory:
     """Chrome's own export (``Chrome/History.json``) writes a dict of ``{"Browser
-    History": [...]}`` with microsecond timestamps; the fallback My-Activity file
+    History": [...]}`` with microsecond timestamps; the My Activity file, the other source of the same history,
     writes the ordinary activity-list shape with a ``time`` field like every other
     source. Both must read into the same three columns."""
 
@@ -779,6 +1004,163 @@ class TestChromeHistory:
         df = google.chrome_history_to_df(reader, errors, ddp_locale)
 
         assert df.empty
+
+    def _own(self, rows: int) -> str:
+        return json.dumps({
+            "Browser History": [
+                {"title": f"Own {number}", "url": f"https://example.org/{number}", "time_usec": 1750000000000000}
+                for number in range(rows)
+            ],
+            "Session": [{"tab_node_id": number, "padding": "x" * 500} for number in range(20)],
+        })
+
+    def _activity_html(self, monkeypatch, estimated_rows: float, records: int = 1) -> str:
+        """The html activity file, padded and with the two constants set so that its
+        size comes out at exactly ``estimated_rows``: no page head, a thousand bytes
+        a row. Whole numbers, so that a tie is a tie and not a rounding. It holds
+        ``records`` records, which is what is counted once it is read."""
+        monkeypatch.setattr(google, "ACTIVITY_HTML_BOILERPLATE_BYTES", 0)
+        monkeypatch.setattr(google, "CHROME_ACTIVITY_HTML_BYTES_PER_ROW", 1000)
+        content = CHROME_HTML if records == 1 else "<body>" + CHROME_HTML * records + "</body>"
+        return _padded(content, int(estimated_rows * 1000))
+
+    def test_the_own_file_is_read_when_it_holds_more_rows(self, monkeypatch):
+        reader, errors, ddp_locale = _reader_for({
+            "Takeout/Chrome/History.json": self._own(3),
+            "Takeout/My Activity/Chrome/My Activity.html": self._activity_html(monkeypatch, 2.0),
+        })
+        df = google.chrome_history_to_df(reader, errors, ddp_locale)
+        assert list(df["Title"]) == ["Own 0", "Own 1", "Own 2"]
+
+    def test_the_activity_file_is_read_when_its_estimate_is_higher(self, monkeypatch):
+        reader, errors, ddp_locale = _reader_for({
+            "Takeout/Chrome/History.json": self._own(3),
+            "Takeout/My Activity/Chrome/My Activity.html": self._activity_html(monkeypatch, 5.0, records=5),
+        })
+        df = google.chrome_history_to_df(reader, errors, ddp_locale)
+        assert list(df["Title"]) == ["Visited a page"] * 5
+
+    def test_an_html_activity_file_with_fewer_rows_than_estimated_is_not_chosen(self, monkeypatch):
+        """The estimate rests on the size of an average record. Records with long
+        urls make a file large without making it fuller: by its size this one holds
+        five rows, and it holds one. Once read, its rows are counted, and the own
+        file with three is kept."""
+        reader, errors, ddp_locale = _reader_for({
+            "Takeout/Chrome/History.json": self._own(3),
+            "Takeout/My Activity/Chrome/My Activity.html": self._activity_html(monkeypatch, 5.0),
+        })
+        df = google.chrome_history_to_df(reader, errors, ddp_locale)
+        assert list(df["Title"]) == ["Own 0", "Own 1", "Own 2"]
+
+    def test_an_own_file_of_zero_bytes_yields_to_the_activity_file(self):
+        reader, errors, ddp_locale = _reader_for({
+            "Takeout/Chrome/History.json": "",
+            "Takeout/My Activity/Chrome/MyActivity.json": json.dumps(json.loads(CHROME_JSON) * 2),
+        })
+        df = google.chrome_history_to_df(reader, errors, ddp_locale)
+        assert list(df["Title"]) == ["Visited a page"] * 2
+
+    def test_a_tie_keeps_the_own_file(self, monkeypatch):
+        reader, errors, ddp_locale = _reader_for({
+            "Takeout/Chrome/History.json": self._own(3),
+            "Takeout/My Activity/Chrome/My Activity.html": self._activity_html(monkeypatch, 3.0),
+        })
+        df = google.chrome_history_to_df(reader, errors, ddp_locale)
+        assert len(df) == 3
+
+    def test_the_session_section_does_not_count_as_history(self, monkeypatch):
+        """The own file holds no history rows, only open tabs. By its size it would
+        look like a full history."""
+        reader, errors, ddp_locale = _reader_for({
+            "Takeout/Chrome/History.json": self._own(0),
+            "Takeout/My Activity/Chrome/My Activity.html": self._activity_html(monkeypatch, 1.0),
+        })
+        df = google.chrome_history_to_df(reader, errors, ddp_locale)
+        assert list(df["Title"]) == ["Visited a page"]
+
+    def test_an_activity_file_in_json_is_counted_not_weighed(self):
+        """In json the activity file is small enough to parse, so its rows are counted
+        like the own file's. Here it is the smaller file in bytes and holds more
+        rows: the own file's bytes are mostly open tabs."""
+        own = self._own(2)
+        activity = json.dumps(json.loads(CHROME_JSON) * 5)
+        assert len(activity) < len(own)
+        reader, errors, ddp_locale = _reader_for({
+            "Takeout/Chrome/History.json": own,
+            "Takeout/My Activity/Chrome/MyActivity.json": activity,
+        })
+        df = google.chrome_history_to_df(reader, errors, ddp_locale)
+        assert list(df["Title"]) == ["Visited a page"] * 5
+
+    def test_an_activity_file_in_json_with_fewer_rows_is_not_chosen(self):
+        reader, errors, ddp_locale = _reader_for({
+            "Takeout/Chrome/History.json": self._own(3),
+            "Takeout/My Activity/Chrome/MyActivity.json": json.dumps(json.loads(CHROME_JSON) * 2),
+        })
+        df = google.chrome_history_to_df(reader, errors, ddp_locale)
+        assert list(df["Title"]) == ["Own 0", "Own 1", "Own 2"]
+
+    def test_two_json_files_with_equal_rows_keep_the_own_file(self):
+        reader, errors, ddp_locale = _reader_for({
+            "Takeout/Chrome/History.json": self._own(2),
+            "Takeout/My Activity/Chrome/MyActivity.json": json.dumps(json.loads(CHROME_JSON) * 2),
+        })
+        df = google.chrome_history_to_df(reader, errors, ddp_locale)
+        assert list(df["Title"]) == ["Own 0", "Own 1"]
+
+    def test_an_own_file_of_another_shape_counts_as_no_rows(self, monkeypatch):
+        reader, errors, ddp_locale = _reader_for({
+            "Takeout/Chrome/History.json": json.dumps({"Browser History": "not a list"}),
+            "Takeout/My Activity/Chrome/My Activity.html": self._activity_html(monkeypatch, 1.0),
+        })
+        df = google.chrome_history_to_df(reader, errors, ddp_locale)
+        assert list(df["Title"]) == ["Visited a page"]
+
+    def test_an_own_file_of_another_shape_alone_yields_no_rows_and_no_error(self):
+        """With no other source the extractor's own guards decide: a Browser History
+        that is not a list is no history, and not an error."""
+        reader, errors, ddp_locale = _reader_for({
+            "Takeout/Chrome/History.json": json.dumps({"Browser History": "not a list"}),
+        })
+        df = google.chrome_history_to_df(reader, errors, ddp_locale)
+        assert df.empty
+        assert errors == Counter()
+
+    def test_an_own_file_with_only_a_session_section_alone_yields_no_rows_and_no_error(self):
+        reader, errors, ddp_locale = _reader_for({
+            "Takeout/Chrome/History.json": json.dumps({"Session": [{"tab_node_id": 1}]}),
+        })
+        df = google.chrome_history_to_df(reader, errors, ddp_locale)
+        assert df.empty
+        assert errors == Counter()
+
+    def test_the_activity_file_alone_is_read(self, monkeypatch):
+        """One source alone is read without being compared."""
+        reader, errors, ddp_locale = _reader_for({
+            "Takeout/My Activity/Chrome/My Activity.html": self._activity_html(monkeypatch, 1.0),
+        })
+        df = google.chrome_history_to_df(reader, errors, ddp_locale)
+        assert list(df["Title"]) == ["Visited a page"]
+
+    @pytest.mark.parametrize("estimated_rows", [2.0, 3.0])
+    def test_a_losing_html_activity_file_is_not_opened(self, monkeypatch, estimated_rows):
+        """The estimate comes from the zip directory; the file is opened only when it
+        wins, and a tie is not a win."""
+        reader, errors, ddp_locale = _reader_for({
+            "Takeout/Chrome/History.json": self._own(3),
+            "Takeout/My Activity/Chrome/My Activity.html": self._activity_html(monkeypatch, estimated_rows),
+        })
+        opened: list[str] = []
+        real_open_member = reader.open_member
+
+        def spy(filename):
+            opened.append(filename)
+            return real_open_member(filename)
+
+        monkeypatch.setattr(reader, "open_member", spy)
+        df = google.chrome_history_to_df(reader, errors, ddp_locale)
+        assert len(df) == 3
+        assert not [name for name in opened if name.endswith(".html")]
 
 
 def _one_activity_file(extension: str, first: str, second: str) -> str:
@@ -1094,3 +1476,125 @@ class TestYoutubeCommentsMalformed:
 
         assert result.errors["ValueError"] == 1
         assert "youtube_subscriptions" in [t.id for t in result.tables]
+
+
+# ---------------------------------------------------------------------------
+# Task 4 (story 4): the product table and missing_products().
+# ---------------------------------------------------------------------------
+
+
+class TestUploadProducts:
+    """Real exports (9 sets, 2026-09-03) group Chrome + My Activity in one zip
+    and YouTube in another, so a single selected zip always lacks a product.
+    Presence is judged on the union member list, never on the part count."""
+
+    def _youtube_part(self):
+        return _named_part("takeout-2-001.zip", {
+            "Takeout/YouTube and YouTube Music/history/watch-history.json": WATCH_JSON,
+        })
+
+    def _activity_part(self):
+        return _named_part("takeout-1-001.zip", {
+            "Takeout/Chrome/History.json": "[]",
+            "Takeout/My Activity/Search/MyActivity.json": "[]",
+        })
+
+    def test_presence_does_not_depend_on_the_order_of_the_path_list(self, monkeypatch):
+        """The order of a path list says which file is tried first, nothing about
+        which folder a product owns. Reversing every list must not change what is
+        reported missing."""
+        reversed_paths = {
+            locale: {key: list(reversed(paths)) for key, paths in keys.items()}
+            for locale, keys in google.TAKEOUT_PATHS.items()
+        }
+        part = _named_part("takeout-1-001.zip", {
+            "Takeout/Chrome/History.json": "[]",
+            "Takeout/My Activity/Search/MyActivity.json": "[]",
+            "Takeout/My Activity/YouTube/MyActivity.json": WATCH_JSON,
+        })
+        before = list(google.missing_products(google.validate_ddp(ArchiveSet([part]))))
+        monkeypatch.setattr(google, "TAKEOUT_PATHS", reversed_paths)
+        part.seek(0)
+        after = list(google.missing_products(google.validate_ddp(ArchiveSet([part]))))
+        assert before == after == ["youtube"]
+
+    def test_chrome_activity_alone_does_not_count_as_chrome(self):
+        """``My Activity/Chrome`` sits in the My Activity folder. Without Chrome's own
+        folder the participant did not export Chrome."""
+        part = _named_part("takeout-1-001.zip", {
+            "Takeout/My Activity/Chrome/MyActivity.json": CHROME_JSON,
+            "Takeout/My Activity/Search/MyActivity.json": "[]",
+            "Takeout/YouTube and YouTube Music/history/watch-history.json": WATCH_JSON,
+        })
+        validation = google.validate_ddp(ArchiveSet([part]))
+        assert list(google.missing_products(validation)) == ["chrome"]
+
+    def test_complete_set_is_missing_nothing(self):
+        validation = google.validate_ddp(ArchiveSet([self._youtube_part(), self._activity_part()]))
+        assert google.missing_products(validation) == {}
+
+    def test_youtube_only_is_missing_activity_and_chrome(self):
+        validation = google.validate_ddp(ArchiveSet([self._youtube_part()]))
+        missing = google.missing_products(validation)
+        assert list(missing) == ["my_activity", "chrome"]
+        assert missing["chrome"].translations["en"] == "Chrome"
+
+    def test_activity_group_only_is_missing_youtube(self):
+        validation = google.validate_ddp(ArchiveSet([self._activity_part()]))
+        assert list(google.missing_products(validation)) == ["youtube"]
+
+    def test_the_youtube_activity_file_does_not_count_as_youtube(self):
+        """A real Chrome + My Activity zip carries ``My Activity/YouTube/My Activity``,
+        the My Activity record of YouTube — but that file lives under the My
+        Activity folder, not YouTube's own, so it must not let a Chrome-only upload
+        pass as complete for YouTube while it is still missing subscriptions,
+        comments and the YouTube folder's own histories."""
+        part = _named_part("takeout-1-001.zip", {
+            "Takeout/Chrome/History.json": "[]",
+            "Takeout/My Activity/Search/MyActivity.json": "[]",
+            "Takeout/My Activity/YouTube/MyActivity.json": WATCH_JSON,
+        })
+        validation = google.validate_ddp(ArchiveSet([part]))
+        assert list(google.missing_products(validation)) == ["youtube"]
+
+    def test_labels_cover_the_ui_locales(self):
+        for _keys, label in google.UPLOAD_PRODUCTS.values():
+            assert set(label.translations) >= {"en", "nl", "de", "it", "es"}
+
+
+LOCAL_SETS = sorted((Path(__file__).parent / "ddp").glob("google_set_*"))
+
+
+@pytest.mark.skipif(not LOCAL_SETS, reason="no local scrubbed Takeout sets under tests/ddp")
+@pytest.mark.parametrize("set_dir", LOCAL_SETS, ids=lambda d: d.name)
+class TestUploadProductsOnLocalSets:
+    """Metadata-only pass over the scrubbed real sets (git-ignored, ADR-0014):
+    the complete union lacks nothing, and every data part on its own lacks
+    something, because real exports never mix the YouTube group with the
+    Chrome + My Activity group. Guards the product table against drift in
+    ``TAKEOUT_PATHS`` that validation alone would not notice."""
+
+    def _parts(self, set_dir):
+        # A plain file object lacks the `.size` ArchiveSet's canonical
+        # (name, size) part ordering wants (archive_set.py), so local sets
+        # are wrapped the way test_extractor_integration_google.py does.
+        return [eih.DiskPart(part) for part in sorted(set_dir.glob("*.zip"))]
+
+    def test_complete_union_lacks_nothing(self, set_dir):
+        parts = self._parts(set_dir)
+        try:
+            assert google.missing_products(google.validate_ddp(ArchiveSet(parts))) == {}
+        finally:
+            for part in parts:
+                part.close()
+
+    def test_each_data_part_alone_lacks_a_product(self, set_dir):
+        for path in sorted(set_dir.glob("*.zip")):
+            part = eih.DiskPart(path)
+            try:
+                validation = google.validate_ddp(ArchiveSet([part]))
+                if validation.get_status_code_id() != 0:
+                    continue  # manifest-only part: no source, already rejected
+                assert google.missing_products(validation), path.name
+            finally:
+                part.close()

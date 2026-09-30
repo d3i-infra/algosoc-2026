@@ -109,7 +109,9 @@ def test_error_flow_skip_renders_incomplete_page_then_exits_nonzero():
     assert incomplete_page["page"]["__type__"] == "PropsUIPageDataSubmission"
     assert "could not be completed" in json.dumps(incomplete_page)
 
-    exit_command = wrapper.send(_Payload("PayloadTrue"))
+    # The notice component resolves itself on mount, so this simulates that
+    # self-resolution (PayloadVoid), not a participant click.
+    exit_command = wrapper.send(_Payload("PayloadVoid"))
     assert exit_command["__type__"] == "CommandSystemExit"
     assert exit_command["code"] != 0
 
@@ -132,7 +134,9 @@ def test_error_flow_report_donates_then_renders_incomplete_page_then_exits_nonze
     assert incomplete_page["__type__"] == "CommandUIRender"
     assert "could not be completed" in json.dumps(incomplete_page)
 
-    exit_command = wrapper.send(_Payload("PayloadTrue"))
+    # The notice component resolves itself on mount, so this simulates that
+    # self-resolution (PayloadVoid), not a participant click.
+    exit_command = wrapper.send(_Payload("PayloadVoid"))
     assert exit_command["__type__"] == "CommandSystemExit"
     assert exit_command["code"] != 0
 
@@ -144,7 +148,9 @@ def test_error_exit_info_contains_no_exception_text():
 
     wrapper.send(None)  # error page
     wrapper.send(_Payload("PayloadFalse"))  # task-incomplete page
-    exit_command = wrapper.send(_Payload("PayloadTrue"))
+    # The notice component resolves itself on mount, so this simulates that
+    # self-resolution (PayloadVoid), not a participant click.
+    exit_command = wrapper.send(_Payload("PayloadVoid"))
 
     assert exit_command["__type__"] == "CommandSystemExit"
     assert "test explosion" not in exit_command["info"]
@@ -171,7 +177,9 @@ def test_task_incomplete_renders_page_then_exits_with_flow_code():
     assert incomplete_page["page"]["__type__"] == "PropsUIPageDataSubmission"
     assert "could not be completed" in json.dumps(incomplete_page)
 
-    exit_command = wrapper.send(_Payload("PayloadTrue"))
+    # The notice component resolves itself on mount (PayloadVoid) — the exit
+    # fires with no participant action.
+    exit_command = wrapper.send(_Payload("PayloadVoid"))
     assert exit_command["__type__"] == "CommandSystemExit"
     assert exit_command["code"] == 2
     assert exit_command["info"] == "Participant abandoned the task"
@@ -190,7 +198,8 @@ def test_task_incomplete_exit_uses_each_reasons_own_literal():
 
         wrapper = ScriptWrapper(incomplete(), platform="X")
         wrapper.send(None)  # task-incomplete page
-        exit_command = wrapper.send(_Payload("PayloadTrue"))
+        # The notice component resolves itself on mount (PayloadVoid).
+        exit_command = wrapper.send(_Payload("PayloadVoid"))
         assert exit_command["__type__"] == "CommandSystemExit"
         assert exit_command["code"] == code
         assert exit_command["code"] != 0
@@ -293,7 +302,8 @@ class TestMultiFileIncompleteExits:
         assert incomplete_page["__type__"] == "CommandUIRender"
         assert "could not be completed" in json.dumps(incomplete_page)
 
-        exit_command = wrapper.send(_Payload("PayloadTrue"))
+        # The notice component resolves itself on mount (PayloadVoid).
+        exit_command = wrapper.send(_Payload("PayloadVoid"))
         assert exit_command["__type__"] == "CommandSystemExit"
         assert exit_command["code"] == 4
         assert exit_command["info"] == "Upload rejected"
@@ -328,6 +338,7 @@ class TestMultiFileIncompleteExits:
         assert incomplete_page["__type__"] == "CommandUIRender"
         assert "could not be completed" in json.dumps(incomplete_page)
 
-        exit_command = wrapper.send(_Payload("PayloadTrue"))
+        # The notice component resolves itself on mount (PayloadVoid).
+        exit_command = wrapper.send(_Payload("PayloadVoid"))
         assert exit_command["__type__"] == "CommandSystemExit"
         assert exit_command["code"] == 4

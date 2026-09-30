@@ -69,6 +69,7 @@ import pandas as pd
 from dateutil import parser
 from lxml import etree
 
+import port.api.props as props
 from port.api.d3i_props import ExtractionResult
 from port.helpers.archive_set import ArchiveSet
 import port.helpers.extraction_helpers as eh
@@ -94,7 +95,9 @@ logger = logging.getLogger(__name__)
 #: Wiedergabeverlauf.html`` and cannot be confused with a file of the same name in
 #: another folder. Only as many trailing segments as are needed to be unambiguous.
 #:
-#: Each entry lists one or more variants, tried in order. Variants absorb uncertainty:
+#: Each entry lists one or more variants, tried in order — except that for the three keys
+#: that list two sources, which source is tried first is decided as described below.
+#: Variants absorb uncertainty:
 #: put the exact path first and a shorter, more forgiving one after it. Never fall back
 #: to a bare filename that occurs in more than one folder of the archive — that lookup
 #: is ambiguous and resolves to nothing.
@@ -112,11 +115,15 @@ logger = logging.getLogger(__name__)
 #: hyphenation choices had simply changed since that archive was taken. Rather than
 #: discard the older spellings, every corrected entry keeps its older-era variant as a
 #: trailing fallback — a participant exports fresh, but the old spelling costs nothing
-#: to keep trying. Ordering within a list is current-verified-first, with one
-#: exception: the two YouTube histories list the My Activity file before the YouTube
-#: history file, because that is the record the researchers want to show participants
-#: (Erik van Haeringen, 2026-09), and only then the history file, its current spelling
-#: before its older one. The activity file records views and searches together; each
+#: to keep trying. Ordering within a list is current-verified-first within one
+#: source. The two YouTube histories and the Chrome history list two different
+#: sources, the My Activity file and the product's own file. Which of the two is read
+#: is decided by how much each holds (``_youtube_history_paths``,
+#: ``_read_chrome_history``); the order here settles only a tie, and the case of two
+#: formats. The two YouTube histories list the My Activity file first (Erik van
+#: Haeringen, 2026-09), because it is fuller in some places. In others the own files
+#: are, which is why size decides and not the order. The My Activity file records
+#: views and searches together, and likes, dislikes and shares besides; each
 #: extractor selects its own rows from it by url.
 #:
 #: Byte-exactness is load-bearing, not stylistic: matching is exact-string, so a
@@ -334,6 +341,202 @@ KEY_FORMATS: dict[str, list[str]] = {
     "news.followed_topics": ["txt"],
     "news.magazines": ["txt"],
 }
+
+#: The three Takeout products this study asks for, each with the path-table keys
+#: that prove it is present and the label the soft-confirm page shows. Order is
+#: the order the page lists them in. ``google_news.history`` is deliberately
+#: absent: the study no longer asks for it.
+#:
+#: A key counts toward its product only when it matched under that product's own
+#: top folder — see ``_in_own_folder``. Real exports (confirmed against
+#: all local fixture sets, 2026-09-03) ship Chrome and My Activity in one zip group
+#: and YouTube in another, but the Chrome + My Activity group still carries
+#: ``My Activity/YouTube/My Activity.html``, the My Activity record of YouTube. The
+#: two YouTube histories can be read from it, but it says nothing about whether the
+#: participant selected the YouTube zip. Counting a key as "found" wherever
+#: any of its variants matched would let a Chrome-only upload pass as complete for
+#: YouTube from that one file alone, while it is still missing
+#: subscriptions, comments and the YouTube folder's own watch/search histories.
+UPLOAD_PRODUCTS: dict[str, tuple[tuple[str, ...], props.Translatable]] = {
+    "youtube": (
+        ("youtube.watch_history", "youtube.search_history", "youtube.subscriptions", "youtube.comments"),
+        props.Translatable({
+            "en": "YouTube and YouTube Music", "nl": "YouTube en YouTube Music",
+            "de": "YouTube und YouTube Music", "it": "YouTube e YouTube Music",
+            "es": "YouTube y YouTube Music",
+        }),
+    ),
+    "my_activity": (
+        ("search.search_history", "video_search.history", "ads.history", "discover.history"),
+        props.Translatable({
+            "en": "My Activity", "nl": "Mijn activiteit", "de": "Meine Aktivitäten",
+            "it": "Le mie attività", "es": "Mi actividad",
+        }),
+    ),
+    "chrome": (
+        ("chrome.history",),
+        props.Translatable({"en": "Chrome", "nl": "Chrome", "de": "Chrome", "it": "Chrome", "es": "Chrome"}),
+    ),
+}
+
+
+#: What the name of each product's own top folder starts with, in every locale
+#: Takeout exports in. The folder is translated ("YouTube en YouTube Music",
+#: "YouTube 和 YouTube Music") but keeps this start. ``None`` for My Activity, whose
+#: keys have no other folder to be found in.
+OWN_FOLDER_PREFIX: dict[str, str | None] = {
+    "youtube": "YouTube",
+    "my_activity": None,
+    "chrome": "Chrome",
+}
+
+
+def _in_own_folder(key: str, path: str) -> bool:
+    """True when ``path`` lies under the own top folder of the product ``key`` belongs
+    to, rather than under the My Activity folder. A key of no product is its own."""
+    for product, (keys, _label) in UPLOAD_PRODUCTS.items():
+        if key in keys:
+            prefix = OWN_FOLDER_PREFIX[product]
+            return prefix is None or path.split("/")[0].startswith(prefix)
+    return True
+
+
+def _split_sources(key: str, ddp_locale: str) -> tuple[list[str], list[str]]:
+    """The paths of ``key`` for this locale as two sources, each in table order: those
+    under the product's own folder, and those under the My Activity folder."""
+    paths = TAKEOUT_PATHS.get(ddp_locale, {}).get(key, [])
+    own_side = [path for path in paths if _in_own_folder(key, path)]
+    activity_side = [path for path in paths if not _in_own_folder(key, path)]
+    return own_side, activity_side
+
+
+#: Bytes of an activity file in html format that are not records: the page head and
+#: stylesheet before the first record and the closing tags after the last. Measured
+#: on 2026-09-29 and 2026-09-30 on exports of 2026-08 in seven languages, on the My
+#: Activity files and on the YouTube folder's own history files alike: 141,754 to
+#: 141,767 in all, differing by a few bytes with the language of the export. Against
+#: records of about a thousand bytes that spread is a hundredth of one row.
+#: Subtracted once per file before sizes are compared, so that two small files do not
+#: outweigh one larger one by their page heads alone.
+ACTIVITY_HTML_BOILERPLATE_BYTES = 141_758
+
+_YOUTUBE_HISTORY_KEYS = ("youtube.watch_history", "youtube.search_history")
+
+
+def _first_member(reader: ZipArchiveReader, key: str, paths: list[str]) -> tuple[str, str, int] | None:
+    """The first file present among ``paths``, in the order ``_read_activity`` tries
+    them, as its path, its extension and its uncompressed size. Sizes come from the
+    zip directory; no member is read."""
+    for path in paths:
+        for extension in KEY_FORMATS[key]:
+            size = reader.member_size(f"{path}.{extension}")
+            if size is not None:
+                return path, extension, size
+    return None
+
+
+def _net_bytes(size: int, extension: str) -> int:
+    """The bytes of a file that are records: for html, the size without the page
+    head, and nothing when the file is smaller than that."""
+    if extension == "html":
+        return max(0, size - ACTIVITY_HTML_BOILERPLATE_BYTES)
+    return size
+
+
+def _youtube_history_paths(reader: ZipArchiveReader, key: str, ddp_locale: str) -> list[str]:
+    """The paths of one of the two YouTube histories, those of the source to read
+    first.
+
+    A complete upload holds the histories twice: in the My Activity file, which
+    records views and searches together, and in the YouTube folder's own two files.
+    The source that holds more is read, judged for both tables together so that both
+    come from the same source. The other source stays in the list behind it, so a
+    table the chosen source has no file for still comes out.
+
+    The order of the table decides when the sizes are equal, and when the two sources
+    were exported in different formats, where size says nothing."""
+    table_order = list(TAKEOUT_PATHS.get(ddp_locale, {}).get(key, []))
+    own_side, activity_side = _split_sources(key, ddp_locale)
+
+    activity = _first_member(reader, key, activity_side)
+    own = [
+        member
+        for history in _YOUTUBE_HISTORY_KEYS
+        if (member := _first_member(reader, history, _split_sources(history, ddp_locale)[0])) is not None
+    ]
+    if activity is None or not own:
+        return table_order
+    if any(extension != activity[1] for _path, extension, _size in own):
+        return table_order
+
+    own_bytes = sum(_net_bytes(size, extension) for _path, extension, size in own)
+    if own_bytes > _net_bytes(activity[2], activity[1]):
+        return own_side + activity_side
+    return table_order
+
+
+#: Mean bytes of one record of ``My Activity/Chrome`` in html format, measured on
+#: 2026-09-29 over the 1064 records of one export, every one of which also stood in
+#: that export's ``Chrome/History.json``. There the same records took 517 bytes each,
+#: so html is 2.1 times json for this product. The mean is not stable: a second copy
+#: of the same 1064 records measured 954 bytes a record, 13% less.
+CHROME_ACTIVITY_HTML_BYTES_PER_ROW = 1_094
+
+
+def _read_chrome_history(reader: ZipArchiveReader, errors: Counter, ddp_locale: str):
+    """Reads the Chrome history from the source that holds more rows.
+
+    Chrome's own file is json and is parsed whole, so its rows are counted. Its size
+    would not do: the file also holds the open tabs of every device, a section that
+    was 7% of one export and all of another. The My Activity file is html and can be
+    large, so its rows are estimated from its size, and it is read only when that
+    estimate is higher than the count. Once read, its rows are counted, and it is used
+    only if it holds more than the own file: the estimate decides whether the read is
+    worth it, the count decides which source is shown. A tie keeps the own file, as
+    the order of the table has it.
+
+    A My Activity file in json is small enough to parse, so it is always read and
+    counted, and the two counts are compared."""
+    key = "chrome.history"
+    own_side, activity_side = _split_sources(key, ddp_locale)
+
+    own = _read_activity(reader, errors, key, ddp_locale, paths=own_side)
+    activity = _first_member(reader, key, activity_side)
+    if activity is None:
+        return own
+    if own is None:
+        return _read_activity(reader, errors, key, ddp_locale, paths=activity_side)
+
+    rows = own.get("Browser History") if isinstance(own, dict) else own
+    own_rows = len(rows) if isinstance(rows, list) else 0
+    if activity[1] == "html":
+        estimate = _net_bytes(activity[2], "html") / CHROME_ACTIVITY_HTML_BYTES_PER_ROW
+        if estimate <= own_rows:
+            return own
+
+    counted = _read_activity(reader, errors, key, ddp_locale, paths=activity_side)
+    if isinstance(counted, list) and len(counted) > own_rows:
+        return counted
+    return own
+
+
+def missing_products(validation: "GoogleValidation") -> dict[str, props.Translatable]:
+    """The products of ``UPLOAD_PRODUCTS`` of which no file was found under the
+    product's own top folder, keyed by product, in table order. Empty for a complete
+    upload. Judged on the union member list, so a product split across several zip
+    parts counts once any part carrying it was selected. A file under the My Activity
+    folder never counts for YouTube or Chrome: it sits in the other zip, and says
+    nothing about whether the participant selected this product's."""
+    suffixes = _path_suffixes(validation.archive_members)
+    return {
+        product: label
+        for product, (keys, label) in UPLOAD_PRODUCTS.items()
+        if not any(
+            path in suffixes
+            for key in keys
+            for path in _split_sources(key, validation.ddp_locale)[0]
+        )
+    }
 
 
 @dataclass
@@ -939,13 +1142,19 @@ def _normalise_json_times(records, errors: Counter | None = None):
     return records
 
 
-def _read_activity(reader: ZipArchiveReader, errors: Counter, key: str, ddp_locale: str):
+def _read_activity(
+    reader: ZipArchiveReader, errors: Counter, key: str, ddp_locale: str,
+    paths: list[str] | None = None,
+):
     """Reads an activity source in whichever format it was exported: JSON parsed
     whole (small), HTML parsed as a stream so a heavy user's multi-hundred-MB
     file never sits in memory at once (open_member — ADR-0040). Returns the
     parsed records, or None when the archive-set holds no file for this key.
-    Parse failures are counted, never raised."""
-    for path in TAKEOUT_PATHS.get(ddp_locale, {}).get(key, []):
+    Parse failures are counted, never raised. ``paths`` narrows or reorders the paths
+    tried; by default the table's list for ``key``."""
+    if paths is None:
+        paths = TAKEOUT_PATHS.get(ddp_locale, {}).get(key, [])
+    for path in paths:
         for extension in KEY_FORMATS[key]:
             if extension == "json":
                 result = reader.json(f"{path}.json")
@@ -1088,11 +1297,12 @@ def youtube_watch_history_to_df(reader: ZipArchiveReader, errors: Counter, ddp_l
         }
     """
     out = pd.DataFrame()
-    d = _read_activity(reader, errors, "youtube.watch_history", ddp_locale)
+    paths = _youtube_history_paths(reader, "youtube.watch_history", ddp_locale)
+    d = _read_activity(reader, errors, "youtube.watch_history", ddp_locale, paths=paths)
     if not _validate_activity_shape(d, errors):
         return out
 
-    # The activity file this reads first records views and searches together, and
+    # The activity file records views and searches together, and
     # neither format tells them apart by itself, so select on the url. Only dict
     # records qualify — a list entry of some other type (malformed export) is
     # dropped, never raised on, since ``.get`` only ever runs on a dict.
@@ -1188,11 +1398,12 @@ def youtube_search_history_to_df(reader: ZipArchiveReader, errors: Counter, ddp_
         }
     """
     out = pd.DataFrame()
-    d = _read_activity(reader, errors, "youtube.search_history", ddp_locale)
+    paths = _youtube_history_paths(reader, "youtube.search_history", ddp_locale)
+    d = _read_activity(reader, errors, "youtube.search_history", ddp_locale, paths=paths)
     if not _validate_activity_shape(d, errors):
         return out
 
-    # The activity file this reads first records views and searches together, and
+    # The activity file records views and searches together, and
     # neither format tells them apart by itself, so select on the url. Only dict
     # records qualify — a list entry of some other type (malformed export) is
     # dropped, never raised on, since ``.get`` only ever runs on a dict.
@@ -1524,20 +1735,20 @@ def chrome_history_to_df(reader: ZipArchiveReader, errors: Counter, ddp_locale: 
         }
     """
     out = pd.DataFrame()
-    d = _read_activity(reader, errors, "chrome.history", ddp_locale)
+    d = _read_chrome_history(reader, errors, ddp_locale)
     if not _validate_activity_shape(d, errors, allow_dict=True):
         return out
 
     datapoints = []
     try:
-        if isinstance(d, dict) and "Browser History" in d:
+        if isinstance(d, dict) and isinstance(d.get("Browser History"), list):
             for item in d["Browser History"]:
                 datapoints.append((
                     item.get("title", ""),
                     item.get("url", ""),
                     _convert_usec_to_iso8601(item.get("time_usec", ""), errors)
                 ))
-        else:
+        elif isinstance(d, list):
             for item in d:
                 datapoints.append((
                     item.get("title", ""),
@@ -2129,6 +2340,9 @@ class GoogleFlow(FlowBuilder):
 
     def extract_data(self, archive_set: ArchiveSet, validation: GoogleValidation) -> ExtractionResult:
         return extraction(archive_set, validation)
+
+    def missing_products(self, validation: GoogleValidation) -> dict[str, props.Translatable]:
+        return missing_products(validation)
 
 
 def process(session_id):

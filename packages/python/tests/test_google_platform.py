@@ -239,10 +239,25 @@ def test_flow_donation_key_is_session_google():
     cmd = _advance_past_logs(gen, _payload_files({
         "Takeout/YouTube and YouTube Music/history/watch-history.json": WATCH_JSON,
     }))
+    # A YouTube-only upload is missing my_activity and chrome, so the soft
+    # confirm appears before consent — continue with these files as is.
+    assert isinstance(cmd, CommandUIRender)
+    assert isinstance(cmd.page.body, props.PropsUIPromptConfirm)
+
+    cmd = _advance_past_logs(gen, _make_payload("PayloadFalse"))
     assert isinstance(cmd, CommandUIRender)  # consent form
 
     cmd = _advance_past_logs(gen, _make_payload("PayloadJSON", value="{}"))
     assert cmd.key == "sess-1-google"
+
+
+def test_google_flow_reports_missing_products_from_validation():
+    validation = google.GoogleValidation(
+        status_code=0, ddp_locale="en",
+        archive_members=["Takeout/YouTube and YouTube Music/history/watch-history.json"],
+    )
+    missing = google.GoogleFlow("s").missing_products(validation)
+    assert list(missing) == ["my_activity", "chrome"]
 
 
 def test_single_zip_through_multi_file_flow_completes(monkeypatch):
@@ -252,6 +267,11 @@ def test_single_zip_through_multi_file_flow_completes(monkeypatch):
     validate, extract, and reach the consent stage exactly like a
     multi-part set — ArchiveSet unions N>=1 parts identically (ADR-0040), so
     nothing in validate_file/extract_data branches on part count.
+
+    This YouTube-only fixture is also missing products, so the soft-confirm
+    step's PropsUIPromptConfirm appears first (see the body below) — it,
+    too, is reachable only once validate_file has already succeeded, so
+    reaching either it or the final consent form proves validation passed.
 
     Runs the real validate_file/extract_data (no monkeypatching of those,
     unlike test_flow_donation_key_is_session_google above, which stubs
@@ -278,6 +298,12 @@ def test_single_zip_through_multi_file_flow_completes(monkeypatch):
     cmd = _advance_past_logs(gen, _payload_files({
         "Takeout/YouTube and YouTube Music/history/watch-history.json": WATCH_JSON,
     }))
+
+    # A YouTube-only upload is missing my_activity and chrome, so the soft
+    # confirm appears before consent — continue with these files as is.
+    assert isinstance(cmd, CommandUIRender)
+    assert isinstance(cmd.page.body, props.PropsUIPromptConfirm)
+    cmd = _advance_past_logs(gen, _make_payload("PayloadFalse"))
 
     # Reaching the consent-form body (as opposed to a retry/error/no-data
     # page, which all render props.PropsUIPromptConfirm instead) proves

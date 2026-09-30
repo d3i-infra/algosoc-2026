@@ -138,3 +138,47 @@ class TestOpenMember:
             archive_set.read_member("big.txt")
         with archive_set.open_member("big.txt") as stream:
             assert stream.read() == b"12345678"
+
+
+class TestMemberSize:
+    def test_archive_set_reports_the_uncompressed_size(self):
+        part = _part("takeout-001.zip", [("Takeout/a.txt", "x" * 1234)])
+        assert ArchiveSet([part]).member_size("Takeout/a.txt") == 1234
+
+    def test_archive_set_reports_the_owning_part(self):
+        first = _part("takeout-001.zip", [("Takeout/a.txt", "x" * 10)])
+        second = _part("takeout-002.zip", [("Takeout/a.txt", "x" * 99)])
+        assert ArchiveSet([second, first]).member_size("Takeout/a.txt") == 10
+
+    def test_single_archive_source_reports_the_uncompressed_size(self):
+        part = _part("one.zip", [("a.txt", "x" * 77)])
+        assert SingleArchiveSource(part, ["a.txt"]).member_size("a.txt") == 77
+
+    @pytest.mark.filterwarnings("ignore:Duplicate name")
+    def test_within_part_duplicate_reports_the_last_entry(self):
+        part = _part("a.zip", [("a.txt", "x" * 5), ("a.txt", "x" * 9)])
+        archive_set = ArchiveSet([part])
+        assert archive_set.member_size("a.txt") == len(archive_set.read_member("a.txt"))
+
+    def test_size_is_read_without_reading_the_member(self, monkeypatch):
+        """Sizes are recorded while the set is built, so reading is forbidden from
+        before the construction on."""
+        part = _part("takeout-001.zip", [("Takeout/a.txt", "x" * 50)])
+
+        def no_read(*args, **kwargs):
+            raise AssertionError("member_size must not read member bytes")
+
+        monkeypatch.setattr(zipfile.ZipFile, "read", no_read)
+        monkeypatch.setattr(zipfile.ZipFile, "open", no_read)
+        archive_set = ArchiveSet([part])
+        assert archive_set.member_size("Takeout/a.txt") == 50
+
+    def test_single_archive_source_reads_the_size_without_reading_the_member(self, monkeypatch):
+        part = _part("one.zip", [("a.txt", "x" * 50)])
+
+        def no_read(*args, **kwargs):
+            raise AssertionError("member_size must not read member bytes")
+
+        monkeypatch.setattr(zipfile.ZipFile, "read", no_read)
+        monkeypatch.setattr(zipfile.ZipFile, "open", no_read)
+        assert SingleArchiveSource(part, ["a.txt"]).member_size("a.txt") == 50

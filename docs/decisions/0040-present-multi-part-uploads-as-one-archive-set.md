@@ -52,6 +52,10 @@ satisfy via `SingleArchiveSource`.
   Deliberately unguarded — the size guard bounds full-buffer decompression, while
   a streaming consumer bounds its own memory. `read_member`'s contract is
   unchanged; `open_member` is a second way in, never a replacement.
+- `ArchiveSource` also carries `member_size(path)`, an additive, metadata-only
+  accessor: the member's uncompressed size from the zip's central directory,
+  never a member read. For a path declared twice within one part it reports the
+  last entry, the one `read_member` returns.
 - Process parts sequentially: one part's `zipfile.ZipFile` context closes before
   the next opens; there is no concurrent multi-part extraction.
 - `PayloadFiles` is `ArchiveSet`'s only transport; `ArchiveSource`,

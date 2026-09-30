@@ -1,4 +1,5 @@
 import logging
+from typing import cast
 
 import port.api.d3i_props as d3i_props
 import port.api.props as props
@@ -17,6 +18,7 @@ def render_page(
         | d3i_props.PropsUIPromptFileInputMultiple
         | d3i_props.PropsUIPromptQuestionnaire
         | props.PropsUIPromptConfirm
+        | d3i_props.PropsUIPromptNotice
     ),
 ) -> CommandUIRender:
     """
@@ -46,50 +48,102 @@ def render_page(
 
 def generate_retry_prompt(platform_name: str, multiple: bool = False) -> props.PropsUIPromptConfirm:
     """
-    Generate a multilingual retry prompt for file processing errors.
+    Generate a multi-locale retry prompt for file processing errors.
 
     Returns a PropsUIPromptConfirm with "Try again" (ok → PayloadTrue) and
-    "Continue" (cancel → PayloadFalse) buttons. Using standard feldspar
-    PropsUIPromptConfirm instead of d3i PropsUIPromptRetry which only
-    renders a single button. See ADR-0016 for the broader
-    decision on custom vs standard prompt components.
+    "Stop for now" (cancel → PayloadFalse) buttons. Declining ends the
+    attempt as participant-abandoned (nonzero exit, task stays pending at
+    the host — see ADR-0039), so the copy must never suggest the file will
+    be accepted. Using standard feldspar PropsUIPromptConfirm instead of
+    d3i PropsUIPromptRetry which only renders a single button. See
+    ADR-0016 for the broader decision on custom vs standard prompt
+    components.
 
     Args:
         platform_name: The name of the platform whose file could not be processed.
         multiple (bool, optional): Whether the upload this retries is a
             multi-file (PayloadFiles) selection — mirrors generate_file_prompt's
-            `multiple` flag. When True, the retry copy tells the participant to
-            select ALL the files again, since a multi-part upload (e.g. Google
-            Takeout) must be resubmitted as a complete set, not one part.
+            `multiple` flag. When True, the retry copy points the participant
+            at different files rather than "a different file": this page
+            fires on a validation failure, i.e. no recognised source found in
+            the selection, or a corrupt part. A selection that validates but
+            is missing a product is instead handled by the soft-confirm step
+            (FlowBuilder.missing_products, see generate_incomplete_upload_prompt),
+            which is why this copy no longer asks for ALL the files again.
             Defaults to False.
     """
 
     if multiple:
         text = props.Translatable(
             {
-                "en": f"Unfortunately, we cannot process your {platform_name} files. Continue, if you are sure that you selected the right files. Try again to select ALL the files.",
-                "nl": f"Helaas, kunnen we uw {platform_name} bestanden niet verwerken. Weet u zeker dat u de juiste bestanden heeft gekozen? Ga dan verder. Probeer opnieuw om ALLE bestanden te selecteren.",
-                "de": f"Leider können wir Ihre {platform_name}-Dateien nicht verarbeiten. Fahren Sie fort, wenn Sie sicher sind, dass Sie die richtigen Dateien ausgewählt haben. Versuchen Sie es erneut, um ALLE Dateien auszuwählen.",
-                "it": f"Purtroppo non possiamo elaborare i suoi file di {platform_name}. Continui se è sicuro di aver selezionato i file giusti. Riprovi per selezionare TUTTI i file.",
-                "es": f"Lamentablemente, no podemos procesar sus archivos de {platform_name}. Continúe si está seguro de que ha seleccionado los archivos correctos. Intente de nuevo para seleccionar TODOS los archivos.",
+                "en": f"Unfortunately, we cannot process your {platform_name} file(s) because they don't look like we would expect. Try again with different files, or stop for now. You can return to this task later.",
+                "nl": f"Helaas kunnen we uw {platform_name}-bestand(en) niet verwerken, omdat ze er niet uitzien zoals we verwachten. Probeer het opnieuw met andere bestanden, of stop voorlopig. U kunt later naar deze taak terugkeren.",
+                "de": f"Leider können wir Ihre {platform_name}-Datei(en) nicht verarbeiten, weil sie nicht so aussehen, wie wir es erwarten. Versuchen Sie es erneut mit anderen Dateien, oder beenden Sie vorerst. Sie können später zu dieser Aufgabe zurückkehren.",
+                "it": f"Purtroppo non possiamo elaborare i suoi file di {platform_name}, perché non corrispondono a quanto ci aspettiamo. Riprovi con altri file, oppure interrompa per ora. Potrà tornare a questa attività più tardi.",
+                "es": f"Lamentablemente, no podemos procesar sus archivos de {platform_name}, porque no tienen el aspecto que esperamos. Inténtelo de nuevo con otros archivos, o deténgase por ahora. Podrá volver a esta tarea más tarde.",
             }
         )
     else:
         text = props.Translatable(
             {
-                "en": f"Unfortunately, we cannot process your {platform_name} file. Continue, if you are sure that you selected the right file. Try again to select a different file.",
-                "nl": f"Helaas, kunnen we uw {platform_name} bestand niet verwerken. Weet u zeker dat u het juiste bestand heeft gekozen? Ga dan verder. Probeer opnieuw als u een ander bestand wilt kiezen.",
-                "de": f"Leider können wir Ihre {platform_name}-Datei nicht verarbeiten. Fahren Sie fort, wenn Sie sicher sind, dass Sie die richtige Datei ausgewählt haben. Versuchen Sie es erneut, um eine andere Datei auszuwählen.",
-                "it": f"Purtroppo non possiamo elaborare il suo file di {platform_name}. Continui se è sicuro di aver selezionato il file giusto. Riprovi per selezionare un file diverso.",
-                "es": f"Lamentablemente, no podemos procesar su archivo de {platform_name}. Continúe si está seguro de que ha seleccionado el archivo correcto. Intente de nuevo para seleccionar un archivo diferente.",
+                "en": f"Unfortunately, we cannot process your {platform_name} file. It does not appear to be the file we expected. Try again to select a different file, or stop for now — you can return to this task later.",
+                "nl": f"Helaas kunnen we uw {platform_name}-bestand niet verwerken. Het lijkt niet het bestand te zijn dat we verwachtten. Probeer opnieuw om een ander bestand te kiezen, of stop voorlopig — u kunt later naar deze taak terugkeren.",
+                "de": f"Leider können wir Ihre {platform_name}-Datei nicht verarbeiten. Es scheint nicht die erwartete Datei zu sein. Versuchen Sie es erneut, um eine andere Datei auszuwählen, oder beenden Sie vorerst — Sie können später zu dieser Aufgabe zurückkehren.",
+                "it": f"Purtroppo non possiamo elaborare il suo file di {platform_name}. Non sembra essere il file previsto. Riprovi per selezionare un file diverso, oppure interrompa per ora — potrà tornare a questa attività più tardi.",
+                "es": f"Lamentablemente, no podemos procesar su archivo de {platform_name}. No parece ser el archivo esperado. Intente de nuevo para seleccionar un archivo diferente, o deténgase por ahora — podrá volver a esta tarea más tarde.",
             }
         )
     ok = props.Translatable(
         {"en": "Try again", "nl": "Probeer opnieuw", "de": "Erneut versuchen", "it": "Riprova", "es": "Intentar de nuevo"}
     )
     cancel = props.Translatable(
-        {"en": "Continue", "nl": "Doorgaan", "de": "Weiter", "it": "Continua", "es": "Continuar"}
+        {"en": "Stop for now", "nl": "Voorlopig stoppen", "de": "Vorerst beenden", "it": "Interrompi per ora", "es": "Detener por ahora"}
     )
+    return props.PropsUIPromptConfirm(text, ok, cancel)
+
+
+def generate_incomplete_upload_prompt(
+    missing: dict[str, props.Translatable]
+) -> props.PropsUIPromptConfirm:
+    """Soft confirmation shown after validation when the upload lacks one or
+    more of the products the study asks for (FlowBuilder.missing_products).
+
+    The copy is deliberately Google-Takeout-specific ("a Google Takeout
+    usually has multiple parts", "the Google Takeout page") rather than
+    taking a platform name: only GoogleFlow overrides missing_products()
+    and reports anything today (the FlowBuilder default returns `{}`, which
+    never reaches this prompt) — generalize the copy if a second platform
+    ever needs this soft confirmation.
+
+    ok → PayloadTrue, "No, I have more files": back to the file prompt, the
+    participant has more parts to add. cancel → PayloadFalse, "Yes, I am
+    sure": proceed with the files as they are. Neither path ends the task;
+    a participant who genuinely exported fewer products goes on to consent.
+    """
+    templates = {
+        "en": "We don't see the following parts: {items}. A Google Takeout usually has multiple parts. Are you sure you have uploaded all parts available on the Google Takeout page?",
+        "nl": "We kunnen de volgende onderdelen niet vinden: {items}. Meestal bestaat een Google export uit meerdere delen. Weet u zeker dat u alle delen heeft geüpload die beschikbaar waren op de Google Takeout-pagina?",
+        "de": "Wir finden die folgenden Teile nicht: {items}. Ein Google-Takeout-Export besteht meist aus mehreren Teilen. Sind Sie sicher, dass Sie alle Teile hochgeladen haben, die auf der Google-Takeout-Seite verfügbar waren?",
+        "it": "Non troviamo le seguenti parti: {items}. Un'esportazione di Google Takeout è di solito composta da più parti. È sicuro di aver caricato tutte le parti disponibili nella pagina di Google Takeout?",
+        "es": "No encontramos las siguientes partes: {items}. Una exportación de Google Takeout suele constar de varias partes. ¿Está seguro de que ha subido todas las partes disponibles en la página de Google Takeout?",
+    }
+    # pyright cannot infer a TypedDict (props.Translations) from a dict comprehension.
+    text = props.Translatable(cast(props.Translations, {
+        locale: template.format(
+            items=", ".join(label.translations.get(locale, label.translations["en"]) for label in missing.values()),
+        )
+        for locale, template in templates.items()
+    }))
+    ok = props.Translatable({
+        "en": "No, I have more files", "nl": "Nee, ik heb meer bestanden",
+        "de": "Nein, ich habe weitere Dateien", "it": "No, ho altri file",
+        "es": "No, tengo más archivos",
+    })
+    cancel = props.Translatable({
+        "en": "Yes, I am sure", "nl": "Ja, ik weet het zeker",
+        "de": "Ja, ich bin sicher", "it": "Sì, sono sicuro",
+        "es": "Sí, estoy seguro",
+    })
     return props.PropsUIPromptConfirm(text, ok, cancel)
 
 
@@ -410,8 +464,9 @@ def render_safety_error_page(platform_name: str, error: Exception) -> CommandUIR
     raises TaskIncompleteError("upload_rejected") next, regardless of which
     button is pressed (start_flow's safety-check branch). A second button
     with the same effect would only invent a distinction that isn't there,
-    so this is a single acknowledging button (no `cancel`) — see the
-    task-incomplete page for the same pattern.
+    so this is a single acknowledging button (no `cancel`) — the raise that
+    follows takes the flow to render_task_incomplete_page, the actual
+    terminal, button-less notice page.
 
     Caller should yield and await response before returning.
     """
@@ -439,13 +494,21 @@ def render_safety_error_page(platform_name: str, error: Exception) -> CommandUIR
 
 
 def render_task_incomplete_page(platform_name: str) -> CommandUIRender:
-    """Render the terminal page of the error flow: the task was not completed
-    and the participant can retry by refreshing the page.
+    """Render the terminal page of an incomplete flow: the task was not
+    completed and the participant returns to the task list via the host's
+    Close control (the task stays pending, so it can be retried from there).
 
-    Shown after the consent-gated error report (or its skip) so the
-    participant does not land on a stale error page when the flow exits
-    nonzero (Issue #123). Caller should yield and await response before
-    returning.
+    Display-only. The notice component resolves the render promise on mount,
+    so the nonzero exit fires without a click and the participant leaves
+    through the host's Close control.
+
+    The copy names the host's Close button because after the nonzero exit
+    the host paints nothing itself (verified on live Next 2026-08-27) —
+    Close is the participant's only visible way back. Shown after the
+    consent-gated error report (or its skip) and on TaskIncompleteError
+    endings, so the participant does not land on a stale page when the
+    flow exits nonzero (Issue #123). Caller should yield and await
+    response before returning.
     """
     header = props.PropsUIHeader(
         props.Translatable({
@@ -456,15 +519,14 @@ def render_task_incomplete_page(platform_name: str) -> CommandUIRender:
             "es": "Tarea no completada",
         })
     )
-    body = props.PropsUIPromptConfirm(
+    body = d3i_props.PropsUIPromptNotice(
         text=props.Translatable({
-            "en": "This task could not be completed. You can try again by refreshing this page. If the problem persists, please contact the researcher.",
-            "nl": "Deze taak kon niet worden voltooid. U kunt het opnieuw proberen door deze pagina te vernieuwen. Als het probleem aanhoudt, neem dan contact op met de onderzoeker.",
-            "de": "Diese Aufgabe konnte nicht abgeschlossen werden. Sie können es erneut versuchen, indem Sie diese Seite aktualisieren. Wenn das Problem weiterhin besteht, wenden Sie sich bitte an den Forscher.",
-            "it": "Non è stato possibile completare questa attività. Può riprovare aggiornando questa pagina. Se il problema persiste, contatti il ricercatore.",
-            "es": "Esta tarea no se pudo completar. Puede intentarlo de nuevo actualizando esta página. Si el problema persiste, póngase en contacto con el investigador.",
+            "en": "This task could not be completed. Use the Close button to return to the list of tasks, or to try this task again. If this problem persists, please contact the researcher.",
+            "nl": "Deze taak kon niet worden voltooid. Gebruik de knop Sluiten om terug te keren naar de lijst met taken, of om deze taak opnieuw te proberen. Als dit probleem aanhoudt, neem dan contact op met de onderzoeker.",
+            "de": "Diese Aufgabe konnte nicht abgeschlossen werden. Verwenden Sie die Schaltfläche Schließen, um zur Aufgabenliste zurückzukehren oder diese Aufgabe erneut zu versuchen. Wenn dieses Problem weiterhin besteht, wenden Sie sich bitte an den Forscher.",
+            "it": "Non è stato possibile completare questa attività. Usi il pulsante Chiudi per tornare all'elenco delle attività o per riprovare questa attività. Se il problema persiste, contatti il ricercatore.",
+            "es": "Esta tarea no se pudo completar. Utilice el botón Cerrar para volver a la lista de tareas o para intentar esta tarea de nuevo. Si este problema persiste, póngase en contacto con el investigador.",
         }),
-        ok=props.Translatable({"en": "OK", "nl": "OK", "de": "OK", "it": "OK", "es": "OK"}),
     )
     page = props.PropsUIPageDataSubmission(platform_name, header, body)
     return CommandUIRender(page)
@@ -478,8 +540,9 @@ def render_donate_failure_page(platform_name: str) -> CommandUIRender:
     button is pressed (start_flow's donate-result branch) — donation is
     never retried from here. A second button with the same effect would
     only invent a distinction that isn't there, so this is a single
-    acknowledging button (no `cancel`) — see the task-incomplete page for
-    the same pattern.
+    acknowledging button (no `cancel`) — the raise that follows takes the
+    flow to render_task_incomplete_page, the actual terminal, button-less
+    notice page.
 
     Caller should yield and await response before returning.
     """
@@ -519,8 +582,9 @@ def render_protocol_error_page(platform_name: str) -> CommandUIRender:
     raises TaskIncompleteError("upload_rejected") next, regardless of which
     button is pressed (start_flow's protocol-mismatch branch). A second
     button with the same effect would only invent a distinction that isn't
-    there, so this is a single acknowledging button (no `cancel`) — see the
-    task-incomplete page for the same pattern.
+    there, so this is a single acknowledging button (no `cancel`) — the
+    raise that follows takes the flow to render_task_incomplete_page, the
+    actual terminal, button-less notice page.
     """
     header = props.Translatable({
         "en": "Something went wrong",
