@@ -479,6 +479,191 @@ class TestActivityFile:
         assert len(searched) == 1
 
 
+def _watched(count: int, tag: str) -> str:
+    return json.dumps([
+        {
+            "title": f"Watched {tag} {number}",
+            "titleUrl": f"https://www.youtube.com/watch?v={tag}{number}",
+            "time": "2026-06-15T20:30:41Z",
+        }
+        for number in range(count)
+    ])
+
+
+def _searched(count: int, tag: str) -> str:
+    return json.dumps([
+        {
+            "title": f"Searched for {tag} {number}",
+            "titleUrl": f"https://www.youtube.com/results?search_query={tag}{number}",
+            "time": "2026-06-15T20:30:41Z",
+        }
+        for number in range(count)
+    ])
+
+
+def _padded(content: str, total: int) -> str:
+    """``content`` followed by an html comment, ``total`` bytes in all."""
+    filler = total - len(content.encode()) - len("<!---->")
+    assert filler >= 0
+    return content + "<!--" + "x" * filler + "-->"
+
+
+ACTIVITY = "Takeout/My Activity/YouTube/MyActivity"
+OWN_WATCH = "Takeout/YouTube and YouTube Music/history/watch-history"
+OWN_SEARCH = "Takeout/YouTube and YouTube Music/history/search-history"
+
+
+class TestYoutubeSourceChoice:
+    """The two YouTube histories exist twice in a complete upload: in the My Activity
+    file and in the YouTube folder's own two files. One of the two is read, the one
+    that holds more, judged for both tables together so that views and searches come
+    from the same source."""
+
+    def test_the_own_files_are_read_when_they_hold_more(self):
+        reader, errors, ddp_locale = _reader_for({
+            f"{ACTIVITY}.json": _watched(1, "activity"),
+            f"{OWN_WATCH}.json": _watched(3, "own"),
+            f"{OWN_SEARCH}.json": _searched(1, "own"),
+        })
+        watched = google.youtube_watch_history_to_df(reader, errors, ddp_locale)
+        assert list(watched["Title"]) == ["Watched own 0", "Watched own 1", "Watched own 2"]
+
+    def test_the_activity_file_is_read_when_it_holds_more(self):
+        reader, errors, ddp_locale = _reader_for({
+            f"{ACTIVITY}.json": _watched(5, "activity"),
+            f"{OWN_WATCH}.json": _watched(1, "own"),
+        })
+        watched = google.youtube_watch_history_to_df(reader, errors, ddp_locale)
+        assert len(watched) == 5
+        assert watched.iloc[0]["Title"] == "Watched activity 0"
+
+    def test_watch_and_search_are_added_together(self):
+        """The watch file alone is smaller than the activity file; with the search
+        file it is larger. Both tables then come from the own files."""
+        reader, errors, ddp_locale = _reader_for({
+            f"{ACTIVITY}.json": _watched(3, "activity"),
+            f"{OWN_WATCH}.json": _watched(2, "own"),
+            f"{OWN_SEARCH}.json": _searched(2, "own"),
+        })
+        watched = google.youtube_watch_history_to_df(reader, errors, ddp_locale)
+        searched = google.youtube_search_history_to_df(reader, errors, ddp_locale)
+        assert list(watched["Title"]) == ["Watched own 0", "Watched own 1"]
+        assert list(searched["Title"]) == ["Searched for own 0", "Searched for own 1"]
+
+    def test_a_tie_keeps_the_order_of_the_table(self):
+        activity, own = _watched(2, "aaa"), _watched(2, "bbb")
+        assert len(activity) == len(own)
+        reader, errors, ddp_locale = _reader_for({
+            f"{ACTIVITY}.json": activity,
+            f"{OWN_WATCH}.json": own,
+        })
+        watched = google.youtube_watch_history_to_df(reader, errors, ddp_locale)
+        assert watched.iloc[0]["Title"] == "Watched aaa 0"
+
+    def test_different_formats_keep_the_order_of_the_table(self, monkeypatch):
+        """Size says nothing across formats: html takes about twice the bytes of json
+        for the same record. The own file here is far the larger one even without its
+        page head, so a comparison of sizes would pick it."""
+        monkeypatch.setattr(google, "ACTIVITY_HTML_BOILERPLATE_BYTES", 0)
+        activity = _watched(1, "activity")
+        own = _padded(WATCH_HTML, 5000)
+        assert len(own.encode()) > len(activity.encode())
+        reader, errors, ddp_locale = _reader_for({
+            f"{ACTIVITY}.json": activity,
+            f"{OWN_WATCH}.html": own,
+        })
+        watched = google.youtube_watch_history_to_df(reader, errors, ddp_locale)
+        assert list(watched["Title"]) == ["Watched activity 0"]
+
+    def test_the_page_head_is_subtracted_once_per_html_file(self, monkeypatch):
+        """Two own files carry two page heads. Without subtracting them the own side
+        would win on bytes (1200 against 1000) while holding less (600 against 700)."""
+        monkeypatch.setattr(google, "ACTIVITY_HTML_BOILERPLATE_BYTES", 300)
+        reader, errors, ddp_locale = _reader_for({
+            f"{ACTIVITY}.html": _padded(WATCH_HTML.replace("A video", "From activity"), 1000),
+            f"{OWN_WATCH}.html": _padded(WATCH_HTML, 600),
+            f"{OWN_SEARCH}.html": _padded(SEARCH_HTML, 600),
+        })
+        watched = google.youtube_watch_history_to_df(reader, errors, ddp_locale)
+        assert list(watched["Title"]) == ["Watched From activity"]
+
+    def test_a_file_smaller_than_the_page_head_counts_as_nothing(self):
+        assert google._net_bytes(10, "html") == 0
+        assert google._net_bytes(google.ACTIVITY_HTML_BOILERPLATE_BYTES + 5, "html") == 5
+        assert google._net_bytes(10, "json") == 10
+
+    def test_a_table_the_chosen_source_lacks_comes_from_the_other(self):
+        """The own side wins on its search file and has no watch file, as in an
+        account with the watch history switched off. The views in the activity file
+        must still reach the table."""
+        reader, errors, ddp_locale = _reader_for({
+            f"{ACTIVITY}.json": _watched(1, "activity"),
+            f"{OWN_SEARCH}.json": _searched(9, "own"),
+        })
+        watched = google.youtube_watch_history_to_df(reader, errors, ddp_locale)
+        searched = google.youtube_search_history_to_df(reader, errors, ddp_locale)
+        assert list(watched["Title"]) == ["Watched activity 0"]
+        assert len(searched) == 9
+
+    def test_one_source_alone_is_read_as_before(self):
+        reader, errors, ddp_locale = _reader_for({f"{OWN_WATCH}.json": _watched(2, "own")})
+        assert len(google.youtube_watch_history_to_df(reader, errors, ddp_locale)) == 2
+        reader, errors, ddp_locale = _reader_for({f"{ACTIVITY}.json": _watched(2, "activity")})
+        assert len(google.youtube_watch_history_to_df(reader, errors, ddp_locale)) == 2
+
+    def test_an_unknown_locale_yields_an_empty_table(self):
+        reader, errors, _ddp_locale = _reader_for({f"{OWN_WATCH}.json": _watched(2, "own")})
+        assert google._youtube_history_paths(reader, "youtube.watch_history", "xx") == []
+        assert google.youtube_watch_history_to_df(reader, errors, "xx").empty
+
+    def test_the_choice_reads_no_member(self, monkeypatch):
+        reader, _errors, ddp_locale = _reader_for({
+            f"{ACTIVITY}.json": _watched(1, "activity"),
+            f"{OWN_WATCH}.json": _watched(3, "own"),
+        })
+
+        def no_read(*args, **kwargs):
+            raise AssertionError("the choice must rest on sizes alone")
+
+        monkeypatch.setattr(zipfile.ZipFile, "read", no_read)
+        monkeypatch.setattr(zipfile.ZipFile, "open", no_read)
+        paths = google._youtube_history_paths(reader, "youtube.watch_history", ddp_locale)
+        assert paths[0] == "YouTube and YouTube Music/history/watch-history"
+
+
+PAGE_HEAD_TOLERANCE_BYTES = 100
+LOCAL_ACTIVITY_SETS = sorted((Path(__file__).parent / "ddp").glob("google_set_*"))
+
+
+@pytest.mark.skipif(not LOCAL_ACTIVITY_SETS, reason="no local scrubbed Takeout sets under tests/ddp")
+@pytest.mark.parametrize("set_dir", LOCAL_ACTIVITY_SETS, ids=lambda d: d.name)
+def test_the_page_head_of_real_html_files_has_the_measured_size(set_dir):
+    """The page head and the closing tags of an html activity file, measured on real
+    exports (git-ignored, ADR-0014). Reads structure only. The head differs by a few
+    bytes between export languages; a difference of more than a tenth of a record
+    means Google changed the page, and the constant needs measuring again."""
+    marker = b'<div class="outer-cell'
+    closing = b"</div></body></html>"
+    checked = 0
+    for zip_path in sorted(set_dir.glob("*.zip")):
+        with zipfile.ZipFile(zip_path) as zf:
+            for info in zf.infolist():
+                segments = info.filename.split("/")
+                if not info.filename.endswith(".html") or len(segments) != 4:
+                    continue
+                if segments[2] not in ("YouTube", "Chrome"):
+                    continue
+                raw = zf.read(info.filename)
+                if marker not in raw:
+                    continue
+                head = raw.index(marker)
+                tail = len(closing) if raw.endswith(closing) else 0
+                assert abs(head + tail - google.ACTIVITY_HTML_BOILERPLATE_BYTES) <= PAGE_HEAD_TOLERANCE_BYTES, info.filename
+                checked += 1
+    if not checked:
+        pytest.skip("no html activity file for YouTube or Chrome in this set")
+
+
 class TestWatchHistoryRow:
     """The table carries the channel a video was published by, which both formats write
     under the title, and the details a view sometimes records, such as an ad it came

@@ -113,11 +113,15 @@ logger = logging.getLogger(__name__)
 #: hyphenation choices had simply changed since that archive was taken. Rather than
 #: discard the older spellings, every corrected entry keeps its older-era variant as a
 #: trailing fallback — a participant exports fresh, but the old spelling costs nothing
-#: to keep trying. Ordering within a list is current-verified-first, with one
-#: exception: the two YouTube histories list the My Activity file before the YouTube
-#: history file, because that is the record the researchers want to show participants
-#: (Erik van Haeringen, 2026-09), and only then the history file, its current spelling
-#: before its older one. The activity file records views and searches together; each
+#: to keep trying. Ordering within a list is current-verified-first within one
+#: source. The two YouTube histories and the Chrome history list two different
+#: sources, the My Activity file and the product's own file. Which of the two is read
+#: is decided by how much each holds (``_youtube_history_paths``,
+#: ``_read_chrome_history``); the order here settles only a tie, and the case of two
+#: formats. The two YouTube histories list the My Activity file first (Erik van
+#: Haeringen, 2026-09), because it is fuller in some places. In others the own files
+#: are, which is why size decides and not the order. The My Activity file records
+#: views and searches together, and likes, dislikes and shares besides; each
 #: extractor selects its own rows from it by url.
 #:
 #: Byte-exactness is load-bearing, not stylistic: matching is exact-string, so a
@@ -401,6 +405,71 @@ def _split_sources(key: str, ddp_locale: str) -> tuple[list[str], list[str]]:
     own_side = [path for path in paths if _in_own_folder(key, path)]
     activity_side = [path for path in paths if not _in_own_folder(key, path)]
     return own_side, activity_side
+
+
+#: Bytes of an activity file in html format that are not records: the page head and
+#: stylesheet before the first record and the closing tags after the last. Measured
+#: on 2026-09-29 at 141,738 and 20 in exports of 2026-08 made in English; exports in
+#: other languages differ from that by a few bytes, 141,757 to 141,767 in all over
+#: the seven languages held locally. Against records of about a thousand bytes that
+#: spread is a hundredth of one row. Subtracted once per file before sizes are
+#: compared, so that two small files do not outweigh one larger one by their page
+#: heads alone.
+ACTIVITY_HTML_BOILERPLATE_BYTES = 141_758
+
+_YOUTUBE_HISTORY_KEYS = ("youtube.watch_history", "youtube.search_history")
+
+
+def _first_member(reader: ZipArchiveReader, key: str, paths: list[str]) -> tuple[str, str, int] | None:
+    """The first file present among ``paths``, in the order ``_read_activity`` tries
+    them, as its path, its extension and its uncompressed size. Sizes come from the
+    zip directory; no member is read."""
+    for path in paths:
+        for extension in KEY_FORMATS[key]:
+            size = reader.member_size(f"{path}.{extension}")
+            if size is not None:
+                return path, extension, size
+    return None
+
+
+def _net_bytes(size: int, extension: str) -> int:
+    """The bytes of a file that are records: for html, the size without the page
+    head, and nothing when the file is smaller than that."""
+    if extension == "html":
+        return max(0, size - ACTIVITY_HTML_BOILERPLATE_BYTES)
+    return size
+
+
+def _youtube_history_paths(reader: ZipArchiveReader, key: str, ddp_locale: str) -> list[str]:
+    """The paths of one of the two YouTube histories, those of the source to read
+    first.
+
+    A complete upload holds the histories twice: in the My Activity file, which
+    records views and searches together, and in the YouTube folder's own two files.
+    The source that holds more is read, judged for both tables together so that both
+    come from the same source. The other source stays in the list behind it, so a
+    table the chosen source has no file for still comes out.
+
+    The order of the table decides when the sizes are equal, and when the two sources
+    were exported in different formats, where size says nothing."""
+    table_order = list(TAKEOUT_PATHS.get(ddp_locale, {}).get(key, []))
+    own_side, activity_side = _split_sources(key, ddp_locale)
+
+    activity = _first_member(reader, key, activity_side)
+    own = [
+        member
+        for history in _YOUTUBE_HISTORY_KEYS
+        if (member := _first_member(reader, history, _split_sources(history, ddp_locale)[0])) is not None
+    ]
+    if activity is None or not own:
+        return table_order
+    if any(extension != activity[1] for _path, extension, _size in own):
+        return table_order
+
+    own_bytes = sum(_net_bytes(size, extension) for _path, extension, size in own)
+    if own_bytes > _net_bytes(activity[2], activity[1]):
+        return own_side + activity_side
+    return table_order
 
 
 def missing_products(validation: "GoogleValidation") -> dict[str, props.Translatable]:
@@ -1025,13 +1094,19 @@ def _normalise_json_times(records, errors: Counter | None = None):
     return records
 
 
-def _read_activity(reader: ZipArchiveReader, errors: Counter, key: str, ddp_locale: str):
+def _read_activity(
+    reader: ZipArchiveReader, errors: Counter, key: str, ddp_locale: str,
+    paths: list[str] | None = None,
+):
     """Reads an activity source in whichever format it was exported: JSON parsed
     whole (small), HTML parsed as a stream so a heavy user's multi-hundred-MB
     file never sits in memory at once (open_member — ADR-0040). Returns the
     parsed records, or None when the archive-set holds no file for this key.
-    Parse failures are counted, never raised."""
-    for path in TAKEOUT_PATHS.get(ddp_locale, {}).get(key, []):
+    Parse failures are counted, never raised. ``paths`` narrows or reorders the paths
+    tried; by default the table's list for ``key``."""
+    if paths is None:
+        paths = TAKEOUT_PATHS.get(ddp_locale, {}).get(key, [])
+    for path in paths:
         for extension in KEY_FORMATS[key]:
             if extension == "json":
                 result = reader.json(f"{path}.json")
@@ -1174,11 +1249,12 @@ def youtube_watch_history_to_df(reader: ZipArchiveReader, errors: Counter, ddp_l
         }
     """
     out = pd.DataFrame()
-    d = _read_activity(reader, errors, "youtube.watch_history", ddp_locale)
+    paths = _youtube_history_paths(reader, "youtube.watch_history", ddp_locale)
+    d = _read_activity(reader, errors, "youtube.watch_history", ddp_locale, paths=paths)
     if not _validate_activity_shape(d, errors):
         return out
 
-    # The activity file this reads first records views and searches together, and
+    # The activity file records views and searches together, and
     # neither format tells them apart by itself, so select on the url. Only dict
     # records qualify — a list entry of some other type (malformed export) is
     # dropped, never raised on, since ``.get`` only ever runs on a dict.
@@ -1274,11 +1350,12 @@ def youtube_search_history_to_df(reader: ZipArchiveReader, errors: Counter, ddp_
         }
     """
     out = pd.DataFrame()
-    d = _read_activity(reader, errors, "youtube.search_history", ddp_locale)
+    paths = _youtube_history_paths(reader, "youtube.search_history", ddp_locale)
+    d = _read_activity(reader, errors, "youtube.search_history", ddp_locale, paths=paths)
     if not _validate_activity_shape(d, errors):
         return out
 
-    # The activity file this reads first records views and searches together, and
+    # The activity file records views and searches together, and
     # neither format tells them apart by itself, so select on the url. Only dict
     # records qualify — a list entry of some other type (malformed export) is
     # dropped, never raised on, since ``.get`` only ever runs on a dict.
