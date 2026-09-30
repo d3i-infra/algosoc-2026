@@ -349,10 +349,11 @@ KEY_FORMATS: dict[str, list[str]] = {
 #: top folder — see ``_in_own_folder``. Real exports (confirmed against
 #: all local fixture sets, 2026-09-03) ship Chrome and My Activity in one zip group
 #: and YouTube in another, but the Chrome + My Activity group still carries
-#: ``My Activity/YouTube/My Activity.html``, the fallback file the youtube keys
-#: share with every other My-Activity product. Counting a key as "found" wherever
+#: ``My Activity/YouTube/My Activity.html``, the My Activity record of YouTube. The
+#: two YouTube histories can be read from it, but it says nothing about whether the
+#: participant selected the YouTube zip. Counting a key as "found" wherever
 #: any of its variants matched would let a Chrome-only upload pass as complete for
-#: YouTube from that one fallback file alone, while it is still missing
+#: YouTube from that one file alone, while it is still missing
 #: subscriptions, comments and the YouTube folder's own watch/search histories.
 UPLOAD_PRODUCTS: dict[str, tuple[tuple[str, ...], props.Translatable]] = {
     "youtube": (

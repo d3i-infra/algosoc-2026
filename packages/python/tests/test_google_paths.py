@@ -1509,9 +1509,9 @@ class TestUploadProducts:
         validation = google.validate_ddp(ArchiveSet([self._activity_part()]))
         assert list(google.missing_products(validation)) == ["youtube"]
 
-    def test_youtube_activity_fallback_does_not_count_as_youtube(self):
+    def test_the_youtube_activity_file_does_not_count_as_youtube(self):
         """A real Chrome + My Activity zip carries ``My Activity/YouTube/My Activity``,
-        the fallback the youtube keys share — but that file lives under the My
+        the My Activity record of YouTube — but that file lives under the My
         Activity folder, not YouTube's own, so it must not let a Chrome-only upload
         pass as complete for YouTube while it is still missing subscriptions,
         comments and the YouTube folder's own histories."""
