@@ -100,14 +100,6 @@ logger = logging.getLogger(__name__)
 #: to a bare filename that occurs in more than one folder of the archive — that lookup
 #: is ambiguous and resolves to nothing.
 #:
-#: For every ``UPLOAD_PRODUCTS`` key, variant 0 is also load-bearing beyond "tried
-#: first": ``missing_products()`` (via ``_matched_under_own_folder``) treats a key as
-#: found under its own product only when the matched path's top segment equals variant
-#: 0's top segment. A key whose variant 0 were a shared fallback (e.g. under "My
-#: Activity" rather than its own product folder), or entries reordered so variant 0 is
-#: no longer the own-folder path, would silently break that check.
-#: ``TestTableConsistency`` pins this across every locale and key.
-#:
 #: Adding a locale is one block; nothing outside this file needs to change.
 #:
 #: Two eras of evidence sit in this table. The English and Dutch blocks come from a
@@ -350,7 +342,7 @@ KEY_FORMATS: dict[str, list[str]] = {
 #: absent: the study no longer asks for it.
 #:
 #: A key counts toward its product only when it matched under that product's own
-#: top folder — see ``_matched_under_own_folder``. Real exports (confirmed against
+#: top folder — see ``_in_own_folder``. Real exports (confirmed against
 #: all local fixture sets, 2026-09-03) ship Chrome and My Activity in one zip group
 #: and YouTube in another, but the Chrome + My Activity group still carries
 #: ``My Activity/YouTube/My Activity.html``, the fallback file the youtube keys
@@ -381,33 +373,52 @@ UPLOAD_PRODUCTS: dict[str, tuple[tuple[str, ...], props.Translatable]] = {
 }
 
 
-def _matched_under_own_folder(validation: "GoogleValidation", key: str) -> bool:
-    """True when ``key``'s found path is one that lives under its own product's top
-    folder for this DDP's locale, rather than a fallback shared with another
-    product (e.g. a youtube key resolved via ``My Activity/YouTube``, or
-    ``chrome.history`` via ``My Activity/Chrome``, both fallbacks living under the
-    My Activity folder, not the product's own). Compares the top-level path
-    segment only, since that is what tells one product's folder apart from
-    another's — see ``UPLOAD_PRODUCTS``."""
-    path = validation.found_paths.get(key)
-    if path is None:
-        return False
-    primary = TAKEOUT_PATHS[validation.ddp_locale][key][0]
-    return path.split("/")[0] == primary.split("/")[0]
+#: What the name of each product's own top folder starts with, in every locale
+#: Takeout exports in. The folder is translated ("YouTube en YouTube Music",
+#: "YouTube 和 YouTube Music") but keeps this start. ``None`` for My Activity, whose
+#: keys have no other folder to be found in.
+OWN_FOLDER_PREFIX: dict[str, str | None] = {
+    "youtube": "YouTube",
+    "my_activity": None,
+    "chrome": "Chrome",
+}
+
+
+def _in_own_folder(key: str, path: str) -> bool:
+    """True when ``path`` lies under the own top folder of the product ``key`` belongs
+    to, rather than under the My Activity folder. A key of no product is its own."""
+    for product, (keys, _label) in UPLOAD_PRODUCTS.items():
+        if key in keys:
+            prefix = OWN_FOLDER_PREFIX[product]
+            return prefix is None or path.split("/")[0].startswith(prefix)
+    return True
+
+
+def _split_sources(key: str, ddp_locale: str) -> tuple[list[str], list[str]]:
+    """The paths of ``key`` for this locale as two sources, each in table order: those
+    under the product's own folder, and those under the My Activity folder."""
+    paths = TAKEOUT_PATHS.get(ddp_locale, {}).get(key, [])
+    own_side = [path for path in paths if _in_own_folder(key, path)]
+    activity_side = [path for path in paths if not _in_own_folder(key, path)]
+    return own_side, activity_side
 
 
 def missing_products(validation: "GoogleValidation") -> dict[str, props.Translatable]:
-    """The products of ``UPLOAD_PRODUCTS`` none of whose keys matched under that
-    product's own top folder (``_matched_under_own_folder``), keyed by product, in
-    table order. Empty for a complete upload. Judged on the union inventory, so a
-    product split across several zip parts still counts once any part carrying it
-    under its own folder was selected — a fallback match under another product's
-    folder never counts, so a Chrome-only upload is never silently read as
-    complete for YouTube (see ``UPLOAD_PRODUCTS``)."""
+    """The products of ``UPLOAD_PRODUCTS`` of which no file was found under the
+    product's own top folder, keyed by product, in table order. Empty for a complete
+    upload. Judged on the union member list, so a product split across several zip
+    parts counts once any part carrying it was selected. A file under the My Activity
+    folder never counts for YouTube or Chrome: it sits in the other zip, and says
+    nothing about whether the participant selected this product's."""
+    suffixes = _path_suffixes(validation.archive_members)
     return {
         product: label
         for product, (keys, label) in UPLOAD_PRODUCTS.items()
-        if not any(_matched_under_own_folder(validation, key) for key in keys)
+        if not any(
+            path in suffixes
+            for key in keys
+            for path in _split_sources(key, validation.ddp_locale)[0]
+        )
     }
 
 
@@ -425,15 +436,6 @@ class GoogleValidation(BaseValidation):
 
     archive_members: list[str] = field(default_factory=list)
     ddp_locale: str = ""
-    #: The ``TAKEOUT_PATHS[ddp_locale]`` keys found in the union member inventory —
-    #: a convenience view of ``found_paths``' keys (``frozenset(found_paths)``).
-    #: Presence is judged by ``found_paths``, which ``missing_products()`` actually
-    #: reads (via ``_matched_under_own_folder``); this field itself has no reader
-    #: outside the tests.
-    found_keys: frozenset[str] = frozenset()
-    #: Each found key's first matching variant path (``TAKEOUT_PATHS`` order) — lets
-    #: ``missing_products()`` tell a product's own folder apart from a fallback path.
-    found_paths: dict[str, str] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -456,10 +458,9 @@ def _path_suffixes(archive_members: list[str]) -> set[str]:
     return suffixes
 
 
-def _detect_locale(archive_members: list[str]) -> tuple[str, int, dict[str, str]]:
-    """Returns the locale whose paths best cover the archive, how many of its
-    sources were found, and which variant path matched each found key (the first
-    one present, in ``TAKEOUT_PATHS`` order).
+def _detect_locale(archive_members: list[str]) -> tuple[str, int]:
+    """Returns the locale whose paths best cover the archive, and how many of its
+    sources were found.
 
     Folder-qualified paths decide, and the number of sources found only breaks ties:
     the filename-only variants exist to be forgiving about folders, so letting them
@@ -481,12 +482,7 @@ def _detect_locale(archive_members: list[str]) -> tuple[str, int, dict[str, str]
         scores[locale] = (sum(folders), sum(found))
     best = max(scores, key=lambda locale: scores[locale])
 
-    found_paths = {
-        key: next(path for path in paths if path in suffixes)
-        for key, paths in TAKEOUT_PATHS[best].items()
-        if any(path in suffixes for path in paths)
-    }
-    return best, scores[best][1], found_paths
+    return best, scores[best][1]
 
 
 def validate_ddp(archive_set: ArchiveSet) -> GoogleValidation:
@@ -508,15 +504,13 @@ def validate_ddp(archive_set: ArchiveSet) -> GoogleValidation:
     (ADR-0040 / ``FlowBuilder``)."""
 
     archive_members = list(archive_set.members)
-    ddp_locale, sources_found, found_paths = _detect_locale(archive_members)
+    ddp_locale, sources_found = _detect_locale(archive_members)
     logger.info("Detected DDP locale: %s (%d sources found)", ddp_locale, sources_found)
 
     return GoogleValidation(
         status_code=0 if sources_found else 1,
         archive_members=archive_members,
         ddp_locale=ddp_locale,
-        found_keys=frozenset(found_paths),
-        found_paths=found_paths,
     )
 
 

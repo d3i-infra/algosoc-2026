@@ -363,7 +363,7 @@ class TestLocaleDetection:
         folder but leaves the file called MyActivity."""
         members = ["Takeout/Mijn activiteit/YouTube/MyActivity.json"]
 
-        locale, sources_found, _ = google._detect_locale(members)
+        locale, sources_found = google._detect_locale(members)
 
         assert locale == "nl"
         assert sources_found > 0
@@ -381,7 +381,7 @@ class TestLocaleDetection:
             "Takeout/My Activity/Search/My Activity.html",
             "Takeout/Chrome/History.json",
         ]
-        locale, sources_found, _ = google._detect_locale(members)
+        locale, sources_found = google._detect_locale(members)
         assert locale == "en"
         assert sources_found > 0
 
@@ -395,7 +395,7 @@ class TestLocaleDetection:
             "Takeout/我的活动/Search/我的活动记录.html",
             "Takeout/Chrome/历史记录.json",
         ]
-        locale, sources_found, _ = google._detect_locale(members)
+        locale, sources_found = google._detect_locale(members)
         assert locale == "zh"
         assert sources_found > 0
 
@@ -412,31 +412,30 @@ class TestTableConsistency:
                 assert not path.rsplit("/", 1)[-1].count(".")
 
     @pytest.mark.parametrize("locale", list(google.TAKEOUT_PATHS))
-    def test_upload_products_variant_zero_is_own_folder(self, locale):
-        """Pins the invariant ``_matched_under_own_folder``/``missing_products()``
-        rely on: for every ``UPLOAD_PRODUCTS`` key, ``TAKEOUT_PATHS[locale][key][0]``
-        is folder-qualified and lives under that product's own top folder. Checked
-        per locale: every key of one product shares its variant-0 top segment, and
-        the three products' top segments are pairwise distinct — so a key resolved
-        under its own product's top folder can never be mistaken for another
-        product's, and a fallback path (which lives under a different top folder)
-        can never be confused with the product's own."""
-        product_top_folders: dict[str, str] = {}
+    def test_every_product_key_has_a_path_in_its_own_folder(self, locale):
+        """Presence and the choice between sources both ask which paths of a key lie
+        under the product's own top folder. That must hold for every key of every
+        product, whatever the order of the list."""
         for product, (keys, _label) in google.UPLOAD_PRODUCTS.items():
-            top_folders = set()
             for key in keys:
-                variant_zero = google.TAKEOUT_PATHS[locale][key][0]
-                assert "/" in variant_zero, (
-                    f"{locale}/{key} variant 0 is not folder-qualified: {variant_zero!r}"
-                )
-                top_folders.add(variant_zero.split("/")[0])
-            assert len(top_folders) == 1, (
-                f"{locale}/{product}: keys disagree on variant-0 top folder: {top_folders}"
-            )
-            product_top_folders[product] = top_folders.pop()
-        assert len(set(product_top_folders.values())) == len(product_top_folders), (
-            f"{locale}: products share a variant-0 top folder: {product_top_folders}"
-        )
+                own_side, _activity_side = google._split_sources(key, locale)
+                assert own_side, f"{locale}/{key}: no path under the own folder of {product}"
+
+    @pytest.mark.parametrize("locale", list(google.TAKEOUT_PATHS))
+    def test_own_folders_do_not_overlap_the_activity_folder(self, locale):
+        """A path of the two YouTube histories or of the Chrome history is either
+        under the product's own folder or under the My Activity folder, and the My
+        Activity folder is the one the four activity-only keys live in."""
+        activity_folders = {
+            path.split("/")[0]
+            for key in google.UPLOAD_PRODUCTS["my_activity"][0]
+            for path in google.TAKEOUT_PATHS[locale][key]
+        }
+        for key in ("youtube.watch_history", "youtube.search_history", "chrome.history"):
+            own_side, activity_side = google._split_sources(key, locale)
+            assert activity_side, f"{locale}/{key}: no My Activity path"
+            assert {path.split("/")[0] for path in activity_side} <= activity_folders
+            assert not {path.split("/")[0] for path in own_side} & activity_folders
 
 
 # ---------------------------------------------------------------------------
@@ -1146,10 +1145,35 @@ class TestUploadProducts:
             "Takeout/My Activity/Search/MyActivity.json": "[]",
         })
 
-    def test_found_keys_lists_every_recognised_key(self):
-        validation = google.validate_ddp(ArchiveSet([self._youtube_part()]))
-        assert "youtube.watch_history" in validation.found_keys
-        assert "chrome.history" not in validation.found_keys
+    def test_presence_does_not_depend_on_the_order_of_the_path_list(self, monkeypatch):
+        """The order of a path list says which file is tried first, nothing about
+        which folder a product owns. Reversing every list must not change what is
+        reported missing."""
+        reversed_paths = {
+            locale: {key: list(reversed(paths)) for key, paths in keys.items()}
+            for locale, keys in google.TAKEOUT_PATHS.items()
+        }
+        part = _named_part("takeout-1-001.zip", {
+            "Takeout/Chrome/History.json": "[]",
+            "Takeout/My Activity/Search/MyActivity.json": "[]",
+            "Takeout/My Activity/YouTube/MyActivity.json": WATCH_JSON,
+        })
+        before = list(google.missing_products(google.validate_ddp(ArchiveSet([part]))))
+        monkeypatch.setattr(google, "TAKEOUT_PATHS", reversed_paths)
+        part.seek(0)
+        after = list(google.missing_products(google.validate_ddp(ArchiveSet([part]))))
+        assert before == after == ["youtube"]
+
+    def test_chrome_activity_alone_does_not_count_as_chrome(self):
+        """``My Activity/Chrome`` sits in the My Activity folder. Without Chrome's own
+        folder the participant did not export Chrome."""
+        part = _named_part("takeout-1-001.zip", {
+            "Takeout/My Activity/Chrome/MyActivity.json": CHROME_JSON,
+            "Takeout/My Activity/Search/MyActivity.json": "[]",
+            "Takeout/YouTube and YouTube Music/history/watch-history.json": WATCH_JSON,
+        })
+        validation = google.validate_ddp(ArchiveSet([part]))
+        assert list(google.missing_products(validation)) == ["chrome"]
 
     def test_complete_set_is_missing_nothing(self):
         validation = google.validate_ddp(ArchiveSet([self._youtube_part(), self._activity_part()]))
