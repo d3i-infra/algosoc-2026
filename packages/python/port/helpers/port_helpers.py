@@ -122,7 +122,7 @@ def generate_incomplete_upload_prompt(
     """
     templates = {
         "en": "We don't see the following parts: {items}. A Google Takeout usually has multiple parts. Are you sure you have uploaded all parts available on the Google Takeout page?",
-        "nl": "We kunnen de volgende onderdelen niet vinden: {items}. Meestal bestaat een Google export uit meerdere delen. Weet u zeker dat u alle delen heeft geüpload die beschikbaar waren op de Google Takeout-pagina?",
+        "nl": "We kunnen de volgende onderdelen niet vinden: {items}. Meestal bestaat een Google export uit meerdere delen. Weet je zeker dat je alle delen hebt geüpload die beschikbaar waren op de Google Takeout-pagina?",
         "de": "Wir finden die folgenden Teile nicht: {items}. Ein Google-Takeout-Export besteht meist aus mehreren Teilen. Sind Sie sicher, dass Sie alle Teile hochgeladen haben, die auf der Google-Takeout-Seite verfügbar waren?",
         "it": "Non troviamo le seguenti parti: {items}. Un'esportazione di Google Takeout è di solito composta da più parti. È sicuro di aver caricato tutte le parti disponibili nella pagina di Google Takeout?",
         "es": "No encontramos las siguientes partes: {items}. Una exportación de Google Takeout suele constar de varias partes. ¿Está seguro de que ha subido todas las partes disponibles en la página de Google Takeout?",
@@ -148,7 +148,7 @@ def generate_incomplete_upload_prompt(
 
 
 def generate_file_prompt(
-    extensions: str, multiple: bool = False
+    platform_name: str, extensions: str, multiple: bool = False
 ) -> d3i_props.PropsUIPromptFileInputSingle | d3i_props.PropsUIPromptFileInputMultiple:
     """
     Generates a file input prompt for selecting file(s) for a platform.
@@ -162,6 +162,8 @@ def generate_file_prompt(
     - If multiple=True: a list of files, wrapped as PayloadFiles
 
     Args:
+        platform_name (str): The name of the platform, shown in the prompt
+            text (e.g. "Instagram").
         extensions (str): A collection of allowed MIME types.
             For example: "application/zip, text/plain, application/json"
         multiple (bool, optional): Whether to allow multiple file selection.
@@ -179,20 +181,20 @@ def generate_file_prompt(
     # unified (de), Dutch compounds per Taalunie (nl) — reviewed 2026-08-27.
     description = props.Translatable(
         {
-            "en": "Please follow the download instructions and choose the file that you stored on your device.",
-            "nl": "Volg de downloadinstructies en kies het bestand dat u op uw apparaat heeft opgeslagen.",
-            "de": "Bitte folgen Sie der Download-Anleitung und wählen Sie die Datei aus, die Sie auf Ihrem Gerät gespeichert haben.",
-            "it": "Segua le istruzioni per il download e scelga il file che ha salvato sul suo dispositivo.",
-            "es": "Siga las instrucciones de descarga y elija el archivo que ha guardado en su dispositivo.",
+            "en": f"Choose the {platform_name} file that you requested in the previous steps and stored on your device.",
+            "nl": f"Kies het {platform_name}-bestand dat je in de vorige stappen hebt aangevraagd en op je apparaat hebt opgeslagen.",
+            "de": f"Wählen Sie die {platform_name}-Datei aus, die Sie in den vorherigen Schritten angefordert und auf Ihrem Gerät gespeichert haben.",
+            "it": f"Scelga il file di {platform_name} che ha richiesto nei passaggi precedenti e salvato sul suo dispositivo.",
+            "es": f"Elija el archivo de {platform_name} que solicitó en los pasos anteriores y guardó en su dispositivo.",
         }
     )
     if multiple:
         description = props.Translatable({
-            "en": "Please follow the download instructions and select ALL the files you received — Google Takeout usually delivers several zip files that belong together.",
-            "nl": "Volg de downloadinstructies en selecteer ALLE bestanden die u heeft ontvangen — Google Takeout levert meestal meerdere zipbestanden die bij elkaar horen.",
-            "de": "Bitte folgen Sie der Download-Anleitung und wählen Sie ALLE erhaltenen Dateien aus — Google Takeout liefert meist mehrere zusammengehörige ZIP-Dateien.",
-            "it": "Segua le istruzioni per il download e selezioni TUTTI i file ricevuti — Google Takeout di solito fornisce più file ZIP appartenenti alla stessa esportazione.",
-            "es": "Siga las instrucciones de descarga y seleccione TODOS los archivos recibidos — Google Takeout suele entregar varios archivos zip que van juntos.",
+            "en": "Choose ALL the Google files that you requested in the previous steps and stored on your device. Google Takeout usually delivers several files that belong together.",
+            "nl": "Kies ALLE Google-bestanden die je in de vorige stappen hebt aangevraagd en op je apparaat hebt opgeslagen. Google Takeout levert meestal meerdere zipbestanden die bij elkaar horen.",
+            "de": "Wählen Sie ALLE Google-Dateien aus, die Sie in den vorherigen Schritten angefordert und auf Ihrem Gerät gespeichert haben. Google Takeout liefert meist mehrere Dateien, die zusammengehören.",
+            "it": "Scelga TUTTI i file di Google che ha richiesto nei passaggi precedenti e salvato sul suo dispositivo. Google Takeout di solito fornisce più file che vanno insieme.",
+            "es": "Elija TODOS los archivos de Google que solicitó en los pasos anteriores y guardó en su dispositivo. Google Takeout suele entregar varios archivos que van juntos.",
         })
         # Keeps the filename portion identical across locales — only the
         # leading "Example"/"Voorbeeld"/... word is translated — matching
@@ -521,11 +523,11 @@ def render_task_incomplete_page(platform_name: str) -> CommandUIRender:
     )
     body = d3i_props.PropsUIPromptNotice(
         text=props.Translatable({
-            "en": "This task could not be completed. Use the Close button to return to the list of tasks, or to try this task again. If this problem persists, please contact the researcher.",
-            "nl": "Deze taak kon niet worden voltooid. Gebruik de knop Sluiten om terug te keren naar de lijst met taken, of om deze taak opnieuw te proberen. Als dit probleem aanhoudt, neem dan contact op met de onderzoeker.",
-            "de": "Diese Aufgabe konnte nicht abgeschlossen werden. Verwenden Sie die Schaltfläche Schließen, um zur Aufgabenliste zurückzukehren oder diese Aufgabe erneut zu versuchen. Wenn dieses Problem weiterhin besteht, wenden Sie sich bitte an den Forscher.",
-            "it": "Non è stato possibile completare questa attività. Usi il pulsante Chiudi per tornare all'elenco delle attività o per riprovare questa attività. Se il problema persiste, contatti il ricercatore.",
-            "es": "Esta tarea no se pudo completar. Utilice el botón Cerrar para volver a la lista de tareas o para intentar esta tarea de nuevo. Si este problema persiste, póngase en contacto con el investigador.",
+            "en": "This task could not be completed. Use the Close button to return to the task list, or to try this task again. If this problem persists, please contact the LISS panel helpdesk: 0800 - 023 14 15 (free) or via info@lisspanel.nl",
+            "nl": "Deze taak kon niet worden voltooid. Gebruik de knop Sluiten om terug te keren naar de lijst met taken, of om deze taak opnieuw te proberen. Als dit probleem aanhoudt, neem dan contact op met de helpdesk van het LISS panel: 0800 - 023 14 15 (gratis) of via info@lisspanel.nl",
+            "de": "Diese Aufgabe konnte nicht abgeschlossen werden. Verwenden Sie die Schaltfläche Schließen, um zur Aufgabenliste zurückzukehren oder um diese Aufgabe erneut zu versuchen. Wenn dieses Problem weiterhin besteht, wenden Sie sich bitte an den LISS-Panel-Support: 0800 - 023 14 15 (kostenlos) oder per E-Mail an info@lisspanel.nl",
+            "it": "Questa attività non è stata completata. Utilizzare il pulsante Chiudi per tornare all'elenco delle attività o per riprovare questa attività. Se questo problema persiste, contattare l'assistenza del pannello LISS: 0800 - 023 14 15 (gratuito) o via email a info@lisspanel.nl",
+            "es": "Esta tarea no se pudo completar. Use el botón Cerrar para volver a la lista de tareas o para intentar esta tarea nuevamente. Si este problema persiste, comuníquese con el servicio de asistencia del panel LISS: 0800 - 023 14 15 (gratis) o por correo electrónico a info@lisspanel.nl",
         }),
     )
     page = props.PropsUIPageDataSubmission(platform_name, header, body)

@@ -50,7 +50,7 @@ async function iframeHeightPx(page: Page): Promise<number> {
 test("donate after removing one row", async ({ page }) => {
   const app = await open(page, "?locale=nl");
   await pick(page, app, "json_en.zip");
-  await expect(app.locator("h1")).toHaveText("Uw TikTok-gegevens");
+  await expect(app.locator("h1")).toHaveText("Je TikTok-gegevens");
   await expect(app.locator("[data-role=table-select] option").first()).toContainText("rijen)");
   // Tick one row and remove the selection: no confirm dialog on this path.
   // The input itself is visually hidden (iOS 12's own checkbox rendering is
@@ -63,7 +63,7 @@ test("donate after removing one row", async ({ page }) => {
   await expect(app.locator("[data-action=undo]")).toBeVisible();
   await expect(app.locator("[data-action=remove-selected]")).toHaveCount(0);
   await app.locator("[data-action=proceed]").click();
-  await expect(app.locator("h1")).toHaveText("Klaar om te delen?");
+  await expect(app.locator("h1")).toHaveText("Klaar om te doneren?");
   await app.locator("[data-action=donate]").click();
   await expect(app.locator("h1")).toHaveText("Bedankt");
   await waitForExit(page);

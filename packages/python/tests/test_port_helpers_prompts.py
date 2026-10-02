@@ -3,7 +3,7 @@ from port.helpers import port_helpers as ph
 
 
 def test_multi_prompt_copy_covers_required_locales():
-    prompt = ph.generate_file_prompt("application/zip", multiple=True)
+    prompt = ph.generate_file_prompt("Google", "application/zip", multiple=True)
     d = prompt.toDict()
     translations = d["description"]["translations"]
     assert set(translations) >= {"en", "nl", "de", "it", "es"}
@@ -13,24 +13,24 @@ def test_multi_prompt_copy_covers_required_locales():
 def test_single_prompt_is_the_d3i_single_prompt():
     """Every single-file flow renders the D3I prompt, which has the drop zone;
     feldspar's PropsUIPromptFileInput is no longer sent by any flow."""
-    prompt = ph.generate_file_prompt("application/zip")
+    prompt = ph.generate_file_prompt("Instagram", "application/zip")
     d = prompt.toDict()
     assert d["__type__"] == "PropsUIPromptFileInputSingle"
     assert d["extensions"] == "application/zip"
 
 
 def test_single_prompt_copy_covers_required_locales():
-    prompt = ph.generate_file_prompt("application/zip")
+    prompt = ph.generate_file_prompt("Instagram", "application/zip")
     translations = prompt.toDict()["description"]["translations"]
     assert set(translations) >= {"en", "nl", "de", "it", "es"}
-    assert "choose the file" in translations["en"]
+    assert all("Instagram" in text for text in translations.values())
 
 
 def test_multi_prompt_includes_example_covering_required_locales():
     """generate_file_prompt(multiple=True) supplies the Takeout-shaped example
     (ITEM 1): PropsUIPromptFileInputMultiple.toDict() includes an "example"
     key when the field is set, covering all 5 locales."""
-    prompt = ph.generate_file_prompt("application/zip", multiple=True)
+    prompt = ph.generate_file_prompt("Google", "application/zip", multiple=True)
     d = prompt.toDict()
     assert "example" in d
     translations = d["example"]["translations"]
@@ -40,7 +40,7 @@ def test_multi_prompt_includes_example_covering_required_locales():
 def test_multi_prompt_example_filename_identical_across_locales():
     """Only the leading word ("Example"/"Voorbeeld"/...) is translated; the
     Takeout filename shape itself must not vary by locale."""
-    prompt = ph.generate_file_prompt("application/zip", multiple=True)
+    prompt = ph.generate_file_prompt("Google", "application/zip", multiple=True)
     translations = prompt.toDict()["example"]["translations"]
     filename_part = "takeout-...-1-001.zip, takeout-...-2-001.zip"
     for locale, text in translations.items():
@@ -50,7 +50,7 @@ def test_multi_prompt_example_filename_identical_across_locales():
 def test_single_prompt_has_no_example_key():
     """The single-file prompt type carries no `example` concept at all —
     only PropsUIPromptFileInputMultiple gained the field."""
-    prompt = ph.generate_file_prompt("application/zip")
+    prompt = ph.generate_file_prompt("Instagram", "application/zip")
     assert "example" not in prompt.toDict()
 
 
@@ -127,7 +127,7 @@ def test_task_incomplete_copy_points_at_close():
     translations = prompt["text"]["translations"]
     assert "Close button" in translations["en"]
     assert "knop Sluiten" in translations["nl"]
-    assert "list of tasks" in translations["en"]
+    assert "task list" in translations["en"]
     assert "lijst met taken" in translations["nl"]
 
 

@@ -28,13 +28,13 @@ test("t() formats numeric vars through formatCount, leaving string vars alone", 
   expect(t("rows_kept", "en", { kept: "2024", deleted: 3 })).toBe("2024 rows, 3 removed");
 });
 
-test("every Dutch string is formal (u/uw), as the desktop consent screen is", () => {
-  const informal: string[] = [];
+test("every Dutch string is informal (je/jouw), as the desktop consent screen is", () => {
+  const formal: string[] = [];
   for (const key in T) {
-    // Word-boundary match so "Kies", "rijen" and the like are left alone.
-    if (/\b(je|jij|jouw)\b/i.test(T[key].nl)) informal.push(key);
+    // Word-boundary match so "uit", "uur" and the like are left alone.
+    if (/\b(u|uw|alstublieft)\b/i.test(T[key].nl)) formal.push(key);
   }
-  expect(informal).toEqual([]);
+  expect(formal).toEqual([]);
 });
 
 test("no button-naming string still says Donate", () => {

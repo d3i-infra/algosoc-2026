@@ -139,7 +139,7 @@ test('nl full flow: Dutch chrome and content, donation completes', async ({ page
     continueButton: 'Verder',
   });
 
-  await expect(page.getByRole('heading', { name: 'Bekijk uw gegevens' }))
+  await expect(page.getByRole('heading', { name: 'Bekijk je gegevens' }))
     .toBeVisible({ timeout: EXTRACTION_TIMEOUT });
   // Config content: the example config ships nl, so the table title is Dutch.
   await expect(page.getByText('Bestanden in de zip')).toBeVisible();

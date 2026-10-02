@@ -144,18 +144,18 @@ const chevronRightIcon = (
 const translations = {
   heading: new TextBundle()
     .add("en", "Your data is divided over {n} tables")
-    .add("nl", "Uw gegevens zijn verdeeld over {n} tabellen")
+    .add("nl", "Je gegevens zijn verdeeld over {n} tabellen")
     .add("de", "Ihre Daten sind auf {n} Tabellen verteilt")
     .add("it", "I suoi dati sono suddivisi in {n} tabelle")
     .add("es", "Sus datos están repartidos en {n} tablas"),
   explanation: new TextBundle()
     .add(
       "en",
-      "Only one table is shown at a time. Use the menu below to explore the other tables. We recommend that you explore and view the tables before deciding which data you want to share."
+      "Only one table is shown at a time. Use the menu below to explore the other tables. We recommend exploring and viewing the tables before deciding which data you want to share."
     )
     .add(
       "nl",
-      "Er wordt steeds één tabel getoond. Gebruik het menu hieronder om de andere tabellen te verkennen. We raden u aan de tabellen te verkennen en te bekijken voordat u beslist welke gegevens u wilt delen."
+      "Er wordt steeds één tabel getoond. Gebruik het menu hieronder om de andere tabellen te verkennen. Bekijk alle tabellen goed voordat je beslist welke gegevens je wilt doneren."
     )
     .add(
       "de",

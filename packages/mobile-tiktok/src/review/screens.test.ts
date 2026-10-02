@@ -55,7 +55,7 @@ function deletedPart(root: HTMLElement): string {
 test("intro shows the file input and reports a chosen file", () => {
   const { root, h, s } = setup("nl");
   s.intro();
-  expect(root.textContent).toContain("Doneer uw TikTok-gegevens");
+  expect(root.textContent).toContain("Doneer je TikTok-gegevens");
   const input = root.querySelector("input[type=file]") as HTMLInputElement;
   const file = new File(["x"], "a.zip");
   Object.defineProperty(input, "files", { value: [file] });
@@ -688,17 +688,17 @@ test("the confirm screen speaks of sharing throughout, and every button names it
   expect(root.textContent).not.toContain("donate");
 });
 
-test("the Dutch screens read formally and speak of sharing", () => {
+test("the Dutch screens read informally and speak of sharing", () => {
   const { root, s } = setup("nl");
   const state = new ReviewState([{ id: "tiktok_watch_history", columns: ["Date", "Link"], rows: [["2024-01-01", "https://x/a"]] }, searches]);
   s.tables(state);
-  expect(root.textContent).toContain("Uw TikTok-gegevens");
-  expect(root.textContent).toContain("Uw gegevens zijn verdeeld over 2 tabellen");
+  expect(root.textContent).toContain("Je TikTok-gegevens");
+  expect(root.textContent).toContain("Je gegevens zijn verdeeld over 2 tabellen");
   expect(root.textContent).toContain("Toon samenvatting voor delen");
   s.confirm(state);
-  expect(root.textContent).toContain("Klaar om te delen?");
-  expect(root.textContent).toContain("Als u nee zegt, wordt alleen uw beslissing vastgelegd.");
+  expect(root.textContent).toContain("Klaar om te doneren?");
+  expect(root.textContent).toContain("Deze tabellen worden naar de onderzoekers gestuurd.");
   expect(root.textContent).toContain("Nee, niet delen");
   s.intro();
-  expect(root.textContent).toContain("Doneer uw TikTok-gegevens");
+  expect(root.textContent).toContain("Doneer je TikTok-gegevens");
 });

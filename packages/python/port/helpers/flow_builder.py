@@ -63,7 +63,7 @@ class FlowBuilder:
         self.UI_TEXT = {
             "submit_file_header": props.Translatable({
                 "en": f"Select your {self.platform_name} file",
-                "nl": f"Selecteer uw {self.platform_name} bestand",
+                "nl": f"Kies je {self.platform_name} bestand",
                 "de": f"Wählen Sie Ihre {self.platform_name}-Datei aus",
                 "it": f"Selezioni il suo file di {self.platform_name}",
                 "es": f"Seleccione su archivo de {self.platform_name}",
@@ -72,7 +72,7 @@ class FlowBuilder:
             # other locales keep the platform's generic text.
             "review_data_header": props.Translatable({
                 "en": "Review your data",
-                "nl": "Bekijk uw gegevens",
+                "nl": "Bekijk je gegevens",
                 "de": f"Ihre {self.platform_name}-Daten",
                 "it": f"I suoi dati di {self.platform_name}",
                 "es": f"Sus datos de {self.platform_name}",
@@ -86,14 +86,14 @@ class FlowBuilder:
             }),
             "incomplete_upload_header": props.Translatable({
                 "en": "Are all your files selected?",
-                "nl": "Heeft u alle bestanden geselecteerd?",
+                "nl": "Heb je alle bestanden geselecteerd?",
                 "de": "Haben Sie alle Dateien ausgewählt?",
                 "it": "Ha selezionato tutti i file?",
                 "es": "¿Ha seleccionado todos los archivos?",
             }),
             "review_data_description": props.Translatable({
-                "en": f"Below you will find a curated selection of {self.platform_name} data. At this time, no data has been shared with the LISS Panel researchers. Before you share this data, you can review it and decide what you do or do not want to share. You can also search the data to navigate easily. You can remove data by clicking the checkbox next to it and clicking Remove. Once you have reviewed everything, click Donate at the bottom of the page.",
-                "nl": f"Hieronder ziet u de gegevens die uit uw {self.platform_name}-datapakket gehaald worden. Op dit moment zijn er nog geen gegevens gedeeld met de onderzoekers van het LISS Panel. Voordat u deze gegevens deelt, kunt u ze bekijken en beslissen wat u wel of niet wilt delen. U kunt de gegevens ook doorzoeken om gemakkelijk te navigeren. U kunt gegevens verwijderen door op het selectievakje ernaast te klikken en op Verwijder te klikken. Als u alles hebt gecontroleerd, klikt u onderaan de pagina op Doneren.",
+                "en": f"Below you can see the data that is extracted from your data package. At this point, no data has been shared yet. You can review it first and choose what you want to share and what you don't.\nYou can search for keywords using the search function at the top right of the table. For example, you can search for a name or website. This works in all tables, if you see more than one.\nYou can remove data by clicking on the checkbox next to it and clicking Remove. Once you have reviewed everything, click the 'Yes, share for research' button at the bottom of the page.",
+                "nl": f"Hieronder zie je de gegevens die uit je datapakket gehaald worden. Op dit moment zijn er nog geen gegevens gedeeld. Je kunt ze eerst bekijken en kiezen wat je wel of niet wilt delen.\nMet de zoekfunctie rechtsboven de tabel kun je gemakkelijk trefwoorden zoeken. Zoek bijvoorbeeld op een naam of website. Dat kan in alle tabellen, als je er meer dan één ziet.\nJe kunt gegevens verwijderen door op het selectievakje ernaast te klikken en op Verwijder te klikken. Als je alles hebt gecontroleerd klik je onderaan de pagina op de knop 'Ja, deel voor onderzoek'.",
                 "de": f"Nachfolgend finden Sie eine sorgfältig zusammengestellte Auswahl von {self.platform_name}-Daten. Zu diesem Zeitpunkt wurden noch keine Daten mit den Forschern des LISS Panels geteilt. Bevor Sie diese Daten teilen, können Sie sie überprüfen und entscheiden, was Sie teilen möchten und was nicht. Sie können die Daten auch durchsuchen, um sich leicht zurechtzufinden. Sie können Daten entfernen, indem Sie das Kontrollkästchen daneben anklicken und auf Entfernen klicken. Sobald Sie alles überprüft haben, klicken Sie unten auf der Seite auf Spenden.",
                 "it": f"Di seguito trova una selezione curata dei dati di {self.platform_name}. Al momento, nessun dato è stato condiviso con i ricercatori del LISS Panel. Prima di condividere questi dati, può rivederli e decidere cosa vuole o non vuole condividere. Può anche cercare nei dati per navigare facilmente. Può rimuovere i dati facendo clic sulla casella di controllo accanto ad essi e facendo clic su Rimuovi. Una volta che ha esaminato tutto, faccia clic su Dona in fondo alla pagina.",
                 "es": f"A continuación encontrará una selección cuidada de los datos de {self.platform_name}. En este momento, no se han compartido datos con los investigadores del LISS Panel. Antes de compartir estos datos, puede revisarlos y decidir qué desea o no desea compartir. También puede buscar en los datos para navegar fácilmente. Puede eliminar datos haciendo clic en la casilla de verificación junto a ellos y haciendo clic en Eliminar. Una vez que haya revisado todo, haga clic en Donar en la parte inferior de la página.",
@@ -335,7 +335,7 @@ class FlowBuilder:
     def generate_file_prompt(self):
         """Generate platform-specific file prompt."""
         return ph.generate_file_prompt(
-            "application/zip", multiple=self.expected_file_payload == "PayloadFiles"
+            self.platform_name, "application/zip", multiple=self.expected_file_payload == "PayloadFiles"
         )
 
     @abstractmethod

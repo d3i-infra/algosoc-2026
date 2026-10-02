@@ -162,11 +162,11 @@ const selectButtonLabel = (): Translatable => {
 
 const note = (): Translatable => {
   return new TextBundle()
-    .add('en', 'Note: The process to extract the correct data from the file is done on your own device. No data is stored or sent yet.')
-    .add('de', 'Hinweis: Der Prozess zur Extraktion der richtigen Daten aus der Datei erfolgt auf Ihrem eigenen Gerät. Es werden noch keine Daten gespeichert oder gesendet.')
-    .add('nl', 'Let op: Het proces om de juiste gegevens uit het bestand te halen wordt uitgevoerd op uw eigen apparaat. Er worden nog geen gegevens opgeslagen of verzonden.')
-    .add('it', 'Nota: Il processo per estrarre i dati corretti dal file viene eseguito sul Suo dispositivo. Nessun dato viene ancora memorizzato o inviato.')
-    .add('es', 'Nota: El proceso para extraer los datos correctos del archivo se realiza en su propio dispositivo. Aún no se almacena ni se envía ningún dato.')
+    .add('en', 'The process to extract the correct data from the file happens on your own device. No data is stored or sent yet.')
+    .add('de', 'Der Prozess zum Extrahieren der richtigen Daten aus der Datei erfolgt auf Ihrem eigenen Gerät. Es werden noch keine Daten gespeichert oder gesendet.')
+    .add('nl', 'Het proces om de juiste gegevens uit het bestand te halen gebeurt op je eigen apparaat. Er worden nog geen gegevens opgeslagen of verzonden.')
+    .add('it', 'Il processo per estrarre i dati corretti dal file avviene sul tuo dispositivo. Nessun dato viene ancora memorizzato o inviato.')
+    .add('es', 'El proceso para extraer los datos correctos del archivo ocurre en su propio dispositivo. Aún no se almacenan ni envían datos.')
 }
 
 const placeholder = (): Translatable => {
