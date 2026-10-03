@@ -55,7 +55,7 @@ const donateQuestionLabel = new TextBundle()
   .add("de", "Möchten Sie die obenstehenden Daten spenden?")
   .add("it", "Vuoi donare i dati sopra indicati?")
   .add("es", "¿Desea donar los datos anteriores?")
-  .add("nl", "Wilt u de bovenstaande gegevens doneren?")
+  .add("nl", "Wil je de bovenstaande gegevens doneren?")
   .add("ro", "Doriți să donați datele de mai sus?")
   .add("lt", "Ar norite paaukoti aukščiau nurodytus duomenis?");
 

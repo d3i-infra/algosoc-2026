@@ -134,7 +134,7 @@ test('nl full flow: Dutch chrome and content, donation completes', async ({ page
   expect(SUPPORTED_UI_LOCALES).toContain('nl');
 
   await bootAndUpload(page, '/?locale=nl', {
-    heading: 'Selecteer uw example bestand',
+    heading: 'Kies je example bestand',
     selectButton: 'Kies bestand',
     continueButton: 'Verder',
   });

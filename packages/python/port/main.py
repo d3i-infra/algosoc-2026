@@ -41,7 +41,7 @@ def error_flow(platform: str | None, tb: str):
         props.PropsUIPromptText(text=props.Translatable({"nl": tb, "en": tb, "de": tb, "it": tb, "es": tb})),
         props.PropsUIPromptConfirm(
             text=props.Translatable({
-                "nl": "Wilt u de fout rapporteren zodat we het probleem kunnen oplossen?",
+                "nl": "Wil je de fout rapporteren zodat we het probleem kunnen oplossen?",
                 "en": "Would you like to report this error so we can fix the problem?",
                 "de": "Möchten Sie diesen Fehler melden, damit wir das Problem beheben können?",
                 "it": "Desidera segnalare questo errore in modo che possiamo risolvere il problema?",
