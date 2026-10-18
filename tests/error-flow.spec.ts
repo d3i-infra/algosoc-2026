@@ -18,6 +18,10 @@ test('error flow donates report, shows task-incomplete page, and exits nonzero',
   await page.goto('http://localhost:3000/');
   await expect(page.getByRole('heading', { name: 'Select your example file' })).toBeVisible({ timeout: 90000 });
 
+  // The e2etest platform sends an example file name; the prompt shows it
+  // until a file is chosen (the example platform shows the built-in fallback).
+  await expect(page.getByText('Example: example-username-2026-10-10-AbCdEfGh.zip', { exact: true })).toBeVisible();
+
   // Upload the fixture that makes the example extractor raise
   const fileChooserPromise = page.waitForEvent('filechooser');
   await page.getByText('Choose file').click();
@@ -71,6 +75,8 @@ test('declining retry after an invalid file shows task-incomplete page and exits
   await page.getByText('Choose file').click();
   const fileChooser = await fileChooserPromise;
   await fileChooser.setFiles(path.join(__dirname, 'invalid.zip'));
+  await expect(page.getByText('invalid.zip', { exact: true })).toBeVisible();
+  await expect(page.getByText('Example: example-username-2026-10-10-AbCdEfGh.zip', { exact: true })).toHaveCount(0);
   await page.getByText('Continue').click();
 
   await expect(page.getByRole('heading', { name: 'Try again' })).toBeVisible({ timeout: 60000 });
