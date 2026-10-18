@@ -1780,6 +1780,8 @@ def extraction(tiktok_zip: SeekableBinaryReader, validation) -> ExtractionResult
 class TikTokFlow(FlowBuilder):
     """Flow implementation for the TikTok data donation study."""
 
+    file_example = "TikTok_Data_1791642231.zip"
+
     def __init__(self, session_id: str):
         super().__init__(session_id, "TikTok")
 
