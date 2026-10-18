@@ -147,8 +147,18 @@ def generate_incomplete_upload_prompt(
     return props.PropsUIPromptConfirm(text, ok, cancel)
 
 
+_EXAMPLE_WORD = {"en": "Example", "nl": "Voorbeeld", "de": "Beispiel", "it": "Esempio", "es": "Ejemplo"}
+
+
+def _example_text(filename: str) -> props.Translatable:
+    """Only the leading word is translated; the file name stays identical in
+    every locale so a participant can compare it letter for letter with the
+    name in their Downloads folder."""
+    return props.Translatable(cast(props.Translations, {locale: f"{word}: {filename}" for locale, word in _EXAMPLE_WORD.items()}))
+
+
 def generate_file_prompt(
-    platform_name: str, extensions: str, multiple: bool = False
+    platform_name: str, extensions: str, multiple: bool = False, example: str | None = None
 ) -> d3i_props.PropsUIPromptFileInputSingle | d3i_props.PropsUIPromptFileInputMultiple:
     """
     Generates a file input prompt for selecting file(s) for a platform.
@@ -168,6 +178,11 @@ def generate_file_prompt(
             For example: "application/zip, text/plain, application/json"
         multiple (bool, optional): Whether to allow multiple file selection.
             Defaults to False.
+        example (str, optional): A sample file name shown in the prompt before a
+            file is selected, e.g. "instagram-username-2026-10-10-UQx3SPDb.zip".
+            When None or empty, a single prompt sends no example (the component
+            shows its own fallback) and a multiple prompt uses the Takeout
+            chunked-export example.
 
     Returns:
         d3i_props.PropsUIPromptFileInputSingle | d3i_props.PropsUIPromptFileInputMultiple:
@@ -199,16 +214,11 @@ def generate_file_prompt(
         # Keeps the filename portion identical across locales — only the
         # leading "Example"/"Voorbeeld"/... word is translated — matching
         # the Google Takeout chunked-export naming shape (see ADR-0040).
-        example = props.Translatable({
-            "en": "Example: takeout-...-1-001.zip, takeout-...-2-001.zip",
-            "nl": "Voorbeeld: takeout-...-1-001.zip, takeout-...-2-001.zip",
-            "de": "Beispiel: takeout-...-1-001.zip, takeout-...-2-001.zip",
-            "it": "Esempio: takeout-...-1-001.zip, takeout-...-2-001.zip",
-            "es": "Ejemplo: takeout-...-1-001.zip, takeout-...-2-001.zip",
-        })
-        return d3i_props.PropsUIPromptFileInputMultiple(description, extensions, example=example)
+        example_text = _example_text(example or "takeout-...-1-001.zip, takeout-...-2-001.zip")
+        return d3i_props.PropsUIPromptFileInputMultiple(description, extensions, example=example_text)
 
-    return d3i_props.PropsUIPromptFileInputSingle(description, extensions)
+    example_text = _example_text(example) if example else None
+    return d3i_props.PropsUIPromptFileInputSingle(description, extensions, example=example_text)
 
 
 def generate_review_data_prompt(

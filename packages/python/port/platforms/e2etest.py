@@ -139,8 +139,12 @@ class E2eTestFlow(FlowBuilder):
 
     Passes ``"example"`` as the participant-visible platform name on purpose:
     the baseline donation specs assert the example platform's headings, and
-    this platform is a stand-in for it.
+    this platform is a stand-in for it. It sets an example file name so the
+    error-flow suite can assert that the component displays one, while the
+    example platform keeps the fallback that ``donation.spec.ts`` asserts.
     """
+
+    file_example = "example-username-2026-10-10-AbCdEfGh.zip"
 
     def __init__(self, session_id: str):
         super().__init__(session_id, "example")

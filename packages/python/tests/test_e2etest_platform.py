@@ -65,3 +65,10 @@ def test_delegates_to_example_platform(monkeypatch):
     # Participant-visible identity mimics the example platform (headings,
     # donation key) so the baseline donation specs pass unchanged.
     assert flow.platform_name == "example"
+
+
+def test_file_prompt_carries_an_example():
+    from port.platforms.e2etest import E2eTestFlow
+
+    d = E2eTestFlow("session").generate_file_prompt().toDict()
+    assert d["example"]["translations"]["en"] == "Example: example-username-2026-10-10-AbCdEfGh.zip"

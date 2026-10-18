@@ -4652,6 +4652,8 @@ def extraction(facebook_zip: SeekableBinaryReader, validation) -> ExtractionResu
 class FacebookFlow(FlowBuilder):
     """Flow implementation for the Facebook data donation study."""
 
+    file_example = "facebook-username-2026-10-10-wjMrFg05.zip"
+
     def __init__(self, session_id: str):
         super().__init__(session_id, "Facebook")
 

@@ -2840,6 +2840,8 @@ class InstagramFlow(FlowBuilder):
         Unique identifier for the current participant session.
     """
 
+    file_example = "instagram-username-2026-10-10-UQx3SPDb.zip"
+
     def __init__(self, session_id: str):
         super().__init__(session_id, "Instagram")
 
