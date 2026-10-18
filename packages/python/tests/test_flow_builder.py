@@ -326,6 +326,19 @@ class TestDonateKeyFormat:
         assert cmd.key == "sess-42-testplatform"
 
 
+class TestFileExample:
+    def test_no_file_example_sends_no_example(self):
+        assert "example" not in StubFlow().generate_file_prompt().toDict()
+
+    def test_file_example_reaches_the_prompt(self):
+        class NamedFlow(StubFlow):
+            file_example = "test-username-2026-10-10-AbCdEfGh.zip"
+
+        d = NamedFlow().generate_file_prompt().toDict()
+        assert d["__type__"] == "PropsUIPromptFileInputSingle"
+        assert d["example"]["translations"]["en"] == "Example: test-username-2026-10-10-AbCdEfGh.zip"
+
+
 class TestUploadAdapterPassthrough:
     """Verify the adapter (file_result.value) is passed to validate/extract,
     not a path string. ADR-0026 streaming invariant.

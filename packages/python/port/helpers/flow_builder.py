@@ -52,6 +52,9 @@ class FlowBuilder:
     # "PayloadFiles"; the file prompt, safety check, and archive-set
     # construction below key off this attribute. See ADR-0040 (ArchiveSet).
     expected_file_payload: str = "PayloadFile"
+    # A platform sets this to the shape of its export's file name; port_helpers
+    # turns it into the example text shown on the file prompt.
+    file_example: str | None = None
 
     def __init__(self, session_id: str, platform_name: str):
         self.session_id = session_id
@@ -335,7 +338,10 @@ class FlowBuilder:
     def generate_file_prompt(self):
         """Generate platform-specific file prompt."""
         return ph.generate_file_prompt(
-            self.platform_name, "application/zip", multiple=self.expected_file_payload == "PayloadFiles"
+            self.platform_name,
+            "application/zip",
+            multiple=self.expected_file_payload == "PayloadFiles",
+            example=self.file_example,
         )
 
     @abstractmethod

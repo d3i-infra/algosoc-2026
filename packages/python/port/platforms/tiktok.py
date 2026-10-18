@@ -1784,7 +1784,9 @@ class TikTokFlow(FlowBuilder):
         super().__init__(session_id, "TikTok")
 
     def generate_file_prompt(self):
-        return ph.generate_file_prompt(self.platform_name, "application/json, application/zip")
+        return ph.generate_file_prompt(
+            self.platform_name, "application/json, application/zip", example=self.file_example
+        )
 
     def validate_file(self, file):
         return validate.validate_zip(DDP_CATEGORIES, file)

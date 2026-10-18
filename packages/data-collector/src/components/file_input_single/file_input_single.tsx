@@ -127,11 +127,11 @@ interface Copy {
   continueButton: string
 }
 
-function prepareCopy ({ description, extensions, locale }: Props): Copy {
+function prepareCopy ({ description, extensions, example, locale }: Props): Copy {
   return {
     description: resolveText(description, locale),
     note: resolveText(note(), locale),
-    placeholder: resolveText(placeholder(), locale),
+    placeholder: example !== undefined ? resolveText(example, locale) : resolveText(placeholder(), locale),
     extensions: extensions,
     selectButton: resolveText(selectButtonLabel(), locale),
     continueButton: resolveText(continueButtonLabel(), locale)
@@ -140,7 +140,8 @@ function prepareCopy ({ description, extensions, locale }: Props): Copy {
 
 // The four bundles below repeat feldspar's file_input.tsx word for word, for
 // the five locales this fork supports, so participants read what they read
-// before this prompt replaced feldspar's.
+// before this prompt replaced feldspar's. The placeholder bundle is now the
+// fallback for prompts that send no `example`.
 
 const continueButtonLabel = (): Translatable => {
   return new TextBundle()

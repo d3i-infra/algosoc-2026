@@ -47,11 +47,68 @@ def test_multi_prompt_example_filename_identical_across_locales():
         assert text.endswith(filename_part), f"locale {locale!r} filename part diverged: {text!r}"
 
 
-def test_single_prompt_has_no_example_key():
-    """The single-file prompt type carries no `example` concept at all —
-    only PropsUIPromptFileInputMultiple gained the field."""
+def test_single_prompt_without_example_has_no_example_key():
+    """No name given → the key is absent, so the component's own fallback shows
+    (the example platform relies on this; tests/donation.spec.ts asserts it)."""
     prompt = ph.generate_file_prompt("Instagram", "application/zip")
     assert "example" not in prompt.toDict()
+
+
+def test_single_prompt_example_translates_only_the_leading_word():
+    prompt = ph.generate_file_prompt(
+        "Instagram", "application/zip", example="instagram-username-2026-10-10-UQx3SPDb.zip"
+    )
+    assert prompt.toDict()["example"]["translations"] == {
+        "en": "Example: instagram-username-2026-10-10-UQx3SPDb.zip",
+        "nl": "Voorbeeld: instagram-username-2026-10-10-UQx3SPDb.zip",
+        "de": "Beispiel: instagram-username-2026-10-10-UQx3SPDb.zip",
+        "it": "Esempio: instagram-username-2026-10-10-UQx3SPDb.zip",
+        "es": "Ejemplo: instagram-username-2026-10-10-UQx3SPDb.zip",
+    }
+
+
+def test_empty_example_is_no_example():
+    """An empty name behaves exactly like None: the single prompt omits the key,
+    the multi prompt keeps its Takeout default."""
+    assert "example" not in ph.generate_file_prompt("Instagram", "application/zip", example="").toDict()
+    multi = ph.generate_file_prompt("Google", "application/zip", multiple=True, example="").toDict()
+    assert multi["example"]["translations"]["en"] == "Example: takeout-...-1-001.zip, takeout-...-2-001.zip"
+
+
+def test_multi_prompt_explicit_example_wins():
+    prompt = ph.generate_file_prompt("Google", "application/zip", multiple=True, example="other-1.zip")
+    assert prompt.toDict()["example"]["translations"]["nl"] == "Voorbeeld: other-1.zip"
+
+
+# The complete wire payload of the Google prompt as it is on master (36baea2),
+# captured before any change.
+GOOGLE_PROMPT_ON_MASTER = {
+    "__type__": "PropsUIPromptFileInputMultiple",
+    "description": {
+        "translations": {
+            "en": "Choose ALL the Google files that you requested in the previous steps and stored on your device. Google Takeout usually delivers several files that belong together.",
+            "nl": "Kies ALLE Google-bestanden die je in de vorige stappen hebt aangevraagd en op je apparaat hebt opgeslagen. Google Takeout levert meestal meerdere zipbestanden die bij elkaar horen.",
+            "de": "Wählen Sie ALLE Google-Dateien aus, die Sie in den vorherigen Schritten angefordert und auf Ihrem Gerät gespeichert haben. Google Takeout liefert meist mehrere Dateien, die zusammengehören.",
+            "it": "Scelga TUTTI i file di Google che ha richiesto nei passaggi precedenti e salvato sul suo dispositivo. Google Takeout di solito fornisce più file che vanno insieme.",
+            "es": "Elija TODOS los archivos de Google que solicitó en los pasos anteriores y guardó en su dispositivo. Google Takeout suele entregar varios archivos que van juntos."
+        }
+    },
+    "extensions": "application/zip",
+    "example": {
+        "translations": {
+            "en": "Example: takeout-...-1-001.zip, takeout-...-2-001.zip",
+            "nl": "Voorbeeld: takeout-...-1-001.zip, takeout-...-2-001.zip",
+            "de": "Beispiel: takeout-...-1-001.zip, takeout-...-2-001.zip",
+            "it": "Esempio: takeout-...-1-001.zip, takeout-...-2-001.zip",
+            "es": "Ejemplo: takeout-...-1-001.zip, takeout-...-2-001.zip"
+        }
+    }
+}
+
+
+def test_google_payload_is_unchanged():
+    """Every field, not just the example: the refactor to _example_text must not move a byte."""
+    assert ph.generate_file_prompt("Google", "application/zip", multiple=True).toDict() == GOOGLE_PROMPT_ON_MASTER
 
 
 def test_protocol_error_page_covers_required_locales():
