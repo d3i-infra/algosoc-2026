@@ -1719,7 +1719,7 @@ def stories_published_to_df(
 
         {
           "summary": "Each row represents one Instagram Story published by the participant.",
-          "source_file": "stories.json / stories.html",
+          "source_file": "media/stories.json / media/stories.html",
           "columns": {
             "Text": "Caption or text of the story, or 'Story has no text' when empty.",
             "Media type": "File extension of the story media asset (e.g. .jpg, .mp4).",
@@ -1752,7 +1752,7 @@ def stories_published_to_df(
 
 
 def _stories_published_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
-    result = reader.json("stories.json")
+    result = reader.json("media/stories.json")
     if not result.found:
         return pd.DataFrame()
     data = result.data
@@ -1789,7 +1789,7 @@ def _stories_published_json(reader: ZipArchiveReader, errors: Counter) -> pd.Dat
 
 
 def _stories_published_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
-    result = reader.raw("stories.html")
+    result = reader.raw("media/stories.html")
     if not result.found:
         return pd.DataFrame()
 

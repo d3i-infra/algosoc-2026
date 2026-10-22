@@ -441,7 +441,7 @@
       "extractor": "stories_published_to_df",
       "documentation": {
         "summary": "Each row represents one Instagram Story published by the participant.",
-        "source_file": "stories.json / stories.html",
+        "source_file": "media/stories.json / media/stories.html",
         "columns": {
           "Text": "Caption or text of the story, or 'Story has no text' when empty.",
           "Media type": "File extension of the story media asset (e.g. .jpg, .mp4).",
