@@ -50,7 +50,6 @@ Platform info::
 import logging
 import re
 from collections import Counter
-from dataclasses import dataclass
 from datetime import datetime
 from typing import Callable
 from urllib.parse import parse_qs, urlparse
@@ -61,6 +60,7 @@ import pandas as pd
 
 import port.helpers.extraction_helpers as eh
 import port.helpers.validate as validate
+from port.helpers.account_holder import AccountHolder, attempt as _attempt, cleaned as _cleaned, redact_account_holder
 from port.helpers.extraction_helpers import ZipArchiveReader
 from port.helpers.flow_builder import FlowBuilder
 
@@ -4425,15 +4425,6 @@ EXTRACTOR_REGISTRY: dict[str, Callable[..., pd.DataFrame]] = {
 # Main extraction & flow
 # ---------------------------------------------------------------------------
 
-@dataclass(frozen=True)
-class AccountHolder:
-    """Whose export this is, as far as the export says: the names the account has
-    gone by, longest first, and its username or, for an account without one, its id."""
-
-    names: tuple[str, ...] = ()
-    identifier: str | None = None
-
-
 #: A username: letters and digits, with single dots inside, five characters at the
 #: least, which is Facebook's own minimum. An account id has digits only. Anything
 #: shorter would be redacted wherever that word or number stands alone.
@@ -4536,23 +4527,6 @@ def _identifier_from_package(reader: ZipArchiveReader, package_name: str) -> str
     return found.pop() if len(found) == 1 else None
 
 
-def _attempt(source, default, *args):
-    """What *source* finds, or *default* when it fails. A source that cannot be read
-    is an export of another shape than expected, never a reason to stop extraction."""
-    try:
-        return source(*args)
-    except Exception as e:
-        logger.warning("Account holder: %s failed with %s", source.__name__, type(e).__name__)
-        return default
-
-
-def _cleaned(names) -> list[str]:
-    """The names worth matching, longest first: whitespace evened out, no
-    duplicates, nothing shorter than two characters."""
-    cleaned = {" ".join(name.split()) for name in names if isinstance(name, str)}
-    return sorted((name for name in cleaned if len(name) >= 2), key=lambda name: (-len(name), name))
-
-
 def _resolve_account_holder(reader: ZipArchiveReader, package_name: str = "") -> AccountHolder:
     """Whose export this is: the names, and the username or the account id.
 
@@ -4590,31 +4564,9 @@ def _identifier_expression(identifier: str) -> str:
 
 
 def _redact_account_holder(frames, holder: AccountHolder) -> None:
-    """Redact the account holder and e-mail addresses from every frame, in place.
-
-    One pattern for the text columns: an address, which becomes ``[email]``, or a
-    name or the identifier, which become ``[user]``. One for the link columns: the
-    identifier alone. A name is matched as a whole, its parts separated by any
-    whitespace, where a hyphen also counts as part of a name, so that another
-    person's double-barrelled name is left."""
-    identifier = _identifier_expression(holder.identifier) if holder.identifier else ""
-    names = "|".join(r"\s+".join(map(re.escape, name.split())) for name in holder.names)
-    alternatives = [
-        rf"(?P<email>{eh.EMAIL_PATTERN.pattern})",
-        rf"(?<![\w-])(?:{names})(?![\w-])" if names else "",
-        identifier,
-    ]
-    text = re.compile("|".join(filter(None, alternatives)), re.IGNORECASE)
-    link = re.compile(identifier, re.IGNORECASE) if identifier else None
-
-    def token(match: re.Match) -> str:
-        return "[email]" if match.group("email") else "[user]"
-
-    for frame in frames:
-        for column in frame.columns.intersection(TEXT_COLUMNS):
-            frame[column] = frame[column].astype("string").str.replace(text, token, regex=True)
-        for column in frame.columns.intersection(LINK_COLUMNS) if link else []:
-            frame[column] = frame[column].astype("string").str.replace(link, "[user]", regex=True)
+    """Redact the account holder and e-mail addresses from every frame, in place."""
+    redact_account_holder(frames, holder, text_columns=TEXT_COLUMNS, link_columns=LINK_COLUMNS,
+                          identifier_expression=_identifier_expression)
 
 
 def extraction(facebook_zip: SeekableBinaryReader, validation) -> ExtractionResult:
