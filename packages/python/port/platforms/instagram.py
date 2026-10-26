@@ -65,10 +65,10 @@ from lxml import etree
 import pandas as pd
 
 import port.helpers.extraction_helpers as eh
-import port.helpers.validate as validate
 from port.helpers.account_holder import AccountHolder, attempt as _attempt, cleaned as _cleaned, redact_account_holder
 from port.helpers.extraction_helpers import ZipArchiveReader
 from port.helpers.flow_builder import FlowBuilder
+from port.helpers.meta_recognition import MetaValidation, validate_meta
 
 from port.helpers.validate import (
     DDPCategory,
@@ -194,7 +194,7 @@ DDP_CATEGORIES = [
             "stories.json",
             "profile_photos.json",
             "followers.json",
-            "signup_information.json",
+            "signup_details.json",
             "comments_allowed_from.json",
             "login_activity.json",
             "your_topics.json",
@@ -2977,6 +2977,17 @@ def extraction(
     return result
 
 
+def validate_ddp(archive: SeekableBinaryReader) -> MetaValidation:
+    """Recognise an Instagram export by its folder markers.
+
+    Recognition goes through the shared Meta helper, which scores the zip's
+    folder names rather than its file names. ``DDP_CATEGORIES`` now only
+    name the export's formats (json_en, html_en); they no longer drive
+    recognition.
+    """
+    return validate_meta(archive, "instagram", DDP_CATEGORIES)
+
+
 class InstagramFlow(FlowBuilder):
     """Flow implementation for the Instagram data donation study.
 
@@ -2990,9 +3001,11 @@ class InstagramFlow(FlowBuilder):
 
     def __init__(self, session_id: str):
         super().__init__(session_id, "Instagram")
+        self.last_validation: MetaValidation | None = None
 
     def validate_file(self, file):
-        return validate.validate_zip(DDP_CATEGORIES, file)
+        self.last_validation = validate_ddp(file)
+        return self.last_validation
 
     def extract_data(self, file_value, validation):
         return extraction(file_value, validation)

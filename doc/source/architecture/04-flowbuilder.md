@@ -184,14 +184,16 @@ platform name, status code, and counts, never participant data.
 | Upload skipped | `[Platform] Upload skipped: type=PayloadFalse` |
 | Protocol mismatch | `[Platform] Protocol mismatch: expected=PayloadFile got=PayloadJSON` |
 | Safety check failed | `[Platform] Safety check failed: FileTooLargeError` |
-| Validation passed | `[Platform] Validation: valid (category_id)` |
-| Validation failed | `[Platform] Validation: invalid` |
+| Validation passed | `[Platform] Validation: valid (category_id) [detail]` |
+| Validation failed | `[Platform] Validation: invalid (category_id) [detail]` |
 | Extraction complete | `[Platform] Extraction complete: N tables, M rows; errors: ErrorType×count` |
 | Consent form shown | `[Platform] Consent form shown` |
 | Consent accepted | `[Platform] Consent: accepted` |
 | Consent declined | `[Platform] Consent: declined` |
 | Donation started | `[Platform] Donation started: payload size=N bytes` |
 | Donation result | `[Platform] Donation result: success/failed` |
+
+The `detail` part is present only for platforms whose validation carries marker counts, today Instagram.
 
 ---
 

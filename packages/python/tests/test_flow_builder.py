@@ -626,3 +626,47 @@ class TestTooManyFilesSafetyPath:
         with pytest.raises(TaskIncompleteError) as exc:
             gen.send(make_payload("PayloadTrue"))
         assert exc.value.exit_code == 4
+
+
+class TestValidationMilestoneDetail:
+    """The validation milestones carry the category id, plus marker counts when provided."""
+
+    @staticmethod
+    def validation_message(flow):
+        gen = flow.start_flow()
+        start_and_skip_logs(gen)
+        cmd = gen.send(make_payload_file())
+        messages = []
+        while isinstance(cmd, CommandSystemLog):
+            messages.append(cmd.message)
+            cmd = gen.send(make_payload("PayloadVoid"))
+        return next(m for m in messages if "Validation:" in m)
+
+    @staticmethod
+    def flow_with(status, category_id, **extra):
+        flow = StubFlow()
+
+        def validate(file):
+            v = MagicMock(spec=ValidateInput)
+            v.get_status_code_id.return_value = status
+            v.current_ddp_category = MagicMock(id=category_id)
+            for key, value in extra.items():
+                setattr(v, key, value)
+            return v
+
+        flow.validate_file = validate
+        return flow
+
+    def test_invalid_milestone_names_category(self):
+        message = self.validation_message(self.flow_with(1, "unknown"))
+        assert message.endswith("Validation: invalid (unknown)")
+
+    def test_milestone_carries_detail_when_present(self):
+        message = self.validation_message(self.flow_with(0, "json_en", milestone_detail="ig=3 fb=0"))
+        assert message.endswith("Validation: valid (json_en) ig=3 fb=0")
+        empty = self.validation_message(self.flow_with(0, "json_en", milestone_detail=""))
+        assert empty.endswith("(json_en)")
+
+    def test_milestone_without_detail_attribute_is_unchanged(self):
+        message = self.validation_message(StubFlow())
+        assert message.endswith("Validation: valid (json_en)")
