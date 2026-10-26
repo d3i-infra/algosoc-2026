@@ -150,7 +150,9 @@ share it rather than each rendering their own prompt:
 
 Both land the participant on the same "Try again?" prompt; from the
 participant's point of view, a corrupt part and an invalid file are the
-same recoverable mistake.
+same recoverable mistake. The prompt's text follows the validation's
+`reason` when it carries one (`FlowBuilder.last_validation`, reset before
+every file prompt), so a retry that ran no validation gets the plain text.
 
 ### Safety check
 

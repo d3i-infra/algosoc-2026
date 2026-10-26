@@ -18,19 +18,6 @@ def test_validate_ddp_is_the_meta_validator():
     assert fb.current_ddp_category.id == "facebook_detected"
 
 
-def test_validate_file_keeps_the_latest_validation():
-    flow = InstagramFlow("s")
-    assert flow.last_validation is None
-    result = flow.validate_file(make_zip(INSTAGRAM_JSON))
-    assert isinstance(result, MetaValidation)
-    assert flow.last_validation is result
-
-    second = flow.validate_file(make_zip(FACEBOOK_LIST))
-    assert flow.last_validation is second
-    assert second is not result
-    assert second.reason == "facebook"
-
-
 def test_known_files_name_signup_details():
     assert "signup_details.json" in DDP_CATEGORIES[0].known_files
     assert "signup_information.json" not in DDP_CATEGORIES[0].known_files
@@ -40,6 +27,17 @@ def upload_payload(members):
     buf = make_zip(members)
     buf.size = len(buf.getvalue())
     return make_payload("PayloadFile", value=buf)
+
+
+def test_flow_keeps_the_latest_validation():
+    flow = InstagramFlow("s")
+    assert flow.last_validation is None
+    gen = flow.start_flow()
+    start_and_skip_logs(gen)
+    cmd = advance_past_logs(gen, upload_payload(FACEBOOK_LIST))
+    assert cmd.page.header.title.translations["en"] == "Try again"
+    assert isinstance(flow.last_validation, MetaValidation)
+    assert flow.last_validation.reason == "facebook"
 
 
 def test_retry_text_follows_latest_validation():

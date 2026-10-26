@@ -67,7 +67,6 @@ import pandas as pd
 import port.helpers.extraction_helpers as eh
 from port.helpers.account_holder import AccountHolder, attempt as _attempt, cleaned as _cleaned, redact_account_holder
 from port.helpers.extraction_helpers import ZipArchiveReader
-import port.helpers.port_helpers as ph
 from port.helpers.flow_builder import FlowBuilder
 from port.helpers.meta_recognition import MetaValidation, require_study_categories, validate_meta
 
@@ -3013,19 +3012,9 @@ class InstagramFlow(FlowBuilder):
 
     def __init__(self, session_id: str):
         super().__init__(session_id, "Instagram")
-        self.last_validation: MetaValidation | None = None
 
     def validate_file(self, file):
-        self.last_validation = validate_ddp(file)
-        return self.last_validation
-
-    def generate_retry_prompt(self):
-        if self.last_validation and self.last_validation.reason == "no_study_categories":
-            return ph.generate_no_study_data_prompt(self.platform_name, self.last_validation.missing_study_labels)
-        return ph.generate_retry_prompt(
-            self.platform_name,
-            reason=self.last_validation.reason if self.last_validation else None,
-        )
+        return validate_ddp(file)
 
     def extract_data(self, file_value, validation):
         return extraction(file_value, validation)
