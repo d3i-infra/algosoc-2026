@@ -47,6 +47,7 @@ Load the ADR(s) whose filename matches the area you are touching.
 - [0024 — ZipArchiveReader handles expected-missing DDP members](./0024-ziparchivereader-handles-expected-missing-ddp-members.md)
 - [0026 — Stream PayloadFile uploads without materializing](./0026-stream-payloadfile-uploads-without-materializing.md)
 - [0040 — Present multi-part uploads as one archive-set](./0040-present-multi-part-uploads-as-one-archive-set.md)
+- [0043 — Resolve the account holder from any source; none is not an error](./0043-resolve-the-account-holder-from-any-source-none-is-not-an-error.md)
 
 ### Testing
 
