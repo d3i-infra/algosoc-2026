@@ -9,7 +9,7 @@
       "en",
       "nl"
     ],
-    "description": "Note that supported DDP language also includes Dutch and probably other languages as well. You get an english DDP regardless of the Dutch language setting. These data donation flows have not been tested yet, if you find anything wrong with them report to datadonation@uu.nl and they will be fixed!",
+    "description": "File and folder names are English whatever the account's language; the labels inside follow it. English and Dutch labels are supported.",
     "time_last_tested": "not yet implemented"
   },
   "tables": [
@@ -441,7 +441,7 @@
       "extractor": "stories_published_to_df",
       "documentation": {
         "summary": "Each row represents one Instagram Story published by the participant.",
-        "source_file": "stories.json / stories.html",
+        "source_file": "media/stories.json / media/stories.html",
         "columns": {
           "Text": "Caption or text of the story, or 'Story has no text' when empty.",
           "Media type": "File extension of the story media asset (e.g. .jpg, .mp4).",

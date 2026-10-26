@@ -4,7 +4,8 @@ Instagram
 This module contains an example flow of a Instagram data donation study
 
 Assumptions:
-It handles DDPs in the english language with filetype JSON.
+It handles DDPs in JSON and HTML. File and folder names are English whatever the account's language, while label_values labels (Owner, Name, Username, Caption) are translated and are matched in English and Dutch.
+string_map_data keys are matched in English and in the Dutch variants seen in earlier real exports (Tijd, Opmerking, Auteur, Media-eigenaar; searches also carry German and others); the autumn 2026 exports checked kept these keys English.
 
 Timestamps
 ----------
@@ -47,7 +48,7 @@ Platform info::
         "name": "Instagram",
         "filetypes": ["json", "html"],
         "languages": ["en", "nl"],
-        "description": "Note that supported DDP language also includes Dutch and probably other languages as well. You get an english DDP regardless of the Dutch language setting. These data donation flows have not been tested yet, if you find anything wrong with them report to datadonation@uu.nl and they will be fixed!",
+        "description": "File and folder names are English whatever the account's language; the labels inside follow it. English and Dutch labels are supported.",
         "time_last_tested": "not yet implemented"
     }
 """
@@ -315,6 +316,17 @@ def _first_present(data: dict[str, Any], keys: list[str]) -> dict[str, Any]:
     return {}
 
 
+# label_values labels that a Dutch account's export translates.
+OWNER_HEADINGS = frozenset({"Owner", "Eigenaar"})
+NAME_LABELS = frozenset({"Name", "Naam"})
+USERNAME_LABELS = frozenset({"Username", "Gebruikersnaam"})
+CAPTION_LABELS = frozenset({"Caption", "Onderschrift"})
+
+# string_map_data keys with the Dutch variants accepted; _first_present tries them in order.
+AUTHOR_KEYS = ["Author", "Auteur"]
+MEDIA_OWNER_KEYS = ["Media Owner", "Media-eigenaar"]
+
+
 def _extract_owner_details(label_values: list[dict[str, Any]]) -> tuple[str, str, str]:
     """Extract ``(owner_name, owner_username, url)`` from a nested label_values structure.
 
@@ -353,9 +365,9 @@ def _extract_owner_details(label_values: list[dict[str, Any]]) -> tuple[str, str
 
         if label == "URL" and not url:
             url = href or value
-        elif label in {"Naam", "Name"} and not owner_name:
+        elif label in NAME_LABELS and not owner_name:
             owner_name = eh.fix_latin1_string(value)
-        elif label in {"Gebruikersnaam", "Username", "Author"} and not owner_username:
+        elif label in USERNAME_LABELS | {"Author"} and not owner_username:
             owner_username = eh.fix_latin1_string(value)
 
         for child in node.values():
@@ -374,7 +386,8 @@ def _extract_owner_from_html(section) -> tuple[str, str]:
 
     Returns ``("", "")`` when no Owner block is found.
     """
-    owner_h2 = section.xpath('.//h2[text()="Owner"]')
+    heading_test = " or ".join(f'text()="{h}"' for h in sorted(OWNER_HEADINGS))
+    owner_h2 = section.xpath(f".//h2[{heading_test}]")
     if not owner_h2:
         return "", ""
     owner_div = owner_h2[0].getparent()
@@ -387,9 +400,9 @@ def _extract_owner_from_html(section) -> tuple[str, str]:
             if len(tds) == 2:
                 label = tds[0].text.strip() if tds[0].text else ""
                 value = tds[1].text.strip() if tds[1].text else ""
-                if label == "Name" and not name:
+                if label in NAME_LABELS and not name:
                     name = value
-                elif label == "Username" and not username:
+                elif label in USERNAME_LABELS and not username:
                     username = value
     return name, username
 
@@ -614,7 +627,7 @@ def _posts_viewed_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFram
             items = data["impressions_history_posts_seen"]  # pyright: ignore
             for item in items:
                 string_map_data = item.get("string_map_data", {})
-                author = _first_present(string_map_data, ["Author", "Auteur"])
+                author = _first_present(string_map_data, AUTHOR_KEYS)
                 time = _first_present(string_map_data, ["Time", "Tijd"])
                 url = _first_present(string_map_data, ["URL"])
                 datapoints.append((
@@ -761,7 +774,7 @@ def _videos_watched_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFr
             items = data["impressions_history_videos_watched"]  # pyright: ignore
             for item in items:
                 string_map_data = item.get("string_map_data", {})
-                author = _first_present(string_map_data, ["Author", "Auteur"])
+                author = _first_present(string_map_data, AUTHOR_KEYS)
                 time = _first_present(string_map_data, ["Time", "Tijd"])
                 url = _first_present(string_map_data, ["URL"])
                 datapoints.append((
@@ -900,7 +913,7 @@ def _post_comments_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFra
             for item in items:  # pyright: ignore[assignment]
                 string_map_data = item.get("string_map_data", {})
                 comment = _first_present(string_map_data, ["Comment", "Opmerking"])
-                owner = _first_present(string_map_data, ["Media Owner", "Media-eigenaar"])
+                owner = _first_present(string_map_data, MEDIA_OWNER_KEYS)
                 time = _first_present(string_map_data, ["Time", "Tijd"])
                 datapoints.append((
                     eh.fix_latin1_string(str(comment.get("value", ""))),
@@ -1442,11 +1455,11 @@ def _saved_posts_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame
                     # Flavour 1: {"label": "...", "value": "..."}
                     label = lv.get("label", "")
                     value = eh.fix_latin1_string(lv.get("value", ""))
-                    if label == "Caption":
+                    if label in CAPTION_LABELS:
                         caption = value
                     elif label == "URL":
                         url = value
-                    elif label == "Username":
+                    elif label in USERNAME_LABELS:
                         username = value
                 elif "dict" in lv:
                     # Flavour 2: {"dict": [...], "title": "..."}
@@ -1460,11 +1473,11 @@ def _saved_posts_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame
                             if tag:
                                 tags.append(eh.fix_latin1_string(tag))
                         hashtags = " ".join(tags) if tags else "Geen hashtags"
-                    elif title == "Owner":
+                    elif title in OWNER_HEADINGS:
                         dict_list = lv.get("dict", [])
                         for dict_item in dict_list:
                             for inner in dict_item.get("dict", []):
-                                if inner.get("label") == "Username":
+                                if inner.get("label") in USERNAME_LABELS:
                                     username = eh.fix_latin1_string(inner.get("value", ""))
 
             if not hashtags:
@@ -1504,7 +1517,8 @@ def _saved_posts_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame
             url = url_a[0].get("href", "") if url_a else ""
 
             # Caption
-            caption_tds = section.xpath(".//td[contains(@class, '_a6_q') and text()='Caption']")
+            caption_test = " or ".join(f"text()='{c}'" for c in sorted(CAPTION_LABELS))
+            caption_tds = section.xpath(f".//td[contains(@class, '_a6_q') and ({caption_test})]")
             caption = ""
             if caption_tds:
                 sibling = caption_tds[0].getnext()
@@ -1719,7 +1733,7 @@ def stories_published_to_df(
 
         {
           "summary": "Each row represents one Instagram Story published by the participant.",
-          "source_file": "stories.json / stories.html",
+          "source_file": "media/stories.json / media/stories.html",
           "columns": {
             "Text": "Caption or text of the story, or 'Story has no text' when empty.",
             "Media type": "File extension of the story media asset (e.g. .jpg, .mp4).",
@@ -1752,7 +1766,7 @@ def stories_published_to_df(
 
 
 def _stories_published_json(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
-    result = reader.json("stories.json")
+    result = reader.json("media/stories.json")
     if not result.found:
         return pd.DataFrame()
     data = result.data
@@ -1789,7 +1803,7 @@ def _stories_published_json(reader: ZipArchiveReader, errors: Counter) -> pd.Dat
 
 
 def _stories_published_html(reader: ZipArchiveReader, errors: Counter) -> pd.DataFrame:
-    result = reader.raw("stories.html")
+    result = reader.raw("media/stories.html")
     if not result.found:
         return pd.DataFrame()
 
@@ -2256,7 +2270,7 @@ def threads_viewed_to_df(
             items = data["text_post_app_text_post_app_posts_seen"]  # pyright: ignore
             for item in items:
                 string_map_data = item.get("string_map_data", {})
-                author = _first_present(string_map_data, ["Author", "Auteur"])
+                author = _first_present(string_map_data, AUTHOR_KEYS)
                 time = _first_present(string_map_data, ["Time", "Tijd"])
                 url = _first_present(string_map_data, ["URL"])
                 datapoints.append((
