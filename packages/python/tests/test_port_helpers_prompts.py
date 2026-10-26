@@ -1,3 +1,5 @@
+import re
+
 import port.api.props as props
 from port.helpers import port_helpers as ph
 
@@ -210,3 +212,93 @@ def test_incomplete_upload_prompt_buttons():
     assert d["ok"]["translations"]["en"] == "No, I have more files"
     assert d["cancel"]["translations"]["en"] == "Yes, I am sure"
     assert d["cancel"]["translations"]["nl"] == "Ja, ik weet het zeker"
+
+
+RETRY_REASON_TEXTS = {
+    ("Instagram", "facebook"): {
+        "en": "This looks like your Facebook file, not your Instagram file. Choose your Instagram file here; you can add your Facebook file at the Facebook step.",
+        "nl": "Dit lijkt je Facebook-bestand te zijn, niet je Instagram-bestand. Kies hier je Instagram-bestand; je Facebook-bestand kun je bij de Facebook-stap toevoegen.",
+    },
+    ("Facebook", "instagram"): {
+        "en": "This looks like your Instagram file, not your Facebook file. Choose your Facebook file here; you can add your Instagram file at the Instagram step.",
+        "nl": "Dit lijkt je Instagram-bestand te zijn, niet je Facebook-bestand. Kies hier je Facebook-bestand; je Instagram-bestand kun je bij de Instagram-stap toevoegen.",
+    },
+    ("Instagram", "nested_zip"): {
+        "en": "This zip file contains another zip file. Open it on your computer and choose the zip file inside it.",
+        "nl": "Dit zipbestand bevat nog een zipbestand. Open het op je computer en kies het zipbestand dat erin zit.",
+    },
+    ("Instagram", "bad_zip"): {
+        "en": "We couldn't open this file as a zip file. Download your Instagram file again and choose the new download.",
+        "nl": "We konden dit bestand niet openen als zipbestand. Download je Instagram-bestand opnieuw en kies de nieuwe download.",
+    },
+}
+
+
+def test_retry_prompt_reason_texts():
+    baseline = ph.generate_retry_prompt("Instagram").toDict()
+    for (platform, reason), expected in RETRY_REASON_TEXTS.items():
+        prompt = ph.generate_retry_prompt(platform, reason=reason).toDict()
+        translations = prompt["text"]["translations"]
+        assert translations["en"] == expected["en"]
+        assert translations["nl"] == expected["nl"]
+        assert prompt["ok"] == baseline["ok"]
+        assert prompt["cancel"] == baseline["cancel"]
+    for reason in (None, "mixed", "unknown"):
+        assert ph.generate_retry_prompt("Instagram", reason=reason).toDict() == baseline
+
+
+def test_retry_prompt_reason_text_names_both_products():
+    fb = ph.generate_retry_prompt("Instagram", reason="facebook").toDict()["text"]["translations"]["en"]
+    assert "Facebook" in fb and "Instagram" in fb
+    ig = ph.generate_retry_prompt("Facebook", reason="instagram").toDict()["text"]["translations"]["en"]
+    assert "Facebook" in ig and "Instagram" in ig
+
+
+def test_retry_prompt_nl_is_informal():
+    formal = re.compile(r"\b(u|uw|alstublieft)\b", re.I)
+    prompts = [ph.generate_retry_prompt("Instagram", reason=r) for r in (None, "facebook", "instagram", "nested_zip", "bad_zip")]
+    prompts.append(ph.generate_retry_prompt("Instagram", multiple=True))
+    for prompt in prompts:
+        d = prompt.toDict()
+        for part in ("text", "ok", "cancel"):
+            assert not formal.search(d[part]["translations"]["nl"])
+    single = ph.generate_retry_prompt("Instagram").toDict()["text"]["translations"]["nl"]
+    assert single == "Helaas kunnen we je Instagram-bestand niet verwerken. Het lijkt niet het bestand te zijn dat we verwachtten. Probeer opnieuw om een ander bestand te kiezen, of stop voorlopig — je kunt later naar deze taak terugkeren."
+    multi = ph.generate_retry_prompt("Instagram", multiple=True).toDict()["text"]["translations"]["nl"]
+    assert multi == "Helaas kunnen we je Instagram-bestand(en) niet verwerken, omdat ze er niet uitzien zoals we verwachten. Probeer het opnieuw met andere bestanden, of stop voorlopig. Je kunt later naar deze taak terugkeren."
+
+
+def _items_two():
+    return {
+        "a": props.Translatable({"en": "Alpha", "nl": "Alfa"}),
+        "b": props.Translatable({"en": "Beta", "nl": "Bèta"}),
+    }
+
+
+_FORMAL = re.compile(r"\b(u|uw|alstublieft)\b", re.I)
+
+
+def test_missing_category_labels_nl_are_informal():
+    from port.platforms.instagram import MISSING_CATEGORIES
+
+    for _folder, label in MISSING_CATEGORIES.values():
+        assert not _FORMAL.search(label.translations["nl"])
+
+
+def test_no_study_data_prompt_text():
+    from port.platforms.instagram import MISSING_CATEGORIES
+
+    items = {key: label for key, (_folder, label) in MISSING_CATEGORIES.items()}
+    d = ph.generate_no_study_data_prompt("Instagram", items).toDict()
+    assert d["text"]["translations"]["en"] == (
+        "Your Instagram file contains none of the parts this study uses: Your Instagram activity, Connections, "
+        "Ads information, Logged information. Request a new download from Instagram with these selected and choose that file."
+    )
+    assert d["text"]["translations"]["nl"] == (
+        "Je Instagram-bestand bevat geen van de onderdelen die het onderzoek gebruikt: Je Instagram-activiteit, Connecties, "
+        "Advertentie-informatie, Gelogde informatie. Vraag bij Instagram een nieuwe download aan waarin deze zijn geselecteerd en kies dat bestand."
+    )
+    retry = ph.generate_retry_prompt("Instagram").toDict()
+    assert d["ok"] == retry["ok"]
+    assert d["cancel"] == retry["cancel"]
+    assert not _FORMAL.search(d["text"]["translations"]["nl"])
