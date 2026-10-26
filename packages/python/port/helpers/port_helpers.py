@@ -46,7 +46,29 @@ def render_page(
     return CommandUIRender(page)
 
 
-def generate_retry_prompt(platform_name: str, multiple: bool = False) -> props.PropsUIPromptConfirm:
+DETECTED_PRODUCT_NAMES: dict[str, str] = {"facebook": "Facebook", "instagram": "Instagram"}
+
+# Retry texts for a validation reason that says more than "not the expected
+# file". Only en and nl are written; other locales fall back (ADR-0037).
+_RETRY_REASON_TEXTS: dict[str, dict[str, str]] = {
+    "_other_product": {
+        "en": "This looks like your {detected} file, not your {platform_name} file. Choose your {platform_name} file here; you can add your {detected} file at the {detected} step.",
+        "nl": "Dit lijkt je {detected}-bestand te zijn, niet je {platform_name}-bestand. Kies hier je {platform_name}-bestand; je {detected}-bestand kun je bij de {detected}-stap toevoegen.",
+    },
+    "nested_zip": {
+        "en": "This zip file contains another zip file. Open it on your computer and choose the zip file inside it.",
+        "nl": "Dit zipbestand bevat nog een zipbestand. Open het op je computer en kies het zipbestand dat erin zit.",
+    },
+    "bad_zip": {
+        "en": "We couldn't open this file as a zip file. Download your {platform_name} file again and choose the new download.",
+        "nl": "We konden dit bestand niet openen als zipbestand. Download je {platform_name}-bestand opnieuw en kies de nieuwe download.",
+    },
+}
+
+
+def generate_retry_prompt(
+    platform_name: str, multiple: bool = False, reason: str | None = None
+) -> props.PropsUIPromptConfirm:
     """
     Generate a multi-locale retry prompt for file processing errors.
 
@@ -68,16 +90,35 @@ def generate_retry_prompt(platform_name: str, multiple: bool = False) -> props.P
             fires on a validation failure, i.e. no recognised source found in
             the selection, or a corrupt part. A selection that validates but
             is missing a product is instead handled by the soft-confirm step
-            (FlowBuilder.missing_products, see generate_incomplete_upload_prompt),
+            (FlowBuilder.missing_products, see generate_incomplete_upload_prompt)
+            on Google; Instagram has no such step and rejects an export holding
+            none of its study categories through this page, with reason
+            "no_study_categories" (see generate_no_study_data_prompt),
             which is why this copy no longer asks for ALL the files again.
             Defaults to False.
+        reason: Why validation failed, when the flow knows. A key of
+            DETECTED_PRODUCT_NAMES (the file is the other Meta product),
+            "nested_zip" or "bad_zip" select a specific text; None and any
+            other value (mixed, unknown) keep the general text below.
     """
 
-    if multiple:
+    if reason in DETECTED_PRODUCT_NAMES:
+        template_key: str | None = "_other_product"
+    elif reason is not None and not reason.startswith("_"):
+        template_key = reason  # a reason must never name an internal template
+    else:
+        template_key = None
+    if template_key in _RETRY_REASON_TEXTS:
+        slots = {"platform_name": platform_name, "detected": DETECTED_PRODUCT_NAMES.get(reason or "", "")}
+        templates = _RETRY_REASON_TEXTS[template_key]
+        text = props.Translatable(
+            {"en": templates["en"].format(**slots), "nl": templates["nl"].format(**slots)}
+        )
+    elif multiple:
         text = props.Translatable(
             {
                 "en": f"Unfortunately, we cannot process your {platform_name} file(s) because they don't look like we would expect. Try again with different files, or stop for now. You can return to this task later.",
-                "nl": f"Helaas kunnen we uw {platform_name}-bestand(en) niet verwerken, omdat ze er niet uitzien zoals we verwachten. Probeer het opnieuw met andere bestanden, of stop voorlopig. U kunt later naar deze taak terugkeren.",
+                "nl": f"Helaas kunnen we je {platform_name}-bestand(en) niet verwerken, omdat ze er niet uitzien zoals we verwachten. Probeer het opnieuw met andere bestanden, of stop voorlopig. Je kunt later naar deze taak terugkeren.",
                 "de": f"Leider können wir Ihre {platform_name}-Datei(en) nicht verarbeiten, weil sie nicht so aussehen, wie wir es erwarten. Versuchen Sie es erneut mit anderen Dateien, oder beenden Sie vorerst. Sie können später zu dieser Aufgabe zurückkehren.",
                 "it": f"Purtroppo non possiamo elaborare i suoi file di {platform_name}, perché non corrispondono a quanto ci aspettiamo. Riprovi con altri file, oppure interrompa per ora. Potrà tornare a questa attività più tardi.",
                 "es": f"Lamentablemente, no podemos procesar sus archivos de {platform_name}, porque no tienen el aspecto que esperamos. Inténtelo de nuevo con otros archivos, o deténgase por ahora. Podrá volver a esta tarea más tarde.",
@@ -87,12 +128,17 @@ def generate_retry_prompt(platform_name: str, multiple: bool = False) -> props.P
         text = props.Translatable(
             {
                 "en": f"Unfortunately, we cannot process your {platform_name} file. It does not appear to be the file we expected. Try again to select a different file, or stop for now — you can return to this task later.",
-                "nl": f"Helaas kunnen we uw {platform_name}-bestand niet verwerken. Het lijkt niet het bestand te zijn dat we verwachtten. Probeer opnieuw om een ander bestand te kiezen, of stop voorlopig — u kunt later naar deze taak terugkeren.",
+                "nl": f"Helaas kunnen we je {platform_name}-bestand niet verwerken. Het lijkt niet het bestand te zijn dat we verwachtten. Probeer opnieuw om een ander bestand te kiezen, of stop voorlopig — je kunt later naar deze taak terugkeren.",
                 "de": f"Leider können wir Ihre {platform_name}-Datei nicht verarbeiten. Es scheint nicht die erwartete Datei zu sein. Versuchen Sie es erneut, um eine andere Datei auszuwählen, oder beenden Sie vorerst — Sie können später zu dieser Aufgabe zurückkehren.",
                 "it": f"Purtroppo non possiamo elaborare il suo file di {platform_name}. Non sembra essere il file previsto. Riprovi per selezionare un file diverso, oppure interrompa per ora — potrà tornare a questa attività più tardi.",
                 "es": f"Lamentablemente, no podemos procesar su archivo de {platform_name}. No parece ser el archivo esperado. Intente de nuevo para seleccionar un archivo diferente, o deténgase por ahora — podrá volver a esta tarea más tarde.",
             }
         )
+    return _retry_confirm(text)
+
+
+def _retry_confirm(text: props.Translatable) -> props.PropsUIPromptConfirm:
+    """The retry page's two buttons around *text*: ok retries, cancel stops."""
     ok = props.Translatable(
         {"en": "Try again", "nl": "Probeer opnieuw", "de": "Erneut versuchen", "it": "Riprova", "es": "Intentar de nuevo"}
     )
@@ -100,6 +146,18 @@ def generate_retry_prompt(platform_name: str, multiple: bool = False) -> props.P
         {"en": "Stop for now", "nl": "Voorlopig stoppen", "de": "Vorerst beenden", "it": "Interrompi per ora", "es": "Detener por ahora"}
     )
     return props.PropsUIPromptConfirm(text, ok, cancel)
+
+
+def _fill_items(templates: dict[str, str], missing: dict[str, props.Translatable], **slots: str) -> props.Translatable:
+    """Format each locale's template, joining the labels of *missing* in that locale."""
+    # pyright cannot infer a TypedDict (props.Translations) from a dict comprehension.
+    return props.Translatable(cast(props.Translations, {
+        locale: template.format(
+            items=", ".join(label.translations.get(locale, label.translations["en"]) for label in missing.values()),
+            **slots,
+        )
+        for locale, template in templates.items()
+    }))
 
 
 def generate_incomplete_upload_prompt(
@@ -127,13 +185,7 @@ def generate_incomplete_upload_prompt(
         "it": "Non troviamo le seguenti parti: {items}. Un'esportazione di Google Takeout è di solito composta da più parti. È sicuro di aver caricato tutte le parti disponibili nella pagina di Google Takeout?",
         "es": "No encontramos las siguientes partes: {items}. Una exportación de Google Takeout suele constar de varias partes. ¿Está seguro de que ha subido todas las partes disponibles en la página de Google Takeout?",
     }
-    # pyright cannot infer a TypedDict (props.Translations) from a dict comprehension.
-    text = props.Translatable(cast(props.Translations, {
-        locale: template.format(
-            items=", ".join(label.translations.get(locale, label.translations["en"]) for label in missing.values()),
-        )
-        for locale, template in templates.items()
-    }))
+    text = _fill_items(templates, missing)
     ok = props.Translatable({
         "en": "No, I have more files", "nl": "Nee, ik heb meer bestanden",
         "de": "Nein, ich habe weitere Dateien", "it": "No, ho altri file",
@@ -145,6 +197,20 @@ def generate_incomplete_upload_prompt(
         "es": "Sí, estoy seguro",
     })
     return props.PropsUIPromptConfirm(text, ok, cancel)
+
+
+def generate_no_study_data_prompt(
+    platform_name: str, missing: dict[str, props.Translatable]
+) -> props.PropsUIPromptConfirm:
+    """Retry page for a recognised export that holds none of the study's
+    parts. Same buttons as generate_retry_prompt; declining ends as
+    abandoned (ADR-0039), so the copy never suggests the file will be
+    accepted."""
+    templates = {
+        "en": "Your {platform_name} file contains none of the parts this study uses: {items}. Request a new download from {platform_name} with these selected and choose that file.",
+        "nl": "Je {platform_name}-bestand bevat geen van de onderdelen die het onderzoek gebruikt: {items}. Vraag bij {platform_name} een nieuwe download aan waarin deze zijn geselecteerd en kies dat bestand.",
+    }
+    return _retry_confirm(_fill_items(templates, missing, platform_name=platform_name))
 
 
 _EXAMPLE_WORD = {"en": "Example", "nl": "Voorbeeld", "de": "Beispiel", "it": "Esempio", "es": "Ejemplo"}

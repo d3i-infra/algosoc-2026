@@ -215,10 +215,12 @@ class FlowBuilder:
             category = getattr(validation, "current_ddp_category", None)
             category_id = getattr(category, "id", "unknown") if category else "unknown"
 
+            detail = getattr(validation, "milestone_detail", "")
+            suffix = f" {detail}" if detail else ""
             if status == 0:
-                yield from ph.emit_log("info", f"[{self.platform_name}] Validation: valid ({category_id})")
+                yield from ph.emit_log("info", f"[{self.platform_name}] Validation: valid ({category_id}){suffix}")
             else:
-                yield from ph.emit_log("info", f"[{self.platform_name}] Validation: invalid")
+                yield from ph.emit_log("info", f"[{self.platform_name}] Validation: invalid ({category_id}){suffix}")
 
             # 4. If invalid → retry prompt
             if status != 0:
