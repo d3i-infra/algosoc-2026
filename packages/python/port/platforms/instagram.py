@@ -58,7 +58,7 @@ import os
 import re
 from collections import Counter
 from datetime import datetime, timedelta
-from typing import Any, Callable
+from typing import Any, Callable, Iterable
 
 from lxml import etree
 
@@ -66,6 +66,7 @@ import pandas as pd
 
 import port.helpers.extraction_helpers as eh
 import port.helpers.validate as validate
+from port.helpers.account_holder import AccountHolder, attempt as _attempt, cleaned as _cleaned, redact_account_holder
 from port.helpers.extraction_helpers import ZipArchiveReader
 from port.helpers.flow_builder import FlowBuilder
 
@@ -2764,6 +2765,14 @@ def _subscription_for_no_ads_html(reader: ZipArchiveReader, errors: Counter) -> 
 # Extractor registry & platform info
 # ---------------------------------------------------------------------------
 
+#: Columns that hold a link. Only the username is redacted from these, so that a link to
+#: the account holder's own profile or post does not name them and other links stay whole.
+LINK_COLUMNS = ["URL"]
+
+#: Columns that hold a date. Left out of redaction: an identifier never legitimately appears in
+#: one, and a numeric handle would otherwise break every date.
+DATE_COLUMNS = ["Date", "Timestamp"]
+
 #: Mapping from the string names used in port_config.json to actual extractor functions.
 EXTRACTOR_REGISTRY: dict[str, Callable[..., pd.DataFrame]] = {
     "following_to_df": following_to_df,
@@ -2791,24 +2800,147 @@ EXTRACTOR_REGISTRY: dict[str, Callable[..., pd.DataFrame]] = {
 # Main extraction & flow
 # ---------------------------------------------------------------------------
 
-def _extract_username(reader: ZipArchiveReader) -> str | None:
-    """Try to extract the participant's name from personal_information.json."""
-    result = reader.json("personal_information/personal_information.json")
-    if not result.found:
-        return None
-    try:
-        d = result.data
-        denested = eh.dict_denester(d)
-        name = eh.find_item(denested, "name-username")
-        if not name:
-            name = eh.find_item(denested, "username")
-        if not name:
-            name = eh.find_item(denested, "name")
-        if name and isinstance(name, str) and len(name) >= 2:
-            return eh.fix_latin1_string(name)
-    except Exception as e:
-        logger.warning("Could not extract Instagram username: %s", e)
-    return None
+PROFILE_JSON = "personal_information/personal_information.json"
+PROFILE_HTML = "personal_information/personal_information.html"
+SIGNUP_JSON = "security_and_login_information/login_and_profile_creation/signup_details.json"
+SIGNUP_HTML = "security_and_login_information/login_and_profile_creation/signup_details.html"
+START_HTML = "start_here.html"
+
+#: ``instagram-<username>-<date>-<suffix>``, as the zip and the folder inside a wrapped
+#: export are named; the suffix is a random string the download is given. Hyphens only:
+#: every package name seen uses them, and an underscore as separator would be ambiguous
+#: with the underscores a username may hold.
+_PACKAGE_NAME = re.compile(
+    r"(?:^|/)instagram-(?P<identifier>[A-Za-z0-9._]{5,})-\d{4}-\d{2}-\d{2}-[A-Za-z0-9]+(?![A-Za-z0-9])"
+)
+
+
+def _string_map_value(entry: object, labels: Iterable[str]) -> str:
+    """The value under the first of *labels* that an entry's ``string_map_data`` holds
+    as a non-empty string; empty when there is none or the entry is of another shape."""
+    string_map = entry.get("string_map_data") if isinstance(entry, dict) else None
+    if not isinstance(string_map, dict):
+        return ""
+    for label in labels:
+        field = string_map.get(label)
+        value = field.get("value") if isinstance(field, dict) else None
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
+def _profile_from_json(reader: ZipArchiveReader) -> tuple[list[str], str]:
+    """The names and the username, from the profile file of a json export."""
+    result = reader.json(PROFILE_JSON)
+    entries = result.data.get("profile_user") if result.found and isinstance(result.data, dict) else None
+    names: list[str] = []
+    username = ""
+    for entry in entries if isinstance(entries, list) else []:
+        names.append(eh.fix_latin1_string(_string_map_value(entry, ("Name", "Naam"))))
+        username = username or eh.fix_latin1_string(_string_map_value(entry, ("Username", "Gebruikersnaam")))
+    return names, username
+
+
+def _cell_values(reader: ZipArchiveReader, path: str) -> list[tuple[str, str]]:
+    """The (label, value) pairs of the cells of an html page that carry a label and a
+    value in one cell, as ``<td class="_2pin _a6_q">Label<div><div>value</div></div></td>``."""
+    raw = reader.raw(path)
+    tree = etree.HTML(raw.data.read()) if raw.found else None
+    if tree is None:
+        return []
+    pairs = []
+    for td in eh.xpath_nodes(tree, "//td[contains(@class,'_a6_q')]"):
+        label = (td.text or "").strip()
+        if label in NAME_LABELS or label in USERNAME_LABELS:
+            value = "".join(td.itertext()).replace(td.text or "", "", 1).strip()
+            pairs.append((label, eh.fix_latin1_string(value)))
+    return pairs
+
+
+def _profile_from_html(reader: ZipArchiveReader) -> tuple[list[str], str]:
+    """The names and the username, from the profile page of an html export."""
+    pairs = _cell_values(reader, PROFILE_HTML)
+    names = [value for label, value in pairs if label in NAME_LABELS]
+    usernames = [value for label, value in pairs if label in USERNAME_LABELS and value]
+    return names, usernames[0] if usernames else ""
+
+
+def _username_from_signup_json(reader: ZipArchiveReader) -> str:
+    """The username, from the file of the account's registration."""
+    result = reader.json(SIGNUP_JSON)
+    entries = result.data.get("account_history_registration_info") if result.found and isinstance(result.data, dict) else None
+    for entry in entries if isinstance(entries, list) else []:
+        value = _string_map_value(entry, ("Username",))
+        if value:
+            return eh.fix_latin1_string(value)
+    return ""
+
+
+def _username_from_signup_html(reader: ZipArchiveReader) -> str:
+    """The username, from the registration page of an html export."""
+    for label, value in _cell_values(reader, SIGNUP_HTML):
+        if label in USERNAME_LABELS and value:
+            return value
+    return ""
+
+
+def _username_from_start_page(reader: ZipArchiveReader) -> str:
+    """The username, from the header that the start page of an html export carries."""
+    raw = reader.raw(START_HTML)
+    tree = etree.HTML(raw.data.read()) if raw.found else None
+    if tree is None:
+        return ""
+    for aside in eh.xpath_nodes(tree, "//aside[time]"):
+        stamp = "".join(aside.find("time").itertext())
+        text = "".join(aside.itertext())
+        header = re.fullmatch(
+            r"\s*(?:Generated by|Gegenereerd door) (.+?) (?:on|op)\s*",
+            text.rpartition(stamp)[0] if stamp else text,
+            re.DOTALL,
+        )
+        if header:
+            return eh.fix_latin1_string(header.group(1))
+    return ""
+
+
+def _username_from_package(reader: ZipArchiveReader, package_name: str) -> str | None:
+    """The username from the name of the zip and of the folders inside a wrapped
+    export, where they name one account and the same."""
+    places = {package_name, *("/".join(member.split("/")[:2]) for member in reader.archive_members)}
+    found = {match.group("identifier").lower() for place in places if (match := _PACKAGE_NAME.search(place))}
+    return found.pop() if len(found) == 1 else None
+
+
+def _resolve_account_holder(reader: ZipArchiveReader, package_name: str = "") -> AccountHolder:
+    """Whose export this is: the names and the username.
+
+    Each value is asked of the export in a fixed order, its files first and the name
+    of the package last, and a later source is asked only for what an earlier one
+    left open. Nothing found is an expected outcome, not an error (ADR-0024): the
+    export may be partial, or the zip renamed. It reads through a reader of its own,
+    so what it cannot read never reaches the extraction's error counter.
+
+    A name that repeats the username is dropped, so that it is matched by the
+    username's own rule and not by the looser rule for names."""
+    own = ZipArchiveReader(reader.archive, reader.archive_members, Counter())
+    names: list[str] = []
+    username = ""
+    for source in (_profile_from_json, _profile_from_html):
+        found_names, found_username = _attempt(source, ([], ""), own)
+        names = names or _cleaned(found_names)
+        username = username or found_username
+    for source in (_username_from_signup_json, _username_from_signup_html, _username_from_start_page):
+        username = username or _attempt(source, "", own)
+    username = username or _attempt(_username_from_package, None, own, package_name) or ""
+    names = [name for name in names if name.lower() != username.lower()]
+    return AccountHolder(tuple(names), username or None)
+
+
+def _identifier_expression(identifier: str) -> str:
+    """The username as a whole token. A dot joined to another word character on
+    either side means a longer username (``x.jane.example``, ``jane.example.more``)
+    and is left, while a sentence-ending dot still counts as a boundary."""
+    return r"(?<![\w.])" + re.escape(identifier) + r"(?!\w|\.\w)"
 
 
 def extraction(
@@ -2834,13 +2966,13 @@ def extraction(
 
     result = run_extraction(reader, errors, config)
 
-    username = _extract_username(reader)
-    if username:
-        logger.info("Extracted Instagram username for anonymization.")
-
-    TEXT_COLUMNS = ["Comment", "Caption", "Text", "Title"]
-    for table in result.tables:
-        eh.anonymize_dataframe(table.data_frame, TEXT_COLUMNS, username)
+    holder = _resolve_account_holder(reader, str(getattr(instagram_zip, "name", "") or ""))
+    logger.info("Account holder for redaction: names=%d identifier=%s", len(holder.names), holder.identifier is not None)
+    redact_account_holder(
+        [t.data_frame for t in result.tables], holder,
+        text_columns=None, link_columns=LINK_COLUMNS, skip_columns=DATE_COLUMNS,
+        identifier_expression=_identifier_expression, single_words_whole_cell=True,
+    )
 
     return result
 
