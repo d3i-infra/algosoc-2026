@@ -174,7 +174,7 @@ or corrupt archive is caught downstream by zip validation (routing to
 
 `start_flow()` calls `ph.emit_log()` at each significant step. These are the
 messages that appear in the host's log stream. They are always PII-free —
-platform name, status code, and counts, never participant data.
+platform name, status code, category id, and counts, never participant data.
 
 | Step | Log message |
 |---|---|
