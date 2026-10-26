@@ -1,16 +1,30 @@
-"""Which Meta product an export is, judged from the folder names in its archive.
+"""Which Meta product an export is, judged from the member names in its archive.
 
 Instagram and Facebook "Download your information" archives share a layout but
 each has folders the other lacks. This helper scores a list of archive member
-paths against each product's folder markers, so a platform can recognise its
-export by structure rather than by file contents. Instagram uses it now;
-Facebook uses it next. It knows nothing about any platform module.
+paths against each product's markers, so a platform can recognise its export by
+structure rather than by file contents. Both Instagram and Facebook validate through it.
+It knows nothing about any platform module.
+
+Markers come in three shapes:
+
+- a folder name, matched against every folder segment of every member;
+- a consecutive "parent/child" folder pair;
+- a "folder/stem" file marker: the folder a file sits directly in and its
+  basename without extension.
+
+File markers exist because two Facebook categories, ``ads_information`` and
+``security_and_login_information``, write their files directly in the folder
+with no subfolder, so an export holding only those categories has no folder
+pair to score. Instagram's file-marker set is empty: it always nests one
+folder deeper.
 """
 
 import logging
 import zipfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
+import port.api.props as props
 from port.api.file_utils import SeekableBinaryReader
 from port.helpers.validate import (
     DDPCategory,
@@ -134,7 +148,54 @@ MARKERS: dict[str, frozenset[str]] = {
     "facebook": FACEBOOK_FOLDER_MARKERS,
 }
 
+INSTAGRAM_FILE_MARKERS: frozenset[str] = frozenset()
+
+# Both spellings where Meta writes an apostrophe or an underscore.
+FACEBOOK_FILE_MARKERS = frozenset(
+    {
+        "ads_information/ad_preferences",
+        "ads_information/advertisers_using_your_activity_or_information",
+        "ads_information/advertisers_you've_interacted_with",
+        "ads_information/advertisers_you_ve_interacted_with",
+        "ads_information/apps_detected_from_your_activity",
+        "ads_information/apps_detected_on_your_account",
+        "ads_information/meta_ad_library_profiles",
+        "ads_information/other_categories_used_to_reach_you",
+        "ads_information/settings_for_ads_shown_outside_of_meta",
+        "ads_information/story_views_in_past_7_days",
+        "ads_information/subscription_for_no_ads",
+        "ads_information/your_pages_mentions",
+        "ads_information/your_recent_reported_conversions",
+        "ads_information/your_sampled_locations",
+        "security_and_login_information/account_activity",
+        "security_and_login_information/browser_cookies",
+        "security_and_login_information/device_login_cookies",
+        "security_and_login_information/email_address_verifications",
+        "security_and_login_information/information_about_your_last_login",
+        "security_and_login_information/ip_address_activity",
+        "security_and_login_information/login_messages_we_have_shown",
+        "security_and_login_information/login_protection_data",
+        "security_and_login_information/logins_and_logouts",
+        "security_and_login_information/recognized_devices",
+        "security_and_login_information/record_details",
+        "security_and_login_information/registration_information",
+        "security_and_login_information/two-factor_authentication",
+        "security_and_login_information/where_you're_logged_in",
+        "security_and_login_information/where_you_re_logged_in",
+        "security_and_login_information/your_facebook_activity_history",
+        "security_and_login_information/your_profile_confirmation_information",
+    }
+)
+
+FILE_MARKERS: dict[str, frozenset[str]] = {
+    "instagram": INSTAGRAM_FILE_MARKERS,
+    "facebook": FACEBOOK_FILE_MARKERS,
+}
+
 OTHER_PRODUCT: dict[str, str] = {"instagram": "facebook", "facebook": "instagram"}
+
+# A study's categories: key -> (export folder, soft-confirm label).
+StudyCategories = dict[str, tuple[str, props.Translatable]]
 
 
 def kept(members: list[str]) -> list[str]:
@@ -167,6 +228,25 @@ def folder_pairs(members: list[str]) -> frozenset[str]:
     return frozenset(pairs)
 
 
+def file_stems(members: list[str]) -> frozenset[str]:
+    """Every "folder/stem" of every kept file member that sits inside a folder.
+
+    The stem is the basename without its final extension; a basename with no
+    dot keeps its full name.
+    """
+    stems: set[str] = set()
+    for member in kept(members):
+        if member.endswith("/"):
+            continue
+        segments = [s for s in member.split("/") if s]
+        if len(segments) < 2:
+            continue
+        folder, basename = segments[-2], segments[-1]
+        stem = basename.rsplit(".", 1)[0]
+        stems.add(f"{folder}/{stem}")
+    return frozenset(stems)
+
+
 @dataclass(frozen=True)
 class FolderScore:
     """How many distinct markers of each product the members match, how many
@@ -184,12 +264,13 @@ class FolderScore:
 
 
 def score_members(members: list[str]) -> FolderScore:
-    """Score *members* against each product's folder markers."""
+    """Score *members* against each product's folder and file markers."""
     present = folder_names(members) | folder_pairs(members)
+    stems = file_stems(members)
     files = [m for m in kept(members) if not m.endswith("/")]
     return FolderScore(
-        instagram=len(INSTAGRAM_FOLDER_MARKERS & present),
-        facebook=len(FACEBOOK_FOLDER_MARKERS & present),
+        instagram=len(MARKERS["instagram"] & present) + len(FILE_MARKERS["instagram"] & stems),
+        facebook=len(MARKERS["facebook"] & present) + len(FILE_MARKERS["facebook"] & stems),
         json_files=sum(m.endswith(".json") for m in files),
         html_files=sum(m.endswith(".html") for m in files),
         only_zips=bool(files) and all(m.lower().endswith(".zip") for m in files),
@@ -202,6 +283,7 @@ class MetaValidation(ValidateInput):
 
     reason: str = "unknown"
     score: FolderScore | None = None
+    missing_study_labels: dict[str, props.Translatable] = field(default_factory=dict)
 
     @property
     def milestone_detail(self) -> str:
@@ -277,4 +359,38 @@ def validate_meta(
         "Meta validation: product=%s reason=%s own=%d other=%d",
         product, validation.reason, ours, theirs,
     )
+    return validation
+
+
+def missing_study_categories(
+    validation: MetaValidation, table: StudyCategories
+) -> dict[str, props.Translatable]:
+    """The entries of *table* whose folder is absent from the archive, in
+    table order. The folder matches at any depth on purpose: Drive downloads
+    wrap the export in two folders, so "top-level" is not knowable from the
+    member list. A nested folder that shares a category name counts as present;
+    that errs toward accepting the export, which is the safe side now that
+    ``require_study_categories`` rejects on this result.
+
+    This is not the ``FlowBuilder.missing_products`` hook: the Meta platforms
+    keep the base hook, which returns ``{}``."""
+    present = folder_names(validation.archive_members)
+    return {key: label for key, (folder, label) in table.items() if folder not in present}
+
+
+def require_study_categories(validation: MetaValidation, table: StudyCategories) -> MetaValidation:
+    """Record which of *table*'s categories a recognised export lacks, and
+    downgrade one holding none of them to a rejection: continuing would end
+    on the no-data page, which the host counts as a completion with nothing
+    donated. A rejected validation passes through untouched.
+
+    *table* must be non-empty: with an empty table every recognised export
+    would count as missing everything and be rejected."""
+    if validation.get_status_code_id() != 0:
+        return validation
+    validation.missing_study_labels = missing_study_categories(validation, table)
+    if len(validation.missing_study_labels) == len(table):
+        validation.reason = "no_study_categories"
+        validation.current_ddp_category = _rejection("no_study_categories")
+        validation.set_current_status_code_by_id(1)
     return validation

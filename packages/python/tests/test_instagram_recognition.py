@@ -57,7 +57,8 @@ def test_retry_text_follows_latest_validation():
 
 import port.helpers.port_helpers as ph
 from port.helpers.flow_builder import TaskIncompleteError
-from port.platforms.instagram import MISSING_CATEGORIES, missing_study_categories, require_study_categories
+from port.helpers.meta_recognition import missing_study_categories, require_study_categories, validate_meta
+from port.platforms.instagram import MISSING_CATEGORIES
 from test_meta_recognition import THIN
 
 ALL_FOUR = [
@@ -70,7 +71,7 @@ WRAPPER = "meta-2026-10-18/instagram-x-2026-10-18-abc/"
 
 
 def _missing_for(members):
-    return missing_study_categories(validate_ddp(make_zip(members)))
+    return missing_study_categories(validate_ddp(make_zip(members)), MISSING_CATEGORIES)
 
 
 def test_missing_products_thin_export():
@@ -100,9 +101,9 @@ def test_missing_products_ignores_wrapper_and_junk():
 
 
 def test_require_study_categories_rejects_export_without_any():
-    original = validate_ddp(make_zip(THIN))
+    original = validate_meta(make_zip(THIN), "instagram", DDP_CATEGORIES)
     members = list(original.archive_members)
-    result = require_study_categories(original)
+    result = require_study_categories(original, MISSING_CATEGORIES)
     assert result.get_status_code_id() == 1
     assert result.reason == "no_study_categories"
     assert result.current_ddp_category.id == "no_study_categories"
@@ -111,12 +112,28 @@ def test_require_study_categories_rejects_export_without_any():
 
 
 def test_require_study_categories_keeps_partial_export():
-    partial = require_study_categories(validate_ddp(make_zip(["connections/contacts/no-data.txt"])))
+    partial = require_study_categories(
+        validate_meta(make_zip(["connections/contacts/no-data.txt"]), "instagram", DDP_CATEGORIES),
+        MISSING_CATEGORIES,
+    )
     assert partial.get_status_code_id() == 0
     assert partial.reason == "instagram"
-    rejected = validate_ddp(make_zip(FACEBOOK_LIST))
-    assert require_study_categories(rejected) is rejected
+    rejected = validate_meta(make_zip(FACEBOOK_LIST), "instagram", DDP_CATEGORIES)
+    assert require_study_categories(rejected, MISSING_CATEGORIES) is rejected
     assert rejected.reason == "facebook"
+
+
+def test_validate_ddp_applies_the_study_check():
+    thin = validate_ddp(make_zip(THIN))
+    assert thin.get_status_code_id() == 1
+    assert thin.reason == "no_study_categories"
+    assert list(thin.missing_study_labels) == list(MISSING_CATEGORIES)
+    assert len(thin.missing_study_labels) == 4
+
+    partial = validate_ddp(make_zip(ALL_FOUR[:3]))
+    assert partial.get_status_code_id() == 0
+    assert partial.reason == "instagram"
+    assert partial.missing_study_labels == {"logged_information": MISSING_CATEGORIES["logged_information"][1]}
 
 
 def test_partial_export_proceeds_without_a_page():

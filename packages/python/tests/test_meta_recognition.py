@@ -3,16 +3,22 @@ import zipfile
 
 import pytest
 
+import port.api.props as props
 from port.helpers.validate import DDPCategory, DDPFiletype, Language
 from port.helpers.meta_recognition import (
+    FACEBOOK_FILE_MARKERS,
     FACEBOOK_FOLDER_MARKERS,
+    FILE_MARKERS,
     INSTAGRAM_FOLDER_MARKERS,
     MARKERS,
     OTHER_PRODUCT,
     FolderScore,
     MetaValidation,
+    file_stems,
     folder_names,
     folder_pairs,
+    missing_study_categories,
+    require_study_categories,
     score_members,
     validate_meta,
 )
@@ -82,11 +88,79 @@ def test_shared_folders_do_not_count():
         [
             "personal_information/facebook_accounts_center/no-data.txt",
             "messages/inbox/x/message_1.json",
-            "ads_information/ad_preferences.json",
         ]
     )
     assert score.instagram == 0
     assert score.facebook == 0
+    # Instagram's ad_preferences sits one folder deeper, so this file is Facebook's.
+    alone = score_members(["ads_information/ad_preferences.json"])
+    assert alone.facebook == 1
+    assert alone.instagram == 0
+
+
+def test_file_stems():
+    members = [
+        "a/ads_information/ad_preferences.json",
+        "ads_information/ad_preferences.html",
+        "ads_information/",
+        "__MACOSX/ads_information/._ad_preferences.json",
+        "readme",
+    ]
+    assert file_stems(members) == {"ads_information/ad_preferences"}
+
+
+FACEBOOK_WRAPPER = "meta-2026-Oct-02-09-44-02/facebook-x-2026-10-02-abc/"
+
+
+@pytest.mark.parametrize(
+    "members",
+    [
+        ["ads_information/ad_preferences.json"],
+        ["ads_information/ad_preferences.html"],
+        ["security_and_login_information/logins_and_logouts.json"],
+        [FACEBOOK_WRAPPER + "ads_information/ad_preferences.json"],
+        [FACEBOOK_WRAPPER + "security_and_login_information/logins_and_logouts.json"],
+    ],
+)
+def test_single_file_category_facebook_exports_are_recognised(members):
+    score = score_members(members)
+    assert score.facebook >= 1
+    assert score.instagram == 0
+
+
+def test_file_markers_match_by_stem():
+    both_spellings = score_members(
+        [
+            "ads_information/advertisers_you've_interacted_with.json",
+            "ads_information/advertisers_you_ve_interacted_with.json",
+        ]
+    )
+    assert both_spellings.facebook == 2
+    both_formats = score_members(
+        ["ads_information/ad_preferences.json", "ads_information/ad_preferences.html"]
+    )
+    assert both_formats.facebook == 1
+
+
+def test_instagram_ads_folder_is_not_a_facebook_file_marker():
+    score = score_members(
+        [
+            "ads_information/ads_and_topics/ads_viewed.json",
+            "ads_information/instagram_ads_and_businesses/ad_preferences.json",
+        ]
+    )
+    assert score.facebook == 0
+    assert score.instagram == 2
+
+
+def test_file_marker_tables():
+    assert FILE_MARKERS["facebook"] is FACEBOOK_FILE_MARKERS
+    assert FILE_MARKERS["instagram"] == frozenset()
+    for marker in FACEBOOK_FILE_MARKERS:
+        assert marker.count("/") == 1
+        assert marker.split("/")[0] in {"ads_information", "security_and_login_information"}
+    instagram_shaped = INSTAGRAM_JSON + ["ads_information/instagram_ads_and_businesses/ad_preferences.json"]
+    assert score_members(instagram_shaped).facebook == 0
 
 
 def test_wrappers_and_macos_junk():
@@ -268,3 +342,41 @@ def test_category_ids_are_constants():
             assert run(members, product).current_ddp_category.id in allowed
     bad = validate_meta(io.BytesIO(b"not a zip"), "instagram", instagram_categories())
     assert bad.current_ddp_category.id in allowed
+
+
+STUDY_TABLE = {
+    "a": ("alpha", props.Translatable({"en": "Alpha", "nl": "Alfa"})),
+    "b": ("beta", props.Translatable({"en": "Beta", "nl": "Beta"})),
+}
+
+
+def test_missing_study_categories_in_table_order():
+    only_beta = run(INSTAGRAM_JSON + ["beta/x.json"])
+    assert missing_study_categories(only_beta, STUDY_TABLE) == {"a": STUDY_TABLE["a"][1]}
+    both = run(INSTAGRAM_JSON + ["alpha/x.json", "beta/x.json"])
+    assert missing_study_categories(both, STUDY_TABLE) == {}
+    neither = run(INSTAGRAM_JSON)
+    assert list(missing_study_categories(neither, STUDY_TABLE)) == ["a", "b"]
+
+
+def test_require_study_categories_marks_missing_and_rejects_when_all_absent():
+    neither = run(INSTAGRAM_JSON)
+    members = list(neither.archive_members)
+    detail = neither.milestone_detail
+    result = require_study_categories(neither, STUDY_TABLE)
+    assert result.get_status_code_id() == 1
+    assert result.reason == "no_study_categories"
+    assert result.current_ddp_category.id == "no_study_categories"
+    assert result.missing_study_labels == {"a": STUDY_TABLE["a"][1], "b": STUDY_TABLE["b"][1]}
+    assert result.archive_members == members
+    assert result.milestone_detail == detail
+
+    partial = require_study_categories(run(INSTAGRAM_JSON + ["beta/x.json"]), STUDY_TABLE)
+    assert partial.get_status_code_id() == 0
+    assert partial.reason == "instagram"
+    assert partial.missing_study_labels == {"a": STUDY_TABLE["a"][1]}
+
+    rejected = run(FACEBOOK_LIST, "instagram")
+    assert require_study_categories(rejected, STUDY_TABLE) is rejected
+    assert rejected.reason == "facebook"
+    assert rejected.missing_study_labels == {}
