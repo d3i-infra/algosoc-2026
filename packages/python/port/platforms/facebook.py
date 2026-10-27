@@ -73,6 +73,7 @@ import port.api.props as props
 from port.api.d3i_props import ExtractionResult
 from port.api.file_utils import SeekableBinaryReader
 from port.helpers.table_extractor import (
+    extractor_inputs,
     load_port_config,
     run_extraction,
 )
@@ -297,7 +298,11 @@ def who_youve_followed_to_df(reader: ZipArchiveReader, errors: Counter, validati
           "headers": {
             "Name": {"en": "Name", "nl": "Naam"},
             "Timestamp": {"en": "Date", "nl": "Datum en tijd"}
-          }
+          },
+          "inputs": [
+            "who_you've_followed.json",
+            "who_you've_followed.html"
+          ]
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
@@ -551,7 +556,11 @@ def facebook_reels_usage_to_df(reader: ZipArchiveReader, errors: Counter, valida
           "headers": {
             "Reel interaction": {"en": "Statistic", "nl": "Statistiek"},
             "Value": {"en": "Value", "nl": "Waarde"}
-          }
+          },
+          "inputs": [
+            "facebook_reels_usage_information.json",
+            "facebook_reels_usage_information.html"
+          ]
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
@@ -734,6 +743,10 @@ def your_search_history_to_df(reader: ZipArchiveReader, errors: Counter, validat
               "textColumn": "Search term",
               "tokenize": false
             }
+          ],
+          "inputs": [
+            "logged_information/search/your_search_history.json",
+            "logged_information/search/your_search_history.html"
           ]
         }
     """
@@ -906,7 +919,11 @@ def ads_interests_to_df(reader: ZipArchiveReader, errors: Counter, validation=No
           },
           "headers": {
             "Ad": {"en": "Interest", "nl": "Interesse"}
-          }
+          },
+          "inputs": [
+            "ads_interests.json",
+            "ads_interests.html"
+          ]
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
@@ -1052,7 +1069,17 @@ def content_shown_to_you_to_df(reader: ZipArchiveReader, errors: Counter, valida
             "Name": {"en": "Name", "nl": "Naam"},
             "Link": {"en": "Link", "nl": "Link"},
             "Date": {"en": "Date", "nl": "Datum en tijd"}
-          }
+          },
+          "inputs": [
+            "logged_information/interactions/ads.json",
+            "logged_information/interactions/content_that_has_been_shown_to_you_in_your_feed.json",
+            "logged_information/interactions/recently_viewed.json",
+            "logged_information/interactions/shows_you_have_watched.json",
+            "logged_information/interactions/ads.html",
+            "logged_information/interactions/content_that_has_been_shown_to_you_in_your_feed.html",
+            "logged_information/interactions/recently_viewed.html",
+            "logged_information/interactions/shows_you_have_watched.html"
+          ]
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
@@ -1324,7 +1351,11 @@ def your_activity_off_meta_to_df(reader: ZipArchiveReader, errors: Counter, vali
             "Business": {"en": "Business", "nl": "Bedrijf"},
             "Event": {"en": "Event", "nl": "Gebeurtenis"},
             "Date": {"en": "Date", "nl": "Datum en tijd"}
-          }
+          },
+          "inputs": [
+            "apps_and_websites_off_of_facebook/your_activity_off_meta_technologies.json",
+            "apps_and_websites_off_of_facebook/your_activity_off_meta_technologies.html"
+          ]
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
@@ -1572,7 +1603,11 @@ def your_events_to_df(reader: ZipArchiveReader, errors: Counter, validation=None
           "headers": {
             "Name": {"en": "Name", "nl": "Naam"},
             "Created": {"en": "Date", "nl": "Datum en tijd"}
-          }
+          },
+          "inputs": [
+            "your_facebook_activity/events/your_events.json",
+            "your_facebook_activity/events/your_events.html"
+          ]
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
@@ -1828,7 +1863,11 @@ def your_comments_in_groups_to_df(reader: ZipArchiveReader, errors: Counter, val
             "Comment": {"en": "Comment", "nl": "Reactie"},
             "Group": {"en": "Group", "nl": "Groep"},
             "Timestamp": {"en": "Date", "nl": "Datum en tijd"}
-          }
+          },
+          "inputs": [
+            "your_comments_in_groups.json",
+            "your_comments_in_groups.html"
+          ]
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
@@ -1955,7 +1994,11 @@ def your_group_membership_activity_to_df(reader: ZipArchiveReader, errors: Count
             "Title": {"en": "Title", "nl": "Titel"},
             "Group name": {"en": "Group name", "nl": "Groepsnaam"},
             "Timestamp": {"en": "Date", "nl": "Datum en tijd"}
-          }
+          },
+          "inputs": [
+            "your_group_membership_activity.json",
+            "your_group_membership_activity.html"
+          ]
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
@@ -2077,7 +2120,11 @@ def pages_and_profiles_you_follow_to_df(reader: ZipArchiveReader, errors: Counte
           "headers": {
             "Title": {"en": "Title", "nl": "Titel"},
             "Timestamp": {"en": "Date", "nl": "Datum en tijd"}
-          }
+          },
+          "inputs": [
+            "pages_and_profiles_you_follow.json",
+            "pages_and_profiles_you_follow.html"
+          ]
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
@@ -2185,7 +2232,11 @@ def pages_youve_liked_to_df(reader: ZipArchiveReader, errors: Counter, validatio
             "Name": {"en": "Name", "nl": "Naam"},
             "URL": {"en": "URL", "nl": "URL"},
             "Timestamp": {"en": "Date", "nl": "Datum en tijd"}
-          }
+          },
+          "inputs": [
+            "pages_you've_liked.json",
+            "pages_you've_liked.html"
+          ]
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
@@ -2368,7 +2419,11 @@ def comments_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) -
             "Title": {"en": "Title", "nl": "Titel"},
             "Comment": {"en": "Comment", "nl": "Reactie"},
             "Timestamp": {"en": "Date", "nl": "Datum en tijd"}
-          }
+          },
+          "inputs": [
+            "comments_and_reactions/comments.json",
+            "your_facebook_activity/comments_and_reactions/comments.html"
+          ]
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
@@ -2484,7 +2539,11 @@ def likes_and_reactions_to_df(reader: ZipArchiveReader, errors: Counter, validat
             "Title": {"en": "Title", "nl": "Titel"},
             "Reaction": {"en": "Reaction", "nl": "Reactie"},
             "Timestamp": {"en": "Date", "nl": "Datum en tijd"}
-          }
+          },
+          "inputs": [
+            "re:(^|/)likes_and_reactions_\\\\d+\\\\.json$",
+            "re:(^|/)likes_and_reactions_\\\\d+\\\\.html$"
+          ]
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
@@ -2830,7 +2889,11 @@ def your_posts_check_ins_to_df(reader: ZipArchiveReader, errors: Counter, valida
             "Post": {"en": "Post", "nl": "Bericht"},
             "URL": {"en": "URL", "nl": "URL"},
             "Timestamp": {"en": "Date", "nl": "Datum en tijd"}
-          }
+          },
+          "inputs": [
+            "re:(^|/)your_posts__check_ins__photos_and_videos_\\\\d+\\\\.json$",
+            "re:(^|/)your_posts__check_ins__photos_and_videos_\\\\d+\\\\.html$"
+          ]
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
@@ -3153,7 +3216,15 @@ def profile_visits_to_df(reader: ZipArchiveReader, errors: Counter, validation=N
             "Category": {"en": "Category", "nl": "Categorie"},
             "Name": {"en": "Name", "nl": "Naam"},
             "Timestamp": {"en": "Date", "nl": "Datum en tijd"}
-          }
+          },
+          "inputs": [
+            "logged_information/interactions/groups_and_events_you've_visited.json",
+            "logged_information/interactions/profile_visits.json",
+            "logged_information/interactions/recently_visited.json",
+            "logged_information/interactions/groups_and_events_you've_visited.html",
+            "logged_information/interactions/recently_visited.html",
+            "profile_visits.html"
+          ]
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
@@ -3479,7 +3550,11 @@ def link_history_to_df(reader: ZipArchiveReader, errors: Counter, validation=Non
             "URL": {"en": "URL", "nl": "URL"},
             "Title": {"en": "Title", "nl": "Titel"},
             "Timestamp": {"en": "Date", "nl": "Datum en tijd"}
-          }
+          },
+          "inputs": [
+            "your_facebook_activity/other_activity/link_history.json",
+            "link_history.html"
+          ]
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
@@ -3593,7 +3668,11 @@ def ad_preferences_to_df(reader: ZipArchiveReader, errors: Counter, validation=N
           "headers": {
             "Label": {"en": "Setting", "nl": "Instelling"},
             "Value": {"en": "Value", "nl": "Waarde"}
-          }
+          },
+          "inputs": [
+            "ads_information/ad_preferences.json",
+            "ad_preferences.html"
+          ]
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
@@ -3773,7 +3852,11 @@ def other_categories_used_to_reach_you_to_df(reader: ZipArchiveReader, errors: C
           },
           "headers": {
             "Category": {"en": "Category", "nl": "Categorie"}
-          }
+          },
+          "inputs": [
+            "ads_information/other_categories_used_to_reach_you.json",
+            "other_categories_used_to_reach_you.html"
+          ]
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
@@ -3886,7 +3969,11 @@ def advertisers_using_your_activity_to_df(reader: ZipArchiveReader, errors: Coun
           "headers": {
             "Label": {"en": "How they reached you", "nl": "Hoe zij u bereikten"},
             "Value": {"en": "Advertiser", "nl": "Adverteerder"}
-          }
+          },
+          "inputs": [
+            "ads_information/advertisers_using_your_activity_or_information.json",
+            "advertisers_using_your_activity_or_information.html"
+          ]
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
@@ -4020,7 +4107,11 @@ def advertisers_youve_interacted_with_to_df(reader: ZipArchiveReader, errors: Co
             "Title": {"en": "Title", "nl": "Titel"},
             "URL": {"en": "URL", "nl": "URL"},
             "Timestamp": {"en": "Date", "nl": "Datum en tijd"}
-          }
+          },
+          "inputs": [
+            "ads_information/advertisers_you've_interacted_with.json",
+            "advertisers_you've_interacted_with.html"
+          ]
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
@@ -4156,7 +4247,11 @@ def your_contributions_to_df(reader: ZipArchiveReader, errors: Counter, validati
             "Value": {"en": "Value", "nl": "Waarde"},
             "Date": {"en": "Date", "nl": "Datum en tijd"},
             "URL": {"en": "URL", "nl": "URL"}
-          }
+          },
+          "inputs": [
+            "your_facebook_activity/groups/your_contributions.json",
+            "your_facebook_activity/groups/your_contributions.html"
+          ]
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
@@ -4280,7 +4375,11 @@ def items_viewed_to_df(reader: ZipArchiveReader, errors: Counter, validation=Non
             "Product Name": {"en": "Product Name", "nl": "Productnaam"},
             "Description": {"en": "Description", "nl": "Beschrijving"},
             "Date": {"en": "Date", "nl": "Datum en tijd"}
-          }
+          },
+          "inputs": [
+            "logged_information/interactions/items_viewed.json",
+            "items_viewed.html"
+          ]
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
@@ -4420,6 +4519,10 @@ EXTRACTOR_REGISTRY: dict[str, Callable[..., pd.DataFrame]] = {
     # "likes_and_reactions_base_to_df": likes_and_reactions_base_to_df,
     # "controls_to_df": controls_to_df,
 }
+
+#: Every export file name or ``re:`` pattern an active extractor declares in its
+#: ``Table config::`` ``inputs`` (ADR-0028).
+EXTRACTOR_INPUTS: frozenset[str] = extractor_inputs(load_port_config(EXTRACTOR_REGISTRY, "facebook"))
 
 
 # ---------------------------------------------------------------------------
@@ -4603,16 +4706,20 @@ def extraction(facebook_zip: SeekableBinaryReader, validation) -> ExtractionResu
 
 
 def validate_ddp(archive: SeekableBinaryReader) -> MetaValidation:
-    """Recognise a Facebook export by its folder and file markers, then
-    require at least one of the study's categories.
+    """Recognise a Facebook export by its folder and file markers or by a
+    file one of its extractors reads, then require at least one of the
+    study's categories or one such file.
 
     Recognition goes through the shared Meta helper, which scores the zip's
     folder names (and, for the two categories that write files straight into
-    their folder, its file names) rather than the known-file lists.
-    ``DDP_CATEGORIES`` now only name the export's formats (json_en, html_en);
-    they no longer drive recognition.
+    their folder, its file names) and resolves ``EXTRACTOR_INPUTS`` the way
+    the extractors do, rather than the known-file lists. ``DDP_CATEGORIES``
+    now only name the export's formats (json_en, html_en); they no longer
+    drive recognition.
     """
-    return require_study_categories(validate_meta(archive, "facebook", DDP_CATEGORIES), MISSING_CATEGORIES)
+    return require_study_categories(
+        validate_meta(archive, "facebook", DDP_CATEGORIES, inputs=EXTRACTOR_INPUTS), MISSING_CATEGORIES
+    )
 
 
 # The export folders the study draws on: key -> (folder, soft-confirm label).

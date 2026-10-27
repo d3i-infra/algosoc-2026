@@ -68,7 +68,20 @@ def _parse_json_block(label: str, docstring: str, section_re: re.Pattern) -> dic
 
 def _parse_table_config_block(fn_name: str, docstring: str) -> dict:
     """Extract and parse the ``Table config::`` JSON block from a docstring."""
-    return _parse_json_block(fn_name, docstring, _SECTION_RE)
+    entry = _parse_json_block(fn_name, docstring, _SECTION_RE)
+    inputs = entry.get("inputs")
+    if "inputs" in entry and not (
+        isinstance(inputs, list)
+        and all(isinstance(name, str) and name for name in inputs)
+    ):
+        raise ValueError(f"{fn_name}: 'inputs' must be a list of non-empty strings")
+    for name in inputs or []:
+        if name.startswith("re:"):
+            try:
+                re.compile(name[len("re:"):])
+            except re.error as exc:
+                raise ValueError(f"{fn_name}: 'inputs' entry {name!r} does not compile: {exc}") from exc
+    return entry
 
 
 def _parse_table_doc_block(fn_name: str, docstring: str) -> dict | None:

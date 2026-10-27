@@ -15,6 +15,7 @@ import pandas as pd
 from port.helpers.archive_set import ArchiveSet
 from port.helpers.extraction_helpers import (
     ZipArchiveReader,
+    member_matches,
     JsonExtractionResult,
     CsvExtractionResult,
     RawExtractionResult,
@@ -137,6 +138,34 @@ class TestResolveMember:
         archive = _build_archive(("who_youve_followed.json", "{}"))
         reader = ZipArchiveReader(archive, ["who_youve_followed.json"], Counter())
         assert reader.resolve_member("who_you've_followed.json") is None
+
+
+@pytest.mark.parametrize(
+    "member, name, expected",
+    [
+        ("a/b/c.json", "c.json", True),
+        ("c.json", "c.json", True),
+        ("x/who_you_ve_followed.json", "who_you've_followed.json", True),
+        ("xc.json", "c.json", False),
+        ("x/who_you've_followed.json", "who_you_ve_followed.json", False),
+    ],
+)
+def test_member_matches_boundary_and_apostrophe(member, name, expected):
+    assert member_matches(member, name) is expected
+
+
+def test_resolve_member_precedence_unchanged():
+    errors = Counter()
+    members = ["c.json", "a/c.json", "b/c.json"]
+    reader = ZipArchiveReader(_build_archive(*[(m, "{}") for m in members]), members, errors)
+    assert reader.resolve_member("c.json") == "c.json"
+    assert not errors
+
+    errors = Counter()
+    members = ["x/who_you've_followed.json", "x/who_you_ve_followed.json"]
+    reader = ZipArchiveReader(_build_archive(*[(m, "{}") for m in members]), members, errors)
+    assert reader.resolve_member("who_you've_followed.json") is None
+    assert errors["AmbiguousMemberMatch(who_you've_followed.json)"] == 1
 
 
 class TestJsonExtraction:

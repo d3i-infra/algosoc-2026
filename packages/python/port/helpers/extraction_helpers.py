@@ -881,6 +881,31 @@ class RawExtractionResult:
     member_path: str | None = None
 
 
+def request_candidates(name: str) -> list[str]:
+    """Spellings of a requested member name that count as a match.
+
+    The name itself, plus the name with every apostrophe replaced by an
+    underscore when it holds one: Meta exports delivered through Google Drive
+    write ``who_you_ve_followed.json`` where device downloads write
+    ``who_you've_followed.json``. The substitution applies to the request only.
+    """
+    candidates = [name]
+    if "'" in name:
+        candidates.append(name.replace("'", "_"))
+    return candidates
+
+
+def member_matches(member: str, name: str) -> bool:
+    """True when an archive member path matches a requested name.
+
+    A match is an exact path or a path-boundary suffix (``member`` ends with
+    ``"/" + candidate``) for any spelling from ``request_candidates``. This is
+    presence, not uniqueness: ``ZipArchiveReader.resolve_member`` adds the
+    uniqueness rule on top.
+    """
+    return any(member == c or member.endswith("/" + c) for c in request_candidates(name))
+
+
 class ZipArchiveReader:
     """Reads files from a zip archive using cached member inventory.
 
@@ -938,9 +963,7 @@ class ZipArchiveReader:
         The counter key embeds the *requested* name (a code literal), never a
         member path from the archive: it reaches the host log.
         """
-        candidates = [filename]
-        if "'" in filename:
-            candidates.append(filename.replace("'", "_"))
+        candidates = request_candidates(filename)
 
         # 1. Exact match
         for candidate in candidates:

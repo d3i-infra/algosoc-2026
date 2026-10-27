@@ -22,6 +22,7 @@ from port.helpers.meta_recognition import (
     STRONG_LEAVES,
     STRONG_ROOTS,
     kept,
+    resolved_inputs,
     score_members,
     validate_meta,
 )
@@ -138,3 +139,110 @@ def test_held_out_skeleton_with_messages_photos_is_instagram():
     assert score.facebook_strong == 0
     assert score.facebook_weak == 0
     assert score.instagram_strong >= 1
+
+
+VALIDATE_DDP = {"facebook": facebook.validate_ddp, "instagram": instagram.validate_ddp}
+
+
+@pytest.mark.filterwarnings("ignore:Duplicate name")
+@pytest.mark.parametrize(
+    "name,product,members", listings(), ids=[name for name, _, _ in listings()]
+)
+def test_corpus_verdicts_through_validate_ddp(name, product, members):
+    """The platforms' own validators, which add the study check and the
+    extractor inputs, give the same verdicts as ``validate_meta``, except
+    that the researcher skeleton (no study folder, no resolvable input) is
+    ``no_study_categories`` at the Instagram step."""
+    other = OTHER_PRODUCT[product]
+    own = VALIDATE_DDP[product](make_zip(members))
+    wrong = VALIDATE_DDP[other](make_zip(members))
+
+    if name == DATA_LOGS_ONLY:
+        for validation in (own, wrong):
+            assert validation.reason == "unknown"
+            assert validation.current_ddp_category.id == "unknown"
+            assert validation.get_status_code_id() == 1
+            assert validation.files == 0
+        return
+
+    if name == RESEARCHER_SKELETON:
+        assert own.reason == "no_study_categories"
+        assert own.current_ddp_category.id == "no_study_categories"
+        assert own.get_status_code_id() == 1
+        assert own.basis == "weak"
+        assert own.files == 0
+        assert wrong.reason == "unknown"
+        assert wrong.current_ddp_category.id == "unknown"
+        assert wrong.get_status_code_id() == 1
+        return
+
+    assert own.reason == product
+    assert own.current_ddp_category.id == expected_category(name)
+    assert own.get_status_code_id() == 0
+    assert own.basis == "strong"
+    assert wrong.reason == product
+    assert wrong.current_ddp_category.id == f"{product}_detected"
+    assert wrong.get_status_code_id() == 1
+
+
+def resolving_inputs(members: list[str], inputs: frozenset[str]) -> set[str]:
+    """The declared inputs that resolve in *members*, the way the files tier
+    resolves them."""
+    return {name for name in inputs if resolved_inputs(members, frozenset({name}))}
+
+
+# The files tier accepts an upload at the wrong step when one of our
+# extractor's inputs resolves in it. Over the corpus, this surface is the
+# ads files Meta writes identically for both products, plus Instagram's
+# link history at the Facebook step. Danielle accepts this recall trade
+# (a thin wrong-product donation beats a false rejection); the sets are
+# pinned so a widening is seen, never absorbed. A different set is a
+# question for her, not a wider pin.
+INSTAGRAM_INPUTS_IN_FACEBOOK_EXPORTS = {
+    "advertisers_using_your_activity_or_information.html",
+    "advertisers_using_your_activity_or_information.json",
+    "subscription_for_no_ads.html",
+    "subscription_for_no_ads.json",
+}
+FACEBOOK_INPUTS_IN_INSTAGRAM_EXPORTS = {
+    "advertisers_using_your_activity_or_information.html",
+    "other_categories_used_to_reach_you.html",
+    "ad_preferences.html",
+    "link_history.html",
+}
+
+
+@pytest.mark.parametrize(
+    "product,inputs,expected",
+    [
+        ("facebook", instagram.EXTRACTOR_INPUTS, INSTAGRAM_INPUTS_IN_FACEBOOK_EXPORTS),
+        ("instagram", facebook.EXTRACTOR_INPUTS, FACEBOOK_INPUTS_IN_INSTAGRAM_EXPORTS),
+    ],
+    ids=["instagram-inputs-in-facebook", "facebook-inputs-in-instagram"],
+)
+def test_wrong_step_routes_by_resolution(product, inputs, expected):
+    product_listings = [m for _, p, m in listings() if p == product]
+    if not product_listings:
+        pytest.skip(f"no {product} listings (ADR-0014: kept locally)")
+    found: set[str] = set()
+    for members in product_listings:
+        found |= resolving_inputs(members, inputs)
+    assert found == expected
+
+
+def test_wrong_step_single_category_examples():
+    ads_only = instagram.validate_ddp(
+        make_zip([
+            "ads_information/advertisers_using_your_activity_or_information.html",
+            "ads_information/ad_preferences.html",
+        ])
+    )
+    assert ads_only.get_status_code_id() == 0
+    assert ads_only.reason == "instagram"
+    assert ads_only.basis == "files"
+    assert ads_only.files == 1
+
+    link_history = facebook.validate_ddp(make_zip(["logged_information/link_history/link_history.html"]))
+    assert link_history.get_status_code_id() == 0
+    assert link_history.reason == "facebook"
+    assert link_history.basis == "files"

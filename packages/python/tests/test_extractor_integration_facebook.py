@@ -304,8 +304,8 @@ def test_held_extractors_are_not_registered():
 def test_held_extractors_carry_valid_table_blocks():
     """A held extractor's docstring must already be what activation needs: both
     ADR-0028 blocks parse with the generator's own parsers, the table id is not
-    yet in the committed config, and the headers name exactly the columns the
-    extractor emits."""
+    yet in the committed config, it declares the files it reads (``inputs``),
+    and the headers name exactly the columns the extractor emits."""
     scripts = REPO_ROOT / "scripts" / "generate_port_config.py"
     spec = importlib.util.spec_from_file_location("generate_port_config", scripts)
     assert spec is not None and spec.loader is not None
@@ -323,6 +323,7 @@ def test_held_extractors_carry_valid_table_blocks():
         assert config["id"] not in committed_ids, f"{name}: id {config['id']!r} is already in facebook_config.json"
         for key in ("title", "description"):
             assert set(config[key]) == {"en", "nl"}, f"{name}: {key} must carry en and nl"
+        assert config.get("inputs"), f"{name}: no 'inputs' declared in its 'Table config::' block"
 
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w") as zf:

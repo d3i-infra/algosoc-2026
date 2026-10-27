@@ -46,6 +46,9 @@ class TableConfig:
         Optional list of column names to include in the extracted DataFrame.
         ``None`` (default) keeps all columns produced by the extractor.
         Column names not present in the DataFrame are silently ignored.
+    inputs:
+        Names of the export files this extractor reads: plain file names, or
+        ``"re:<pattern>"`` for a family of files matched by regex.
     """
 
     id: str
@@ -56,6 +59,12 @@ class TableConfig:
     extractor_kwargs: dict[str, Any] = field(default_factory=dict)
     visualizations: list[dict[str, Any]] = field(default_factory=list)
     variables: list[str] | None = None
+    inputs: list[str] = field(default_factory=list)
+
+
+def extractor_inputs(config: list[TableConfig]) -> frozenset[str]:
+    """Return the union of every table's declared ``inputs``."""
+    return frozenset(name for table in config for name in table.inputs)
 
 
 def _build_config(
@@ -97,6 +106,7 @@ def _build_config(
             extractor_kwargs=entry.get("extractor_kwargs", {}),
             visualizations=entry.get("visualizations", []),
             variables=entry.get("variables", None),
+            inputs=entry.get("inputs", []),
         ))
     return configs
 

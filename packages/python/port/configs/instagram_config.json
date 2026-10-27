@@ -37,6 +37,10 @@
           "nl": "Datum en tijd"
         }
       },
+      "inputs": [
+        "following.json",
+        "following.html"
+      ],
       "extractor": "following_to_df",
       "documentation": {
         "summary": "Each row represents one account that the participant follows on Instagram, including when they started following.",
@@ -121,6 +125,10 @@
           ]
         }
       ],
+      "inputs": [
+        "posts_viewed.json",
+        "posts_viewed.html"
+      ],
       "extractor": "posts_viewed_to_df",
       "documentation": {
         "summary": "Each row represents one post that appeared in the participant's Instagram feed and was registered as viewed. Captures the author and timing of each impression.",
@@ -182,6 +190,10 @@
           ]
         }
       ],
+      "inputs": [
+        "videos_watched.json",
+        "videos_watched.html"
+      ],
       "extractor": "videos_watched_to_df",
       "documentation": {
         "summary": "Each row represents one video (including Reels) that the participant watched on Instagram. Captures the creator and timing of each view event.",
@@ -217,6 +229,10 @@
           "nl": "Datum en tijd"
         }
       },
+      "inputs": [
+        "re:(^|/)post_comments(?:_\\d+)?\\.json$",
+        "re:(^|/)post_comments(?:_\\d+)?\\.html$"
+      ],
       "extractor": "post_comments_to_df",
       "documentation": {
         "summary": "Each row represents one comment the participant posted on an Instagram post. Covers all matching comment files in the archive (e.g. post_comments.json, post_comments_1.json).",
@@ -252,6 +268,10 @@
           "nl": "Datum en tijd"
         }
       },
+      "inputs": [
+        "liked_comments.json",
+        "liked_comments.html"
+      ],
       "extractor": "liked_comments_to_df",
       "documentation": {
         "summary": "Each row represents one comment the participant liked on Instagram. Comment text may be absent in newer export formats.",
@@ -298,6 +318,10 @@
           "tokenize": false
         }
       ],
+      "inputs": [
+        "liked_posts.json",
+        "liked_posts.html"
+      ],
       "extractor": "liked_posts_to_df",
       "documentation": {
         "summary": "Each row represents one post the participant liked on Instagram, including the account whose post was liked and when the like was given.",
@@ -329,6 +353,10 @@
           "nl": "Datum en tijd"
         }
       },
+      "inputs": [
+        "story_likes.json",
+        "story_likes.html"
+      ],
       "extractor": "story_likes_to_df",
       "documentation": {
         "summary": "Each row represents one Instagram Story the participant liked, recording the account whose story was liked and when.",
@@ -371,6 +399,10 @@
           "nl": "Datum en tijd"
         }
       },
+      "inputs": [
+        "saved_posts.json",
+        "saved_posts.html"
+      ],
       "extractor": "saved_posts_to_df",
       "documentation": {
         "summary": "Each row represents one post the participant bookmarked (saved) on Instagram for later viewing.",
@@ -404,6 +436,10 @@
           "nl": "Datum en tijd"
         }
       },
+      "inputs": [
+        "word_or_phrase_searches.json",
+        "word_or_phrase_searches.html"
+      ],
       "extractor": "word_or_phrase_searches_to_df",
       "documentation": {
         "summary": "Each row represents one keyword or phrase search the participant performed on Instagram.",
@@ -438,6 +474,10 @@
           "nl": "Datum en tijd"
         }
       },
+      "inputs": [
+        "media/stories.json",
+        "media/stories.html"
+      ],
       "extractor": "stories_published_to_df",
       "documentation": {
         "summary": "Each row represents one Instagram Story published by the participant.",
@@ -469,6 +509,10 @@
           "nl": "Hoe zij u bereikten"
         }
       },
+      "inputs": [
+        "advertisers_using_your_activity_or_information.json",
+        "advertisers_using_your_activity_or_information.html"
+      ],
       "extractor": "advertisers_using_activity_to_df",
       "documentation": {
         "summary": "Each row represents one advertiser that used the participant's activity or information to target them on Instagram.",
@@ -507,6 +551,10 @@
           "nl": "Datum en tijd"
         }
       },
+      "inputs": [
+        "ads_viewed.json",
+        "ads_viewed.html"
+      ],
       "extractor": "ads_viewed_to_df",
       "documentation": {
         "summary": "Each row represents one advertisement impression shown to the participant on Instagram. Includes the advertiser identity and when the ad was displayed.",
@@ -539,6 +587,9 @@
           "nl": "Datum en tijd"
         }
       },
+      "inputs": [
+        "profile_searches.json"
+      ],
       "extractor": "profile_searches_to_df",
       "documentation": {
         "summary": "Each row represents one profile search performed by the participant on Instagram, recording what was searched and when.",
@@ -573,6 +624,9 @@
           "nl": "Datum en tijd"
         }
       },
+      "inputs": [
+        "threads_viewed.json"
+      ],
       "extractor": "threads_viewed_to_df",
       "documentation": {
         "summary": "Each row represents one post on Threads (Meta's text-based social network linked to Instagram) that the participant viewed, including the author and timing.",
@@ -612,6 +666,9 @@
           "nl": "Datum en tijd"
         }
       },
+      "inputs": [
+        "ads_clicked.json"
+      ],
       "extractor": "ads_clicked_to_df",
       "documentation": {
         "summary": "Each row represents one advertisement the participant clicked on Instagram.",
@@ -644,6 +701,10 @@
           "nl": "Datum en tijd"
         }
       },
+      "inputs": [
+        "re:(^|/)posts(?:_\\d+)?\\.json$",
+        "re:(^|/)posts(?:_\\d+)?\\.html$"
+      ],
       "extractor": "posts_published_to_df",
       "documentation": {
         "summary": "Each row represents one post published by the participant on Instagram.",
@@ -674,6 +735,10 @@
           "nl": "Waarde"
         }
       },
+      "inputs": [
+        "subscription_for_no_ads.json",
+        "subscription_for_no_ads.html"
+      ],
       "extractor": "subscription_for_no_ads_to_df",
       "documentation": {
         "summary": "Each row represents a field from the participant's ad-free subscription status on Instagram.",

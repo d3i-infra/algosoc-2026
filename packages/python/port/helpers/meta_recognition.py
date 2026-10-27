@@ -27,6 +27,17 @@ shared top-level folders, and the file markers. Weak markers only argue for a
 product; they never count against the other one, so the same weak-only archive
 may validate at either product's step.
 
+A third tier, **files**, holds no markers of its own: it is the inputs the
+product's extractors declare, resolved the way the extractors resolve them
+(``member_matches``: an exact path or a path-boundary suffix, the
+apostrophe-to-underscore variant on the request only; a ``re:`` input is a
+regex searched against every kept member). The count of inputs with at least
+one match is recorded on every basis, and decides only when neither strong nor
+weak evidence does. With no strong evidence of either product, validation
+accepts whenever a declared input resolves; strong evidence of the other
+product, and strong evidence of both (``mixed``), are the deliberate
+exceptions, rejected even where an extractor would find a file.
+
 The error ordering behind the tiers: the full extent of participant export
 layouts is unknowable, so a false rejection of a genuine export on a layout we
 did not anticipate is the worst outcome and a thin, empty or mislabelled
@@ -34,12 +45,14 @@ wrong-product donation the lesser one. Only strong evidence can reject.
 """
 
 import logging
+import re
 import zipfile
 from dataclasses import dataclass, field
 from typing import Literal
 
 import port.api.props as props
 from port.api.file_utils import SeekableBinaryReader
+from port.helpers.extraction_helpers import member_matches
 from port.helpers.validate import (
     DDPCategory,
     DDPFiletype,
@@ -346,6 +359,29 @@ def score_members(members: list[str]) -> FolderScore:
     )
 
 
+REGEX_INPUT = "re:"
+
+
+def resolved_inputs(members: list[str], inputs: frozenset[str]) -> int:
+    """How many of *inputs* have at least one kept member matching, resolved
+    as the extractors resolve them: ``member_matches`` for a plain name, or
+    ``re.search`` over every kept member for a ``re:<pattern>`` input.
+
+    Presence is what counts; a name matching several members is extraction's
+    concern (``ZipArchiveReader.resolve_member``), not validation's.
+    """
+    files = [m for m in kept(members) if not m.endswith("/")]
+    count = 0
+    for name in inputs:
+        if name.startswith(REGEX_INPUT):
+            pattern = re.compile(name[len(REGEX_INPUT):])
+            if any(pattern.search(m) for m in files):
+                count += 1
+        elif any(member_matches(m, name) for m in files):
+            count += 1
+    return count
+
+
 Basis = Literal["strong", "weak", "files", "none"]
 
 
@@ -416,12 +452,16 @@ def validate_meta(
     archive: SeekableBinaryReader,
     product: str,
     categories: list[DDPCategory],
+    inputs: frozenset[str] = frozenset(),
 ) -> MetaValidation:
     """Accept *archive* if its folder names show it is *product*'s export,
-    on the strong or the weak basis; reject only on strong evidence of the
-    other product, or when nothing argues for ours.
+    on the strong or the weak basis, or if any of the extractor *inputs*
+    resolves in it, on the files basis; reject only on strong evidence of
+    the other product, or when nothing argues for ours.
 
-    Reads only the member list (ADR-0026) and leaves the upload open.
+    The resolved-input count is a fact about the archive and is recorded
+    whatever basis wins. Reads only the member list (ADR-0026) and leaves
+    the upload open.
     """
     validation = MetaValidation(
         [
@@ -445,7 +485,8 @@ def validate_meta(
     validation.archive_members = members
     score = score_members(members)
     validation.score = score
-    reason, basis = decide(score, product, 0)
+    validation.files = resolved_inputs(members, inputs)
+    reason, basis = decide(score, product, validation.files)
     validation.reason, validation.basis = reason, basis
 
     if reason == product:
@@ -488,12 +529,21 @@ def require_study_categories(validation: MetaValidation, table: StudyCategories)
     on the no-data page, which the host counts as a completion with nothing
     donated. A rejected validation passes through untouched.
 
+    An export in which an extractor input resolved (``files >= 1``) is never
+    rejected here, whatever its basis: an extractor would read it, so the
+    study has something to show. On the files basis the folder table says
+    nothing about the layout, so no category is reported missing.
+
     *table* must be non-empty: with an empty table every recognised export
-    would count as missing everything and be rejected."""
+    holding no resolvable input would count as missing everything and be
+    rejected."""
     if validation.get_status_code_id() != 0:
         return validation
-    validation.missing_study_labels = missing_study_categories(validation, table)
-    if len(validation.missing_study_labels) == len(table):
+    if validation.basis == "files":
+        validation.missing_study_labels = {}
+    else:
+        validation.missing_study_labels = missing_study_categories(validation, table)
+    if len(validation.missing_study_labels) == len(table) and validation.files == 0:
         validation.reason = "no_study_categories"
         validation.current_ddp_category = _rejection("no_study_categories")
         validation.set_current_status_code_by_id(1)

@@ -25,6 +25,7 @@ from port.helpers.meta_recognition import (
     folder_pairs,
     missing_study_categories,
     require_study_categories,
+    resolved_inputs,
     score_members,
     validate_meta,
 )
@@ -313,8 +314,8 @@ WEAK_INSTAGRAM = [
 ]
 
 
-def run(members, product="instagram"):
-    return validate_meta(make_zip(members), product, instagram_categories())
+def run(members, product="instagram", inputs=frozenset()):
+    return validate_meta(make_zip(members), product, instagram_categories(), inputs=inputs)
 
 
 def test_validate_meta_accepts_json_and_html():
@@ -545,3 +546,66 @@ def test_require_study_categories_marks_missing_and_rejects_when_all_absent():
     assert require_study_categories(rejected, STUDY_TABLE) is rejected
     assert rejected.reason == "facebook"
     assert rejected.missing_study_labels == {}
+
+
+# A made-up extractor input set (ADR-0014): a plain name, a numbered-file
+# pattern and a folder-qualified name.
+TEST_INPUTS = frozenset({"following.json", r"re:(^|/)post_comments(?:_\d+)?\.json$", "media/stories.json"})
+
+
+def test_resolved_inputs_counts_presence():
+    members = [
+        "following.json",
+        "a/following.json",
+        "post_comments_2.json",
+        "media/stories.json",
+        "x/stories.json",
+    ]
+    assert resolved_inputs(members, TEST_INPUTS) == 3
+    assert resolved_inputs(members, frozenset()) == 0
+    assert resolved_inputs(["x/stories.json"], TEST_INPUTS) == 0
+
+
+def test_flattened_export_accepted_on_files_basis():
+    flat = run(["following.json", "liked_posts.json"], inputs=TEST_INPUTS)
+    assert flat.get_status_code_id() == 0
+    assert flat.reason == "instagram"
+    assert flat.basis == "files"
+    assert flat.files == 1
+    assert flat.current_ddp_category.id == "json_en"
+    assert flat.milestone_detail.endswith("basis=files files=1")
+
+    html = run(["following.html", "liked_posts.html", "x.json"], inputs=frozenset({"following.html"}))
+    assert html.get_status_code_id() == 0
+    assert html.basis == "files"
+    assert html.current_ddp_category.id == "html_en"
+
+
+def test_files_tier_only_after_weak():
+    # The other product's weak marker never counts against ours, so the
+    # files tier decides.
+    other_weak = run(["following.json", "connections/friends/x.json"], inputs=TEST_INPUTS)
+    assert other_weak.basis == "files"
+    assert other_weak.reason == "instagram"
+    # Our own weak marker wins over the files tier; the count is still recorded.
+    own_weak = run(["following.json", "connections/followers_and_following/x.json"], inputs=TEST_INPUTS)
+    assert own_weak.basis == "weak"
+    assert own_weak.files == 1
+
+
+def test_strong_other_still_rejects_with_files():
+    result = run(["your_facebook_activity/x/y.json", "following.json"], inputs=TEST_INPUTS)
+    assert result.get_status_code_id() == 1
+    assert result.reason == "facebook"
+    assert result.basis == "none"
+    assert result.current_ddp_category.id == "facebook_detected"
+    assert result.files == 1
+
+
+def test_files_count_is_recorded_on_every_basis():
+    members = INSTAGRAM_JSON + ["connections/followers_and_following/following.json"]
+    result = run(members, inputs=TEST_INPUTS)
+    assert result.basis == "strong"
+    assert result.files == 1
+    assert result.milestone_detail.endswith("basis=strong")
+    assert run(INSTAGRAM_JSON, inputs=TEST_INPUTS).files == 0
