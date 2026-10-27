@@ -754,8 +754,8 @@ class TestValidationMilestoneDetail:
         assert message.endswith("Validation: invalid (unknown)")
 
     def test_milestone_carries_detail_when_present(self):
-        message = self.validation_message(self.flow_with(0, "json_en", milestone_detail="ig=3 fb=0"))
-        assert message.endswith("Validation: valid (json_en) ig=3 fb=0")
+        message = self.validation_message(self.flow_with(0, "json_en", milestone_detail="ig=3+0 fb=0+0 basis=strong"))
+        assert message.endswith("Validation: valid (json_en) ig=3+0 fb=0+0 basis=strong")
         empty = self.validation_message(self.flow_with(0, "json_en", milestone_detail=""))
         assert empty.endswith("(json_en)")
 

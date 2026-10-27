@@ -106,7 +106,7 @@ def test_require_study_categories_rejects_export_without_any():
     assert result.reason == "no_study_categories"
     assert result.current_ddp_category.id == "no_study_categories"
     assert result.archive_members == members
-    assert result.milestone_detail == "ig=2 fb=0"
+    assert result.milestone_detail == "ig=0+2 fb=0+0 basis=weak"
 
 
 def test_require_study_categories_keeps_partial_export():
@@ -149,7 +149,7 @@ def test_partial_export_proceeds_without_a_page():
         while isinstance(cmd, CommandSystemLog):
             logs.append(cmd.message)
             cmd = gen.send(make_payload("PayloadVoid"))
-    assert any(m.endswith("Validation: valid (json_en) ig=4 fb=0") for m in logs)
+    assert any(m.endswith("Validation: valid (json_en) ig=2+2 fb=0+0 basis=strong") for m in logs)
     assert not any("Upload incomplete" in m for m in logs)
     # The no-data page is itself a confirm prompt, so tell the soft-confirm
     # apart by its header.
@@ -173,7 +173,7 @@ def test_thin_export_takes_the_retry_path_and_declining_stays_pending():
         "Your Instagram file contains none of the parts this study uses: "
         "Your Instagram activity, Connections, Ads information, Logged information"
     )
-    assert any(m.endswith("Validation: invalid (no_study_categories) ig=2 fb=0") for m in logs)
+    assert any(m.endswith("Validation: invalid (no_study_categories) ig=0+2 fb=0+0 basis=weak") for m in logs)
     with pytest.raises(TaskIncompleteError) as exc:
         advance_past_logs(gen, make_payload("PayloadFalse"))
     assert exc.value.reason == "abandoned"

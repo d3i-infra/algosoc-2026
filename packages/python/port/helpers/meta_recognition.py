@@ -18,11 +18,25 @@ File markers exist because two Facebook categories, ``ads_information`` and
 with no subfolder, so an export holding only those categories has no folder
 pair to score. Instagram's file-marker set is empty: it always nests one
 folder deeper.
+
+Markers fall into two tiers. The **strong** tier is curated: each product's
+named roots (``your_<product>_activity``, ``apps_and_websites_off_of_<product>``),
+every pair under those roots, and four verified leaves that carry the product's
+name. The **weak** tier is everything else: the sample-derived pairs under the
+shared top-level folders, and the file markers. Weak markers only argue for a
+product; they never count against the other one, so the same weak-only archive
+may validate at either product's step.
+
+The error ordering behind the tiers: the full extent of participant export
+layouts is unknowable, so a false rejection of a genuine export on a layout we
+did not anticipate is the worst outcome and a thin, empty or mislabelled
+wrong-product donation the lesser one. Only strong evidence can reject.
 """
 
 import logging
 import zipfile
 from dataclasses import dataclass, field
+from typing import Literal
 
 import port.api.props as props
 from port.api.file_utils import SeekableBinaryReader
@@ -84,11 +98,27 @@ INSTAGRAM_FOLDER_MARKERS = frozenset(
     }
 )
 
+# Pairs seen in a Facebook sample that also occur inside Instagram's
+# ``your_instagram_activity/messages`` tree or are plain media layout; they are
+# deleted from the Facebook marker set, not filtered at scoring time.
+FACEBOOK_PAIR_ARTIFACTS: frozenset[str] = frozenset(
+    {
+        "messages/e2ee_cutover",
+        "messages/filtered_threads",
+        "messages/photos",
+        "messages/stickers_used",
+        "posts/album",
+        "posts/media",
+        "media/stickers_used",
+        "media/your_posts",
+        "comments_and_reactions/icons",
+    }
+)
+
 FACEBOOK_FOLDER_MARKERS = frozenset(
     {
         "your_facebook_activity",
         "apps_and_websites_off_of_facebook",
-        "comments_and_reactions/icons",
         "connections/followers",
         "connections/friends",
         "logged_information/activity_messages",
@@ -98,20 +128,12 @@ FACEBOOK_FOLDER_MARKERS = frozenset(
         "logged_information/notifications",
         "logged_information/other_logged_information",
         "logged_information/search",
-        "media/stickers_used",
-        "media/your_posts",
-        "messages/e2ee_cutover",
-        "messages/filtered_threads",
-        "messages/photos",
-        "messages/stickers_used",
         "personal_information/avatars_store",
         "personal_information/facebook_assistant",
         "personal_information/facebook_portal",
         "personal_information/health_professional",
         "personal_information/other_personal_information",
         "personal_information/profile_information",
-        "posts/album",
-        "posts/media",
         "preferences/feed",
         "preferences/memories",
         "preferences/preferences",
@@ -147,6 +169,40 @@ MARKERS: dict[str, frozenset[str]] = {
     "instagram": INSTAGRAM_FOLDER_MARKERS,
     "facebook": FACEBOOK_FOLDER_MARKERS,
 }
+
+# The strong tier: product-named roots, every pair under them, and four leaves
+# verified to carry the product's name. Only these can reject an upload.
+STRONG_ROOTS: dict[str, frozenset[str]] = {
+    "instagram": frozenset({"your_instagram_activity", "apps_and_websites_off_of_instagram"}),
+    "facebook": frozenset({"your_facebook_activity", "apps_and_websites_off_of_facebook"}),
+}
+
+STRONG_LEAVES: dict[str, frozenset[str]] = {
+    "instagram": frozenset(
+        {
+            "ads_information/instagram_ads_and_businesses",
+            "logged_information/past_instagram_insights",
+        }
+    ),
+    "facebook": frozenset(
+        {
+            "personal_information/facebook_portal",
+            "personal_information/facebook_assistant",
+        }
+    ),
+}
+
+
+def _strong_markers(product: str) -> frozenset[str]:
+    roots = STRONG_ROOTS[product]
+    under_roots = frozenset(m for m in MARKERS[product] if m.split("/")[0] in roots)
+    return roots | under_roots | STRONG_LEAVES[product]
+
+
+STRONG_MARKERS: dict[str, frozenset[str]] = {p: _strong_markers(p) for p in MARKERS}
+
+# The weak tier: every other folder marker. File markers (below) are weak too.
+WEAK_MARKERS: dict[str, frozenset[str]] = {p: MARKERS[p] - STRONG_MARKERS[p] for p in MARKERS}
 
 INSTAGRAM_FILE_MARKERS: frozenset[str] = frozenset()
 
@@ -249,32 +305,75 @@ def file_stems(members: list[str]) -> frozenset[str]:
 
 @dataclass(frozen=True)
 class FolderScore:
-    """How many distinct markers of each product the members match, how many
-    JSON and HTML files there are, and whether the archive holds only zips."""
+    """How many distinct strong and weak markers of each product the members
+    match, how many JSON and HTML files there are, and whether the archive
+    holds only zips."""
 
-    instagram: int
-    facebook: int
+    instagram_strong: int
+    instagram_weak: int
+    facebook_strong: int
+    facebook_weak: int
     json_files: int
     html_files: int
     only_zips: bool
 
-    def count(self, product: str) -> int:
-        """The marker count for *product*, "instagram" or "facebook"."""
-        return getattr(self, product)
+    def strong(self, product: str) -> int:
+        """The strong-marker count for *product*, "instagram" or "facebook"."""
+        return getattr(self, f"{product}_strong")
+
+    def weak(self, product: str) -> int:
+        """The weak-marker count for *product*, "instagram" or "facebook"."""
+        return getattr(self, f"{product}_weak")
 
 
 def score_members(members: list[str]) -> FolderScore:
-    """Score *members* against each product's folder and file markers."""
+    """Score *members* against each product's folder and file markers, by tier."""
     present = folder_names(members) | folder_pairs(members)
     stems = file_stems(members)
     files = [m for m in kept(members) if not m.endswith("/")]
+
+    def weak(product: str) -> int:
+        return len(WEAK_MARKERS[product] & present) + len(FILE_MARKERS[product] & stems)
+
     return FolderScore(
-        instagram=len(MARKERS["instagram"] & present) + len(FILE_MARKERS["instagram"] & stems),
-        facebook=len(MARKERS["facebook"] & present) + len(FILE_MARKERS["facebook"] & stems),
+        instagram_strong=len(STRONG_MARKERS["instagram"] & present),
+        instagram_weak=weak("instagram"),
+        facebook_strong=len(STRONG_MARKERS["facebook"] & present),
+        facebook_weak=weak("facebook"),
         json_files=sum(m.endswith(".json") for m in files),
         html_files=sum(m.endswith(".html") for m in files),
         only_zips=bool(files) and all(m.lower().endswith(".zip") for m in files),
     )
+
+
+Basis = Literal["strong", "weak", "files", "none"]
+
+
+def decide(score: FolderScore, product: str, files: int) -> tuple[str, Basis]:
+    """The reason and basis for *product*'s step, from *score* and the number
+    of extractor input *files* that resolved.
+
+    Strong evidence decides first: ours alone accepts, theirs alone names the
+    other product, both is ``mixed``. With no strong evidence either way, any
+    weak marker of ours accepts, then any resolved file; otherwise the archive
+    is ``nested_zip`` or ``unknown``. Weak markers of the other product never
+    count against ours.
+    """
+    other = OTHER_PRODUCT[product]
+    ours, theirs = score.strong(product), score.strong(other)
+    if ours and not theirs:
+        return product, "strong"
+    if theirs and not ours:
+        return other, "none"
+    if ours and theirs:
+        return "mixed", "none"
+    if score.weak(product) >= 1:
+        return product, "weak"
+    if files >= 1:
+        return product, "files"
+    if score.only_zips:
+        return "nested_zip", "none"
+    return "unknown", "none"
 
 
 @dataclass
@@ -282,15 +381,26 @@ class MetaValidation(ValidateInput):
     """A ValidateInput that also records why an archive was or was not accepted."""
 
     reason: str = "unknown"
+    basis: Basis = "none"
+    files: int = 0
     score: FolderScore | None = None
     missing_study_labels: dict[str, props.Translatable] = field(default_factory=dict)
 
     @property
     def milestone_detail(self) -> str:
-        """Marker counts for a host milestone; never a path or member name."""
+        """Tiered marker counts and the basis for a host milestone; never a
+        path or member name."""
         if self.score is None:
             return ""
-        return f"ig={self.score.instagram} fb={self.score.facebook}"
+        s = self.score
+        detail = (
+            f"ig={s.instagram_strong}+{s.instagram_weak}"
+            f" fb={s.facebook_strong}+{s.facebook_weak}"
+            f" basis={self.basis}"
+        )
+        if self.basis == "files":
+            detail += f" files={self.files}"
+        return detail
 
 
 def _rejection(reason_id: str) -> DDPCategory:
@@ -307,7 +417,9 @@ def validate_meta(
     product: str,
     categories: list[DDPCategory],
 ) -> MetaValidation:
-    """Accept *archive* if its folder names show it is *product*'s export.
+    """Accept *archive* if its folder names show it is *product*'s export,
+    on the strong or the weak basis; reject only on strong evidence of the
+    other product, or when nothing argues for ours.
 
     Reads only the member list (ADR-0026) and leaves the upload open.
     """
@@ -333,31 +445,23 @@ def validate_meta(
     validation.archive_members = members
     score = score_members(members)
     validation.score = score
-    ours, theirs = score.count(product), score.count(other)
+    reason, basis = decide(score, product, 0)
+    validation.reason, validation.basis = reason, basis
 
-    if ours >= 1 and theirs == 0:
+    if reason == product:
         wanted = DDPFiletype.HTML if score.html_files > score.json_files else DDPFiletype.JSON
-        validation.reason = product
         validation.set_current_status_code_by_id(0)
         validation.current_ddp_category = next(
             (c for c in categories if c.ddp_filetype == wanted), None
         )
     else:
-        if theirs >= 1 and ours == 0:
-            validation.reason = other
-            category_id = f"{other}_detected"
-        elif ours >= 1 and theirs >= 1:
-            validation.reason = category_id = "mixed"
-        elif score.only_zips:
-            validation.reason = category_id = "nested_zip"
-        else:
-            validation.reason = category_id = "unknown"
+        category_id = f"{other}_detected" if reason == other else reason
         validation.set_current_status_code_by_id(1)
         validation.current_ddp_category = _rejection(category_id)
 
     logger.info(
-        "Meta validation: product=%s reason=%s own=%d other=%d",
-        product, validation.reason, ours, theirs,
+        "Meta validation: product=%s reason=%s %s",
+        product, validation.reason, validation.milestone_detail,
     )
     return validation
 
