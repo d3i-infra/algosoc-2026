@@ -59,6 +59,10 @@ class FlowBuilder:
     def __init__(self, session_id: str, platform_name: str):
         self.session_id = session_id
         self.platform_name = platform_name
+        # The validation of the most recent upload, read by
+        # generate_retry_prompt; None until validate_file has run in the
+        # current attempt.
+        self.last_validation: validate.ValidateInput | None = None
         self._initialize_ui_text()
 
     def _initialize_ui_text(self):
@@ -120,6 +124,11 @@ class FlowBuilder:
         diagnostic detail in browser console only.
         """
         while True:
+            # Every attempt starts without a validation: a retry that fails
+            # before validate_file runs (a corrupt part below) must not
+            # reuse the previous upload's reason on its retry prompt.
+            self.last_validation = None
+
             # 1. Render file prompt → receive payload
             logger.info("Prompt for file for %s", self.platform_name)
             file_prompt = self.generate_file_prompt()
@@ -211,6 +220,7 @@ class FlowBuilder:
             # against the narrower, far more common SeekableBinaryReader;
             # a PayloadFiles subclass narrows its own override to ArchiveSet.
             validation = self.validate_file(cast(SeekableBinaryReader, archive))
+            self.last_validation = validation
             status = validation.get_status_code_id()
             category = getattr(validation, "current_ddp_category", None)
             category_id = getattr(category, "id", "unknown") if category else "unknown"
@@ -375,6 +385,14 @@ class FlowBuilder:
     def generate_retry_prompt(self):
         """Generate platform-specific retry prompt.
 
+        The text follows `self.last_validation` when it carries the two
+        optional attributes a MetaValidation has: `reason` (a key
+        port_helpers.generate_retry_prompt knows, or "no_study_categories",
+        which renders generate_no_study_data_prompt instead) and
+        `missing_study_labels` (the label dict that page lists). A
+        validation without them — every other platform — and a retry that
+        ran no validation (last_validation is None) get the plain text.
+
         Mirrors generate_file_prompt's `multiple=` flag: a PayloadFiles
         flow (expected_file_payload == "PayloadFiles") gets the multi-aware
         copy pointing the participant at different files, rather than "a
@@ -382,8 +400,15 @@ class FlowBuilder:
         selection that validates but is missing a product is instead caught
         by the soft-confirm step (missing_products/generate_incomplete_upload_prompt).
         """
+        reason = getattr(self.last_validation, "reason", None)
+        if reason == "no_study_categories":
+            return ph.generate_no_study_data_prompt(
+                self.platform_name, getattr(self.last_validation, "missing_study_labels", {})
+            )
         return ph.generate_retry_prompt(
-            self.platform_name, multiple=self.expected_file_payload == "PayloadFiles"
+            self.platform_name,
+            multiple=self.expected_file_payload == "PayloadFiles",
+            reason=reason,
         )
 
     def generate_review_data_prompt(self, table_list):

@@ -540,6 +540,98 @@ class TestMultiFileFlow:
         assert exc.value.exit_code == 2
 
 
+class TestRetryReason:
+    """The retry text follows the latest validation's reason when it has one."""
+
+    def test_retry_prompt_follows_validation_reason(self):
+        flow = StubFlow()
+        v = MagicMock(spec=ValidateInput)
+        v.get_status_code_id.return_value = 1
+        v.current_ddp_category = MagicMock(id="facebook_detected")
+        v.reason = "facebook"
+        flow.validate_file = lambda file: v
+
+        gen = flow.start_flow()
+        start_and_skip_logs(gen)
+        cmd = advance_past_logs(gen, make_payload_file())
+        assert isinstance(cmd, CommandUIRender)
+        assert cmd.page.body.text.translations["en"].startswith("This looks like your Facebook file")
+        assert flow.last_validation is v
+
+        # A validation without a reason (every non-Meta platform) gets today's text.
+        plain = StubFlow(validation_status=1)
+        gen = plain.start_flow()
+        start_and_skip_logs(gen)
+        cmd = advance_past_logs(gen, make_payload_file())
+        assert cmd.page.body.text.translations["en"].startswith(
+            "Unfortunately, we cannot process your TestPlatform file."
+        )
+
+    def test_retry_prompt_renders_no_study_text_from_validation(self):
+        flow = StubFlow()
+        v = MagicMock(spec=ValidateInput)
+        v.get_status_code_id.return_value = 1
+        v.current_ddp_category = MagicMock(id="no_study_categories")
+        v.reason = "no_study_categories"
+        v.missing_study_labels = {"x": props.Translatable({"en": "Part X", "nl": "Deel X"})}
+        flow.validate_file = lambda file: v
+
+        gen = flow.start_flow()
+        start_and_skip_logs(gen)
+        cmd = advance_past_logs(gen, make_payload_file())
+        assert isinstance(cmd, CommandUIRender)
+        assert cmd.page.header.title.translations["en"] == "Try again"
+        assert "Part X" in cmd.page.body.text.translations["en"]
+        assert cmd.page.body.ok.translations["en"] == "Try again"
+
+    def test_corrupt_part_retry_uses_plain_text(self):
+        flow = MultiStubFlow()
+        gen = flow.start_flow()
+        start_and_skip_logs(gen)
+
+        good = make_payload_files(n=1).value[0]
+        bad = io.BytesIO(b"not a zip file")
+        bad.name = "takeout-2-001.zip"
+        bad.size = len(b"not a zip file")
+
+        # No validation ran, so there is no reason to follow: the multi-file plain text.
+        cmd = advance_past_logs(gen, make_payload("PayloadFiles", value=[good, bad]))
+        assert isinstance(cmd, CommandUIRender)
+        assert flow.last_validation is None
+        assert cmd.page.body.text.translations["en"].startswith(
+            "Unfortunately, we cannot process your TestPlatform file(s)"
+        )
+
+    def test_last_validation_resets_between_attempts(self):
+        flow = MultiStubFlow()
+        v = MagicMock(spec=ValidateInput)
+        v.get_status_code_id.return_value = 1
+        v.current_ddp_category = MagicMock(id="facebook_detected")
+        v.reason = "facebook"
+        flow.validate_file = lambda archive_set: v
+
+        gen = flow.start_flow()
+        start_and_skip_logs(gen)
+
+        # First upload reads fine and validates with a reason → Facebook text.
+        cmd = advance_past_logs(gen, make_payload_files(n=1))
+        assert cmd.page.body.text.translations["en"].startswith("This looks like your Facebook file")
+        assert flow.last_validation is v
+
+        # Retry → file prompt; the second upload fails before validation.
+        cmd = advance_past_logs(gen, make_payload("PayloadTrue"))
+        assert isinstance(cmd, CommandUIRender)
+        bad = io.BytesIO(b"not a zip file")
+        bad.name = "takeout-2-001.zip"
+        bad.size = len(b"not a zip file")
+        cmd = advance_past_logs(gen, make_payload("PayloadFiles", value=[bad]))
+        assert isinstance(cmd, CommandUIRender)
+        assert flow.last_validation is None
+        assert cmd.page.body.text.translations["en"].startswith(
+            "Unfortunately, we cannot process your TestPlatform file(s)"
+        )
+
+
 class IncompleteStubFlow(MultiStubFlow):
     """Reports one missing product until told otherwise."""
 

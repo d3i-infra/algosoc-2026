@@ -67,9 +67,8 @@ import pandas as pd
 import port.helpers.extraction_helpers as eh
 from port.helpers.account_holder import AccountHolder, attempt as _attempt, cleaned as _cleaned, redact_account_holder
 from port.helpers.extraction_helpers import ZipArchiveReader
-import port.helpers.port_helpers as ph
 from port.helpers.flow_builder import FlowBuilder
-from port.helpers.meta_recognition import MetaValidation, folder_names, validate_meta
+from port.helpers.meta_recognition import MetaValidation, require_study_categories, validate_meta
 
 from port.helpers.validate import (
     DDPCategory,
@@ -2980,14 +2979,15 @@ def extraction(
 
 
 def validate_ddp(archive: SeekableBinaryReader) -> MetaValidation:
-    """Recognise an Instagram export by its folder markers.
+    """Recognise an Instagram export by its folder markers, then require at
+    least one of the study's categories.
 
     Recognition goes through the shared Meta helper, which scores the zip's
     folder names rather than its file names. ``DDP_CATEGORIES`` now only
     name the export's formats (json_en, html_en); they no longer drive
     recognition.
     """
-    return validate_meta(archive, "instagram", DDP_CATEGORIES)
+    return require_study_categories(validate_meta(archive, "instagram", DDP_CATEGORIES), MISSING_CATEGORIES)
 
 
 # The export folders the study draws on: key -> (folder, soft-confirm label).
@@ -2997,32 +2997,6 @@ MISSING_CATEGORIES: dict[str, tuple[str, props.Translatable]] = {
     "ads_information": ("ads_information", props.Translatable({"en": "Ads information", "nl": "Advertentie-informatie"})),
     "logged_information": ("logged_information", props.Translatable({"en": "Logged information", "nl": "Gelogde informatie"})),
 }
-
-
-def missing_study_categories(validation: MetaValidation) -> dict[str, props.Translatable]:
-    """The entries of ``MISSING_CATEGORIES`` whose folder is absent from the
-    archive, in table order. The folder matches at any depth on purpose: Drive
-    downloads wrap the export in two folders, so "top-level" is not knowable
-    from the member list. A nested folder that shares a category name hides the
-    nudge; the nudge is advisory.
-
-    This is not the ``FlowBuilder.missing_products`` hook: Instagram keeps the
-    base hook, which returns ``{}``."""
-    present = folder_names(validation.archive_members)
-    return {key: label for key, (folder, label) in MISSING_CATEGORIES.items() if folder not in present}
-
-
-def require_study_categories(validation: MetaValidation) -> MetaValidation:
-    """Downgrade a recognised export holding none of the study's categories to
-    a rejection: continuing would end on the no-data page, which the host
-    counts as a completion with nothing donated."""
-    if validation.get_status_code_id() == 0 and len(missing_study_categories(validation)) == len(MISSING_CATEGORIES):
-        validation.reason = "no_study_categories"
-        validation.current_ddp_category = DDPCategory(
-            id="no_study_categories", ddp_filetype=DDPFiletype.UNKOWN, language=Language.UNKNOWN, known_files=[]
-        )
-        validation.set_current_status_code_by_id(1)
-    return validation
 
 
 class InstagramFlow(FlowBuilder):
@@ -3038,19 +3012,9 @@ class InstagramFlow(FlowBuilder):
 
     def __init__(self, session_id: str):
         super().__init__(session_id, "Instagram")
-        self.last_validation: MetaValidation | None = None
 
     def validate_file(self, file):
-        self.last_validation = require_study_categories(validate_ddp(file))
-        return self.last_validation
-
-    def generate_retry_prompt(self):
-        if self.last_validation and self.last_validation.reason == "no_study_categories":
-            return ph.generate_no_study_data_prompt(self.platform_name, missing_study_categories(self.last_validation))
-        return ph.generate_retry_prompt(
-            self.platform_name,
-            reason=self.last_validation.reason if self.last_validation else None,
-        )
+        return validate_ddp(file)
 
     def extract_data(self, file_value, validation):
         return extraction(file_value, validation)

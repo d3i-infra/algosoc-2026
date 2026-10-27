@@ -59,16 +59,17 @@ from lxml import etree
 import pandas as pd
 
 import port.helpers.extraction_helpers as eh
-import port.helpers.validate as validate
 from port.helpers.account_holder import AccountHolder, attempt as _attempt, cleaned as _cleaned, redact_account_holder
 from port.helpers.extraction_helpers import ZipArchiveReader
 from port.helpers.flow_builder import FlowBuilder
+from port.helpers.meta_recognition import MetaValidation, StudyCategories, require_study_categories, validate_meta
 
 from port.helpers.validate import (
     DDPCategory,
     DDPFiletype,
     Language,
 )
+import port.api.props as props
 from port.api.d3i_props import ExtractionResult
 from port.api.file_utils import SeekableBinaryReader
 from port.helpers.table_extractor import (
@@ -4601,6 +4602,30 @@ def extraction(facebook_zip: SeekableBinaryReader, validation) -> ExtractionResu
     return result
 
 
+def validate_ddp(archive: SeekableBinaryReader) -> MetaValidation:
+    """Recognise a Facebook export by its folder and file markers, then
+    require at least one of the study's categories.
+
+    Recognition goes through the shared Meta helper, which scores the zip's
+    folder names (and, for the two categories that write files straight into
+    their folder, its file names) rather than the known-file lists.
+    ``DDP_CATEGORIES`` now only name the export's formats (json_en, html_en);
+    they no longer drive recognition.
+    """
+    return require_study_categories(validate_meta(archive, "facebook", DDP_CATEGORIES), MISSING_CATEGORIES)
+
+
+# The export folders the study draws on: key -> (folder, soft-confirm label).
+MISSING_CATEGORIES: StudyCategories = {
+    "your_facebook_activity": ("your_facebook_activity", props.Translatable({"en": "Your Facebook activity", "nl": "Je Facebook-activiteit"})),
+    "logged_information": ("logged_information", props.Translatable({"en": "Logged information", "nl": "Gelogde informatie"})),
+    "ads_information": ("ads_information", props.Translatable({"en": "Ads information", "nl": "Advertentie-informatie"})),
+    "apps_and_websites_off_of_facebook": ("apps_and_websites_off_of_facebook", props.Translatable({"en": "Apps and websites off of Facebook", "nl": "Apps en websites buiten Facebook"})),
+    "preferences": ("preferences", props.Translatable({"en": "Preferences", "nl": "Voorkeuren"})),
+    "personal_information": ("personal_information", props.Translatable({"en": "Personal information", "nl": "Persoonlijke informatie"})),
+}
+
+
 class FacebookFlow(FlowBuilder):
     """Flow implementation for the Facebook data donation study."""
 
@@ -4610,7 +4635,7 @@ class FacebookFlow(FlowBuilder):
         super().__init__(session_id, "Facebook")
 
     def validate_file(self, file):
-        return validate.validate_zip(DDP_CATEGORIES, file)
+        return validate_ddp(file)
 
     def extract_data(self, file_value, validation):
         return extraction(file_value, validation)
