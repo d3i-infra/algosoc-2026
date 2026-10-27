@@ -99,11 +99,16 @@ class PropsUIPromptConsentFormViz:
         description (Optional[Translatable]): Optional description of the consent form.
         donate_question (Optional[Translatable]): Optional donation question.
         donate_button (Optional[Translatable]): Optional text for the donate button.
+        validation (Optional[dict[str, str | int]]): Optional PII-free record of
+            the validation that accepted the upload (code constants and
+            integers only), which the consent form writes into the donation.
+            Serialised as "validation" only when set.
     """
     tables: list[PropsUIPromptConsentFormTableViz]
     description: Optional[props.Translatable] = None
     donate_question: Optional[props.Translatable] = None
     donate_button: Optional[props.Translatable] = None
+    validation: Optional[dict[str, str | int]] = None
 
     def translate_tables(self):
         """
@@ -130,6 +135,8 @@ class PropsUIPromptConsentFormViz:
         dict["description"] = self.description and self.description.toDict()
         dict["donateQuestion"] = self.donate_question and self.donate_question.toDict()
         dict["donateButton"] = self.donate_button and self.donate_button.toDict()
+        if self.validation is not None:
+            dict["validation"] = self.validation
         return dict
 
 

@@ -16,9 +16,9 @@ import {
     PropsUITableRow,
 } from "./types"
 import { useCallback, useEffect, useMemo, useRef, useState, ReactElement } from "react"
-import _ from "lodash"
 import { TableContainer } from "./table_container"
 import { TableSelector } from "./table_selector"
+import { serializeConsentData } from "./serialize"
 
 type Props = PropsUIPromptConsentFormViz & ReactFactoryContext
 
@@ -146,33 +146,12 @@ export const ConsentFormViz = (props: Props): ReactElement => {
   }, [])
 
   function handleDonate(): void {
-    const value = serializeConsentData()
+    const value = serializeConsentData(tables, props.validation)
     resolve?.({ __type__: "PayloadJSON", "value": value })
   }
 
   function handleCancel(): void {
     resolve?.({ __type__: "PayloadFalse", value: false })
-  }
-
-  function serializeConsentData(): string {
-    const array = serializeTables()
-    return JSON.stringify(array)
-  }
-
-  function serializeTables(): any[] {
-    return tables.map((table) => serializeTable(table))
-  }
-
-
-  function serializeTable({ id, head, body: { rows }, deletedRowCount }: TableWithContext): any {
-    const data = rows.map((row) => serializeRow(row, head))
-    return { [id]: data, "deleted row count": deletedRowCount.toString() }
-  }
-
-  function serializeRow(row: PropsUITableRow, head: PropsUITableHead): any {
-    const keys = head.cells.map((cell) => cell)
-    const values = row.cells.map((cell) => cell)
-    return _.fromPairs(_.zip(keys, values))
   }
 
   return (

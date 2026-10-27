@@ -501,6 +501,14 @@ def test_milestone_detail_renders_tiers():
     assert on_files.milestone_detail == "ig=0+0 fb=0+0 basis=files files=3"
 
 
+def test_donation_record():
+    record = validate_meta(make_zip(INSTAGRAM_JSON), "instagram", instagram_categories()).donation_record()
+    assert record == {"basis": "strong", "ig_strong": 2, "ig_weak": 3, "fb_strong": 0, "fb_weak": 0, "files": 0}
+    # No score (an unreadable upload): zeros, never a member name.
+    bad = validate_meta(io.BytesIO(b"not a zip"), "instagram", instagram_categories()).donation_record()
+    assert bad == {"basis": "none", "ig_strong": 0, "ig_weak": 0, "fb_strong": 0, "fb_weak": 0, "files": 0}
+
+
 def test_category_ids_are_constants():
     allowed = {"json_en", "html_en", "facebook_detected", "instagram_detected", "mixed", "nested_zip", "unknown", "bad_zip"}
     for members in (INSTAGRAM_JSON, INSTAGRAM_HTML, THIN, FACEBOOK_LIST, MIXED_FEW_FB, MIXED_FEW_IG, NESTED, UNKNOWN):

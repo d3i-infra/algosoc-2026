@@ -75,6 +75,7 @@ test('can remove rows from submission', async ({ page }) => {
   const tables = JSON.parse(parsedData.data!);
   const fileStats = tables.find((t: any) => 'example_file_stats' in t);
   expect(fileStats['deleted row count']).toEqual('1');
+  expect(fileStats.validation).toEqual({ category: 'unknown' });
 });
 
 test('can undo row removal before submission', async ({ page }) => {

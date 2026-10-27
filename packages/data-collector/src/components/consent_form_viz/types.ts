@@ -24,6 +24,9 @@ export interface PropsUIPromptConsentFormViz {
   donateQuestion?: Text
   donateButton?: Text
   tables: PropsUIPromptConsentFormTableViz[]
+  // Python's validation record (category, and for Meta the marker tiers), sent
+  // only when set; serializeConsentData writes it beside each "deleted row count".
+  validation?: Record<string, string | number>
 }
 
 export interface Annotation {

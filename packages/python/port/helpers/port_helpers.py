@@ -288,7 +288,9 @@ def generate_file_prompt(
 
 
 def generate_review_data_prompt(
-    description: props.Translatable, table_list: list[d3i_props.PropsUIPromptConsentFormTableViz]
+    description: props.Translatable,
+    table_list: list[d3i_props.PropsUIPromptConsentFormTableViz],
+    validation: dict[str, str | int] | None = None,
 ) -> d3i_props.PropsUIPromptConsentFormViz:
     """
     Generates a data review form with a list of tables and a description, including default donate question and button.
@@ -298,6 +300,9 @@ def generate_review_data_prompt(
     Args:
         table_list (list[props.PropsUIPromptConsentFormTableViz]): A list of consent form tables to be included in the prompt.
         description (props.Translatable): A translatable description text for the consent prompt.
+        validation (dict[str, str | int] | None): The PII-free validation record
+            (code constants and integers only) the consent form writes into the
+            donation; omitted from the prompt when None.
 
     Returns:
         props.PropsUIPromptConsentForm: A structured consent form object containing the provided table list, description,
@@ -324,7 +329,11 @@ def generate_review_data_prompt(
     )
 
     return d3i_props.PropsUIPromptConsentFormViz(
-        tables=table_list, description=description, donate_question=donate_question, donate_button=donate_button
+        tables=table_list,
+        description=description,
+        donate_question=donate_question,
+        donate_button=donate_button,
+        validation=validation,
     )
 
 

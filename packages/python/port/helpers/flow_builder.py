@@ -60,8 +60,8 @@ class FlowBuilder:
         self.session_id = session_id
         self.platform_name = platform_name
         # The validation of the most recent upload, read by
-        # generate_retry_prompt; None until validate_file has run in the
-        # current attempt.
+        # generate_retry_prompt and generate_review_data_prompt; None until
+        # validate_file has run in the current attempt.
         self.last_validation: validate.ValidateInput | None = None
         self._initialize_ui_text()
 
@@ -411,11 +411,28 @@ class FlowBuilder:
             reason=reason,
         )
 
+    def validation_record(self, validation) -> dict[str, str | int]:
+        """The PII-free record of *validation* that the consent form writes
+        into the donation (ADR-0023): the category id ("unknown" when there
+        is none, as in the validation milestone), plus whatever
+        `donation_record()` returns when the validation has one — a
+        MetaValidation adds its basis and tiered marker counts. Duck-typed
+        like generate_retry_prompt, so every other platform records only
+        its category."""
+        category = getattr(validation, "current_ddp_category", None)
+        record: dict[str, str | int] = {"category": getattr(category, "id", "unknown") if category else "unknown"}
+        donation_record = getattr(validation, "donation_record", None)
+        if donation_record is not None:
+            record.update(donation_record())
+        return record
+
     def generate_review_data_prompt(self, table_list):
-        """Generate platform-specific review data prompt."""
+        """Generate platform-specific review data prompt, carrying the
+        validation record of the accepted upload (`validation_record`)."""
         return ph.generate_review_data_prompt(
             description=self.UI_TEXT["review_data_description"],
             table_list=table_list,
+            validation=self.validation_record(self.last_validation),
         )
 
     def missing_products(self, validation) -> dict[str, props.Translatable]:

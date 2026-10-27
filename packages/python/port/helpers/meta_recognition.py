@@ -438,6 +438,21 @@ class MetaValidation(ValidateInput):
             detail += f" files={self.files}"
         return detail
 
+    def donation_record(self) -> dict[str, str | int]:
+        """The basis and tiered marker counts for the donation record, the
+        same facts as `milestone_detail` as code constants and integers;
+        never a path or member name (ADR-0023). Counts are zero when no
+        score was taken; `files` is the real count on every basis."""
+        s = self.score
+        return {
+            "basis": self.basis,
+            "ig_strong": s.instagram_strong if s else 0,
+            "ig_weak": s.instagram_weak if s else 0,
+            "fb_strong": s.facebook_strong if s else 0,
+            "fb_weak": s.facebook_weak if s else 0,
+            "files": self.files,
+        }
+
 
 def _rejection(reason_id: str) -> DDPCategory:
     return DDPCategory(
