@@ -177,7 +177,8 @@ flowchart LR
 
 When the participant clicks "Yes, share for research", `serializeConsentData()`
 walks the (possibly modified) tables and produces a JSON string. This includes
-the remaining rows and a `"deleted row count"` per table. The result is sent
+the remaining rows and a `"deleted row count"` per table. Each table object
+also carries the `"validation"` record the Python validation produced. The result is sent
 back to Python as `PayloadJSON`, where `FlowBuilder.start_flow()` passes it
 to `ph.donate()` → `CommandSystemDonate` → bridge → host.
 

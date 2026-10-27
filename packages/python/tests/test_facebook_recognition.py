@@ -63,7 +63,7 @@ def test_validate_ddp_accepts_json_and_html():
     assert result.get_status_code_id() == 0
     assert result.reason == "facebook"
     assert result.current_ddp_category.id == "json_en"
-    assert result.milestone_detail.startswith("ig=0 fb=")
+    assert result.milestone_detail.startswith("ig=0+0 fb=")
 
     html = validate_ddp(make_zip(FACEBOOK_HTML))
     assert html.get_status_code_id() == 0
@@ -91,7 +91,7 @@ def test_ads_only_export_is_recognised():
 def test_connections_and_security_only_takes_the_retry_path():
     flow = FacebookFlow("s")
     gen, logs, cmd = drive_upload(flow, upload_payload(CONNECTIONS_AND_SECURITY))
-    assert any(m.endswith("Validation: invalid (no_study_categories) ig=0 fb=2") for m in logs)
+    assert any(m.endswith("Validation: invalid (no_study_categories) ig=0+0 fb=0+2 basis=weak") for m in logs)
     assert cmd.page.header.title.translations["en"] == "Try again"
     en = cmd.page.body.toDict()["text"]["translations"]["en"]
     assert en.startswith(
@@ -121,7 +121,7 @@ def test_partial_export_proceeds():
     flow = FacebookFlow("s")
     with patch.object(FacebookFlow, "extract_data", return_value=ExtractionResult(tables=[], errors=Counter())):
         _, logs, cmd = drive_upload(flow, upload_payload(members))
-    assert any(m.endswith("Validation: valid (json_en) ig=0 fb=2") for m in logs)
+    assert any(m.endswith("Validation: valid (json_en) ig=0+0 fb=2+0 basis=strong") for m in logs)
     assert not any("Upload incomplete" in m for m in logs)
     # The no-data page is itself a confirm prompt, so tell the soft-confirm
     # apart by its header.
@@ -160,3 +160,14 @@ def test_validate_ddp_recognises_the_hand_built_html_export():
     old_rows = {t.id: len(t.data_frame) for t in old_tables}
     assert new_rows == old_rows
     assert new_rows["facebook_who_youve_followed"] >= 1
+
+
+def test_flattened_facebook_export_accepted():
+    # The search history is declared folder-qualified, so only the first
+    # name resolves at the root.
+    result = validate_ddp(make_zip(["who_you've_followed.json", "your_search_history.json"]))
+    assert result.get_status_code_id() == 0
+    assert result.reason == "facebook"
+    assert result.basis == "files"
+    assert result.files == 1
+    assert result.missing_study_labels == {}

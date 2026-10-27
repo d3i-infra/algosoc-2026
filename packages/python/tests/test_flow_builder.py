@@ -24,7 +24,10 @@ from port.api.commands import CommandUIRender, CommandSystemDonate, CommandSyste
 from port.api.d3i_props import ExtractionResult
 import port.api.props as props
 import port.api.d3i_props as d3i_props
+from port.helpers.meta_recognition import validate_meta
 from port.helpers.validate import ValidateInput
+from port.platforms.instagram import DDP_CATEGORIES
+from test_meta_recognition import INSTAGRAM_JSON, make_zip
 
 
 class StubFlow(FlowBuilder):
@@ -754,11 +757,36 @@ class TestValidationMilestoneDetail:
         assert message.endswith("Validation: invalid (unknown)")
 
     def test_milestone_carries_detail_when_present(self):
-        message = self.validation_message(self.flow_with(0, "json_en", milestone_detail="ig=3 fb=0"))
-        assert message.endswith("Validation: valid (json_en) ig=3 fb=0")
+        message = self.validation_message(self.flow_with(0, "json_en", milestone_detail="ig=3+0 fb=0+0 basis=strong"))
+        assert message.endswith("Validation: valid (json_en) ig=3+0 fb=0+0 basis=strong")
         empty = self.validation_message(self.flow_with(0, "json_en", milestone_detail=""))
         assert empty.endswith("(json_en)")
 
     def test_milestone_without_detail_attribute_is_unchanged(self):
         message = self.validation_message(StubFlow())
         assert message.endswith("Validation: valid (json_en)")
+
+
+class TestValidationRecord:
+    """The consent prompt carries a PII-free record of the validation that accepted the upload."""
+
+    def test_record_for_validation_without_meta_fields(self):
+        flow = StubFlow()
+        gen = flow.start_flow()
+        start_and_skip_logs(gen)
+        cmd = advance_past_logs(gen, make_payload_file())
+        assert isinstance(cmd.page.body, d3i_props.PropsUIPromptConsentFormViz)
+
+        assert flow.validation_record(flow.last_validation) == {"category": "json_en"}
+        assert cmd.page.body.toDict()["validation"] == {"category": "json_en"}
+
+        no_category = MagicMock(spec=ValidateInput)
+        no_category.current_ddp_category = None
+        assert flow.validation_record(no_category) == {"category": "unknown"}
+
+    def test_record_for_meta_validation(self):
+        validation = validate_meta(make_zip(INSTAGRAM_JSON), "instagram", DDP_CATEGORIES)
+        record = StubFlow().validation_record(validation)
+        assert set(record) == {"category", "basis", "ig_strong", "ig_weak", "fb_strong", "fb_weak", "files"}
+        assert record["category"] == "json_en"
+        assert record["basis"] == "strong"

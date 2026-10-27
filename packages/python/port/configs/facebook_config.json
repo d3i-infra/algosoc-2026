@@ -43,6 +43,10 @@
           "tokenize": false
         }
       ],
+      "inputs": [
+        "logged_information/search/your_search_history.json",
+        "logged_information/search/your_search_history.html"
+      ],
       "extractor": "your_search_history_to_df",
       "documentation": {
         "summary": "Each row represents a search query the participant made on Facebook, including the search term and date.",
@@ -69,6 +73,10 @@
           "nl": "Interesse"
         }
       },
+      "inputs": [
+        "ads_interests.json",
+        "ads_interests.html"
+      ],
       "extractor": "ads_interests_to_df",
       "documentation": {
         "summary": "Each row represents an interest topic Facebook has associated with the participant for ad targeting purposes.",
@@ -102,6 +110,14 @@
           "nl": "Datum en tijd"
         }
       },
+      "inputs": [
+        "logged_information/interactions/groups_and_events_you've_visited.json",
+        "logged_information/interactions/profile_visits.json",
+        "logged_information/interactions/recently_visited.json",
+        "logged_information/interactions/groups_and_events_you've_visited.html",
+        "logged_information/interactions/recently_visited.html",
+        "profile_visits.html"
+      ],
       "extractor": "profile_visits_to_df",
       "documentation": {
         "summary": "Each row is a Facebook profile, page, group or event the participant opened in roughly the last 90 days. Read from the grouped recently_visited file (exports up to June 2026) or, from September 2026, from the split profile_visits and groups_and_events_you've_visited files (an event carries a Start time or End time, a group only a Name). Marketplace visit counters that carry only a date are not rows.",
@@ -141,6 +157,16 @@
           "nl": "Datum en tijd"
         }
       },
+      "inputs": [
+        "logged_information/interactions/ads.json",
+        "logged_information/interactions/content_that_has_been_shown_to_you_in_your_feed.json",
+        "logged_information/interactions/recently_viewed.json",
+        "logged_information/interactions/shows_you_have_watched.json",
+        "logged_information/interactions/ads.html",
+        "logged_information/interactions/content_that_has_been_shown_to_you_in_your_feed.html",
+        "logged_information/interactions/recently_viewed.html",
+        "logged_information/interactions/shows_you_have_watched.html"
+      ],
       "extractor": "content_shown_to_you_to_df",
       "documentation": {
         "summary": "Each row is an item Facebook showed the participant or the participant watched in roughly the last 90 days: posts shown in the feed, videos watched, ads shown, Marketplace items viewed, web pages opened off Facebook. Read from the grouped recently_viewed file (exports up to June 2026) and, from September 2026, from the split content_that_has_been_shown_to_you_in_your_feed (Posts / Videos / Links lists), ads and shows_you_have_watched files; every file present contributes rows. Marketplace activity counters that carry only a date are not rows.",
@@ -173,6 +199,10 @@
           "nl": "Waarde"
         }
       },
+      "inputs": [
+        "facebook_reels_usage_information.json",
+        "facebook_reels_usage_information.html"
+      ],
       "extractor": "facebook_reels_usage_to_df",
       "documentation": {
         "summary": "Each row represents a type of interaction the participant had with Facebook Reels and its associated value.",
@@ -207,6 +237,10 @@
           "nl": "Datum en tijd"
         }
       },
+      "inputs": [
+        "your_facebook_activity/other_activity/link_history.json",
+        "link_history.html"
+      ],
       "extractor": "link_history_to_df",
       "documentation": {
         "summary": "Each row represents an outbound link the participant opened in Facebook's in-app browser, with a timestamp.",
@@ -238,6 +272,10 @@
           "nl": "Datum en tijd"
         }
       },
+      "inputs": [
+        "your_facebook_activity/events/your_events.json",
+        "your_facebook_activity/events/your_events.html"
+      ],
       "extractor": "your_events_to_df",
       "documentation": {
         "summary": "Each row represents a Facebook event the participant created or was invited to, including the event name and creation timestamp.",
@@ -272,6 +310,10 @@
           "nl": "Datum en tijd"
         }
       },
+      "inputs": [
+        "your_group_membership_activity.json",
+        "your_group_membership_activity.html"
+      ],
       "extractor": "your_group_membership_activity_to_df",
       "documentation": {
         "summary": "Each row represents a Facebook group the participant joined, including the title, group name, and the time of joining.",
@@ -303,6 +345,10 @@
           "nl": "Waarde"
         }
       },
+      "inputs": [
+        "ads_information/ad_preferences.json",
+        "ad_preferences.html"
+      ],
       "extractor": "ad_preferences_to_df",
       "documentation": {
         "summary": "Each row represents an ad-preference setting the participant has on Facebook, such as targeting toggles and opt-outs.",
@@ -329,6 +375,10 @@
           "nl": "Categorie"
         }
       },
+      "inputs": [
+        "ads_information/other_categories_used_to_reach_you.json",
+        "other_categories_used_to_reach_you.html"
+      ],
       "extractor": "other_categories_used_to_reach_you_to_df",
       "documentation": {
         "summary": "Each row represents a targeting category advertisers used to reach the participant on Facebook.",
@@ -358,6 +408,10 @@
           "nl": "Adverteerder"
         }
       },
+      "inputs": [
+        "ads_information/advertisers_using_your_activity_or_information.json",
+        "advertisers_using_your_activity_or_information.html"
+      ],
       "extractor": "advertisers_using_your_activity_to_df",
       "documentation": {
         "summary": "Each row represents an advertiser who used the participant's activity or information for ad targeting on Facebook, grouped by targeting method.",
@@ -396,6 +450,10 @@
           "nl": "Datum en tijd"
         }
       },
+      "inputs": [
+        "ads_information/advertisers_you've_interacted_with.json",
+        "advertisers_you've_interacted_with.html"
+      ],
       "extractor": "advertisers_youve_interacted_with_to_df",
       "documentation": {
         "summary": "Each row represents an ad the participant clicked or engaged with on Facebook, including the action taken, ad title, URL, and timestamp.",
@@ -432,6 +490,10 @@
           "nl": "Datum en tijd"
         }
       },
+      "inputs": [
+        "apps_and_websites_off_of_facebook/your_activity_off_meta_technologies.json",
+        "apps_and_websites_off_of_facebook/your_activity_off_meta_technologies.html"
+      ],
       "extractor": "your_activity_off_meta_to_df",
       "documentation": {
         "summary": "Each row is one activity that a business or organisation reported to Meta about the participant on its own website or app (page view, search, purchase, app open, ...). JSON has two shapes (off_facebook_activity_v2 with events[]; 2026 record format with label_values); HTML is an index page plus one page per business, read one at a time.",
@@ -467,6 +529,10 @@
           "nl": "Datum en tijd"
         }
       },
+      "inputs": [
+        "comments_and_reactions/comments.json",
+        "your_facebook_activity/comments_and_reactions/comments.html"
+      ],
       "extractor": "comments_to_df",
       "documentation": {
         "summary": "Each row represents a comment the participant made on a Facebook post or other content, including the title, comment text, and timestamp.",
@@ -502,6 +568,10 @@
           "nl": "Datum en tijd"
         }
       },
+      "inputs": [
+        "re:(^|/)likes_and_reactions_\\d+\\.json$",
+        "re:(^|/)likes_and_reactions_\\d+\\.html$"
+      ],
       "extractor": "likes_and_reactions_to_df",
       "documentation": {
         "summary": "Each row represents a post the participant liked or reacted to on Facebook, including the post title, reaction type, and timestamp.",
@@ -541,6 +611,10 @@
           "nl": "Datum en tijd"
         }
       },
+      "inputs": [
+        "re:(^|/)your_posts__check_ins__photos_and_videos_\\d+\\.json$",
+        "re:(^|/)your_posts__check_ins__photos_and_videos_\\d+\\.html$"
+      ],
       "extractor": "your_posts_check_ins_to_df",
       "documentation": {
         "summary": "Each row represents a post or check-in the participant made on Facebook, including the title, post content, URL, and timestamp.",
@@ -577,6 +651,10 @@
           "nl": "URL"
         }
       },
+      "inputs": [
+        "your_facebook_activity/groups/your_contributions.json",
+        "your_facebook_activity/groups/your_contributions.html"
+      ],
       "extractor": "your_contributions_to_df",
       "documentation": {
         "summary": "Each row represents a post or comment the participant contributed to a Facebook group, including the content, date, and URL.",
@@ -616,6 +694,10 @@
           "nl": "Datum en tijd"
         }
       },
+      "inputs": [
+        "your_comments_in_groups.json",
+        "your_comments_in_groups.html"
+      ],
       "extractor": "your_comments_in_groups_to_df",
       "documentation": {
         "summary": "Each row represents a comment the participant made in a Facebook group, including the title, comment text, group name, and timestamp.",
@@ -648,6 +730,10 @@
           "nl": "Datum en tijd"
         }
       },
+      "inputs": [
+        "who_you've_followed.json",
+        "who_you've_followed.html"
+      ],
       "extractor": "who_youve_followed_to_df",
       "documentation": {
         "summary": "Each row represents a Facebook profile or page that the participant follows, including the name and the time they started following.",
@@ -678,6 +764,10 @@
           "nl": "Datum en tijd"
         }
       },
+      "inputs": [
+        "pages_and_profiles_you_follow.json",
+        "pages_and_profiles_you_follow.html"
+      ],
       "extractor": "pages_and_profiles_you_follow_to_df",
       "documentation": {
         "summary": "Each row represents a Facebook Page or profile the participant follows, including the title and time they started following.",
@@ -712,6 +802,10 @@
           "nl": "Datum en tijd"
         }
       },
+      "inputs": [
+        "pages_you've_liked.json",
+        "pages_you've_liked.html"
+      ],
       "extractor": "pages_youve_liked_to_df",
       "documentation": {
         "summary": "Each row represents a Facebook Page the participant has liked, including the page name, URL, and timestamp.",

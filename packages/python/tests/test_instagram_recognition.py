@@ -106,7 +106,7 @@ def test_require_study_categories_rejects_export_without_any():
     assert result.reason == "no_study_categories"
     assert result.current_ddp_category.id == "no_study_categories"
     assert result.archive_members == members
-    assert result.milestone_detail == "ig=2 fb=0"
+    assert result.milestone_detail == "ig=0+2 fb=0+0 basis=weak"
 
 
 def test_require_study_categories_keeps_partial_export():
@@ -149,7 +149,7 @@ def test_partial_export_proceeds_without_a_page():
         while isinstance(cmd, CommandSystemLog):
             logs.append(cmd.message)
             cmd = gen.send(make_payload("PayloadVoid"))
-    assert any(m.endswith("Validation: valid (json_en) ig=4 fb=0") for m in logs)
+    assert any(m.endswith("Validation: valid (json_en) ig=2+2 fb=0+0 basis=strong") for m in logs)
     assert not any("Upload incomplete" in m for m in logs)
     # The no-data page is itself a confirm prompt, so tell the soft-confirm
     # apart by its header.
@@ -173,7 +173,7 @@ def test_thin_export_takes_the_retry_path_and_declining_stays_pending():
         "Your Instagram file contains none of the parts this study uses: "
         "Your Instagram activity, Connections, Ads information, Logged information"
     )
-    assert any(m.endswith("Validation: invalid (no_study_categories) ig=2 fb=0") for m in logs)
+    assert any(m.endswith("Validation: invalid (no_study_categories) ig=0+2 fb=0+0 basis=weak") for m in logs)
     with pytest.raises(TaskIncompleteError) as exc:
         advance_past_logs(gen, make_payload("PayloadFalse"))
     assert exc.value.reason == "abandoned"
@@ -183,3 +183,64 @@ def test_retry_prompt_unknown_reason_keeps_default_text():
     default = ph.generate_retry_prompt("Instagram")
     for reason in ("detected_product", "bogus"):
         assert ph.generate_retry_prompt("Instagram", reason=reason) == default
+
+
+import io
+import json
+import zipfile
+
+from port.platforms import instagram
+
+
+def following_export() -> io.BytesIO:
+    """A zip holding only the smallest ``following.json`` the extractor accepts,
+    at the root: no Meta folder at all (made-up, ADR-0014)."""
+    data = {
+        "relationships_following": [
+            {
+                "title": "someone",
+                "string_list_data": [
+                    {"href": "https://www.instagram.com/someone", "value": "someone", "timestamp": 1700000000}
+                ],
+            }
+        ]
+    }
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("following.json", json.dumps(data))
+    buf.seek(0)
+    return buf
+
+
+def test_flattened_export_extracts():
+    archive = following_export()
+    validation = validate_ddp(archive)
+    assert validation.get_status_code_id() == 0
+    assert validation.reason == "instagram"
+    assert validation.basis == "files"
+    assert validation.files == 1
+    assert validation.reason != "no_study_categories"
+    assert validation.missing_study_labels == {}
+
+    result = instagram.extraction(archive, validation)
+    tables = {t.id: t.data_frame for t in result.tables}
+    assert "instagram_following" in tables
+    assert not tables["instagram_following"].empty
+
+
+def test_weak_basis_with_resolved_file_passes_the_study_check():
+    result = validate_ddp(make_zip(["following.json", "preferences/settings/x.json"]))
+    assert result.basis == "weak"
+    assert result.files == 1
+    assert list(result.missing_study_labels) == list(MISSING_CATEGORIES)
+    assert len(result.missing_study_labels) == 4
+    assert result.get_status_code_id() == 0
+    assert result.reason == "instagram"
+
+
+def test_researcher_skeleton_is_no_study_categories():
+    result = validate_ddp(make_zip(THIN))
+    assert result.get_status_code_id() == 1
+    assert result.reason == "no_study_categories"
+    assert result.basis == "weak"
+    assert result.files == 0

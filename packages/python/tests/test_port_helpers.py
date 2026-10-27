@@ -1,6 +1,7 @@
 """Tests for new port_helpers functions."""
 from unittest.mock import MagicMock
 
+import port.api.props as props
 import port.helpers.port_helpers as ph
 from port.api.commands import CommandUIRender
 
@@ -114,3 +115,16 @@ class TestHandleDonateResult:
         result = MagicMock()
         result.__type__ = "PayloadWeird"
         assert ph.handle_donate_result(result) is False
+
+
+class TestGenerateReviewDataPrompt:
+    DESCRIPTION = props.Translatable({"en": "Review", "nl": "Bekijk"})
+
+    def test_review_prompt_carries_validation(self):
+        record = {"category": "json_en", "basis": "strong"}
+        prompt = ph.generate_review_data_prompt(description=self.DESCRIPTION, table_list=[], validation=record)
+        assert prompt.toDict()["validation"] == {"category": "json_en", "basis": "strong"}
+
+        # Without a record the key is absent, not null.
+        plain = ph.generate_review_data_prompt(description=self.DESCRIPTION, table_list=[])
+        assert "validation" not in plain.toDict()

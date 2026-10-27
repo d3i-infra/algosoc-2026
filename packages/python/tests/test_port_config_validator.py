@@ -10,13 +10,16 @@ a participant.
 All fixtures here are synthetic: table *metadata* only, never participant data.
 """
 
+import pandas as pd
 import pytest
 
+import port.api.props as props
 from port.helpers.port_config_validator import (
     ui_content_coverage,
     validate,
     validate_ui_content,
 )
+from port.helpers.table_extractor import TableConfig, extractor_inputs
 from port.helpers.ui_locale import (
     DEFAULT_UI_LOCALE,
     PROVISIONAL_UI_LOCALES,
@@ -277,3 +280,60 @@ def test_every_supported_locale_appears_in_the_coverage_matrix(locale):
 
     assert locale in coverage["present"]
     assert locale in coverage["empty"]
+
+
+def _validate_with_tables(monkeypatch, tables):
+    raw = {"platform_info": {"name": "example"}, "tables": tables}
+    monkeypatch.setattr(
+        "port.helpers.port_config_validator.read_config",
+        lambda platform: raw,
+    )
+    errors, _ = validate("example")
+    return errors
+
+
+def test_inputs_is_optional_and_typed(monkeypatch):
+    ok = _validate_with_tables(monkeypatch, [_table(inputs=["a.json", "re:x"])])
+    assert not any("inputs" in e for e in ok)
+
+    absent = _validate_with_tables(monkeypatch, [_table()])
+    assert not any("inputs" in e for e in absent)
+
+    not_a_list = _validate_with_tables(monkeypatch, [_table(inputs="a.json")])
+    assert any("inputs" in e for e in not_a_list)
+
+    bad_element = _validate_with_tables(monkeypatch, [_table(inputs=[1])])
+    assert any("inputs" in e and "synthetic_table" in e for e in bad_element)
+
+    empty_element = _validate_with_tables(monkeypatch, [_table(inputs=[""])])
+    assert any("inputs" in e and "synthetic_table" in e for e in empty_element)
+
+
+def test_a_pattern_input_that_does_not_compile_is_an_error(monkeypatch):
+    errors = _validate_with_tables(monkeypatch, [_table(inputs=["a.json", "re:x", "re:("])])
+    assert [e for e in errors if "inputs" in e] == [
+        "tables[0] (id 'synthetic_table'): 'inputs'[2] 're:(' does not compile: "
+        "missing ), unterminated subpattern at position 0"
+    ]
+
+
+def _table_config(table_id: str, inputs: list[str]) -> TableConfig:
+    return TableConfig(
+        id=table_id,
+        extractor=lambda reader, errors, **kwargs: pd.DataFrame(),
+        title=props.Translatable({"en": table_id}),
+        description=props.Translatable({"en": ""}),
+        headers={},
+        inputs=inputs,
+    )
+
+
+def test_extractor_inputs_unions_declared_inputs():
+    config = [
+        _table_config("t1", ["a.json", "re:x"]),
+        _table_config("t2", ["a.json", "b.json"]),
+        _table_config("t3", []),
+    ]
+
+    assert extractor_inputs(config) == frozenset({"a.json", "b.json", "re:x"})
+    assert extractor_inputs([]) == frozenset()

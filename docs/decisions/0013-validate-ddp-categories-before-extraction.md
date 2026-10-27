@@ -10,13 +10,10 @@ applies_to:
     - packages/python/port/helpers/flow_builder.py
     - packages/python/port/helpers/validate.py
     - packages/python/port/platforms/**/*.py
-    - packages/python/port/helpers/meta_recognition.py
-    - packages/python/port/platforms/instagram.py
 priority: default
 companions:
     - packages/python/tests/test_validate.py
     - packages/python/tests/test_flow_builder.py
-    - packages/python/tests/test_meta_recognition.py
     - packages/python/tests/test_instagram_recognition.py
     - packages/python/tests/test_facebook_recognition.py
 ---
@@ -30,20 +27,16 @@ companions:
 ## Guidance
 
 - Do not call `extract_data()` before validation or bypass `FlowBuilder.start_flow()` to reach extraction directly.
-- A platform that validates through `validate_zip` (the default) checks the archive against its `DDP_CATEGORIES`; keep its `DDP_CATEGORIES` aligned with the files `extract_data()` actually reads.
 - Invalid validation returns the retry prompt; it is not an extraction error or traceback path.
-- Instagram and Facebook recognise their export through `meta_recognition.validate_meta`, which counts the zip's markers for each product: accept only when ours is nonzero and the other product's is zero. Any marker of the other product means the export is never accepted (`<other>_detected` or `mixed`), however many of ours there are. A Meta platform's `DDP_CATEGORIES` only name the format (json/html) and do not drive recognition.
-- Markers in `meta_recognition.py` are folder names, consecutive `parent/child` folder pairs, or `folder/stem` file markers for categories that keep their files directly in the folder. Re-derive them from real export listings whenever Meta's export layout changes; they are not documentation of the layout.
-- A Meta platform rejects a recognised export that holds none of its study categories (`no_study_categories`, applied by `require_study_categories` in its `validate_ddp`), so the participant stays pending and sees the retry prompt instead of completing through the no-data page.
-- The invariant is validate-before-extract, not `DDP_CATEGORIES` specifically. WhatsApp (own `validate_file()`, single-file export), Google (`validate_ddp` over the `ArchiveSet` inventory), Instagram and Facebook (`validate_meta`) are the standing exceptions to the `DDP_CATEGORIES` contract and still validate before extraction.
+- A platform that validates through `validate_zip` (the default) checks the archive against its `DDP_CATEGORIES`; keep their `known_files` aligned with the files `extract_data()` actually reads.
+- The invariant is validate-before-extract, not `DDP_CATEGORIES` specifically. WhatsApp (own `validate_file()`, single-file export), Google (`validate_ddp` over the `ArchiveSet` inventory), and Instagram and Facebook (`validate_ddp` delegating to `meta_recognition.validate_meta`) are the standing exceptions to the `DDP_CATEGORIES` contract and still validate before extraction.
 
 ## Why
 
-Uploaded zips are routinely the wrong platform, wrong format, or corrupt, and extraction is expensive and fails cryptically on bad input — a raw `KeyError` after all the parsing is useless to a participant. Validating first fails fast with a meaningful retry prompt and lets `extract_data()` assume a recognised archive; centralizing the order in `start_flow()` means no platform can reach extraction first. The ordering, not `DDP_CATEGORIES` itself, is the invariant: WhatsApp's chat export is a single file, and Google's Takeout has no stable filename set, so neither fits a `DDP_CATEGORIES` list. Instagram and Facebook exports share a layout and file names, so a `known_files` share cannot tell them apart or survive Meta renaming files; markers can, and the one shared helper keeps both platforms judging the same way. Cost: a platform's recognition logic (`DDP_CATEGORIES`, markers, or its own validator) must stay aligned with real exports, or invalid files slip through or valid ones are refused.
+Uploaded zips are routinely the wrong platform, wrong format, or corrupt, and extraction is expensive and fails cryptically on bad input — a raw `KeyError` after all the parsing is useless to a participant. Validating first fails fast with a meaningful retry prompt and lets `extract_data()` assume a recognised archive; centralizing the order in `start_flow()` means no platform can reach extraction first. The ordering, not `DDP_CATEGORIES` itself, is the invariant: WhatsApp's chat export is a single file, Google's Takeout has no stable filename set, and Instagram and Facebook share a layout and file names that a `known_files` share cannot tell apart. Cost: each platform's recognition logic must stay aligned with real exports, or invalid files slip through or valid ones are refused.
 
 ## Checks
 
 - Aside from the e2etest platforms (which `release.sh` excludes from release builds) and the non-normative `example.py` template, confirm `platforms/google.py` and `platforms/whatsapp.py` are the only modules under `port/platforms/` that define no `DDP_CATEGORIES`, and that each instead exposes its own validator (`validate_ddp` / `validate_file`).
 - Confirm `google.validate_ddp` takes an `ArchiveSet` and never calls `zipfile.ZipFile(...)` itself — recognition runs over `archive_set.members`, not a fresh unzip.
-- Confirm `instagram.validate_ddp` and `facebook.validate_ddp` delegate to `validate_meta` and do not read `known_files` for recognition.
-- Confirm the rejection paths are pinned by tests: `mixed` and `<other>_detected` in `packages/python/tests/test_meta_recognition.py`, `no_study_categories` in `packages/python/tests/test_instagram_recognition.py` and `packages/python/tests/test_facebook_recognition.py`.
+- Confirm `instagram.validate_ddp` and `facebook.validate_ddp` delegate to `meta_recognition.validate_meta`.

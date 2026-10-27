@@ -35,6 +35,7 @@ module cannot be loaded.
 import importlib.resources
 import json
 import logging
+import re
 from importlib import import_module
 from typing import Any, Callable, Iterator, TypedDict
 
@@ -62,6 +63,7 @@ _OPTIONAL_FIELDS: list[tuple[str, type]] = [
     ("extractor_kwargs", dict),
     ("variables", list),
     ("documentation", dict),
+    ("inputs", list),
 ]
 
 # Table fields whose value is a single participant-facing text bundle.
@@ -342,6 +344,22 @@ def validate(platform: str) -> tuple[list[str], list[str]]:
                     f"{prefix}: optional field '{field}' must be {expected_type.__name__}, "
                     f"got {type(entry[field]).__name__}"
                 )
+        inputs = entry.get("inputs")
+        if isinstance(inputs, list):
+            for j, name in enumerate(inputs):
+                if not isinstance(name, str) or not name:
+                    errors.append(
+                        f"{prefix} (id {entry.get('id')!r}): 'inputs'[{j}] must be a "
+                        f"non-empty string, got {name!r}"
+                    )
+                elif name.startswith("re:"):
+                    try:
+                        re.compile(name[len("re:"):])
+                    except re.error as exc:
+                        errors.append(
+                            f"{prefix} (id {entry.get('id')!r}): 'inputs'[{j}] {name!r} "
+                            f"does not compile: {exc}"
+                        )
 
     # 5. UI-content locale coverage (JSON-only; no platform import needed).
     content_errors, content_warnings = validate_ui_content(tables)

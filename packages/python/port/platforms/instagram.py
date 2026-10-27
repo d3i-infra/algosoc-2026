@@ -79,6 +79,7 @@ import port.api.props as props
 from port.api.d3i_props import ExtractionResult
 from port.api.file_utils import SeekableBinaryReader
 from port.helpers.table_extractor import (
+    extractor_inputs,
     load_port_config,
     run_extraction,
 )
@@ -462,7 +463,11 @@ def following_to_df(reader: ZipArchiveReader, errors: Counter, validation=None) 
             "Account": {"en": "Account", "nl": "Account"},
             "URL": {"en": "URL", "nl": "URL"},
             "Date": {"en": "Date", "nl": "Datum en tijd"}
-          }
+          },
+          "inputs": [
+            "following.json",
+            "following.html"
+          ]
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
@@ -606,6 +611,10 @@ def posts_viewed_to_df(reader: ZipArchiveReader, errors: Counter, validation=Non
               "group": {"column": "Date", "dateFormat": "hour_cycle", "label": {"en": "Hour of the day", "nl": "Uur van de dag"}},
               "values": [{"label": {"en": "Number of posts", "nl": "Aantal berichten"}}]
             }
+          ],
+          "inputs": [
+            "posts_viewed.json",
+            "posts_viewed.html"
           ]
         }
     """
@@ -754,6 +763,10 @@ def videos_watched_to_df(
               "group": {"column": "Date", "dateFormat": "auto", "label": {"en": "Date", "nl": "Datum"}},
               "values": [{"aggregate": "count", "label": {"en": "Videos watched", "nl": "Bekeken video's"}}]
             }
+          ],
+          "inputs": [
+            "videos_watched.json",
+            "videos_watched.html"
           ]
         }
     """
@@ -886,7 +899,11 @@ def post_comments_to_df(
             "Comment": {"en": "Comment", "nl": "Reactie"},
             "Media owner": {"en": "Media owner", "nl": "Account"},
             "Date": {"en": "Date", "nl": "Datum en tijd"}
-          }
+          },
+          "inputs": [
+            "re:(^|/)post_comments(?:_\\\\d+)?\\\\.json$",
+            "re:(^|/)post_comments(?:_\\\\d+)?\\\\.html$"
+          ]
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
@@ -1030,7 +1047,11 @@ def liked_comments_to_df(
             "Account name": {"en": "Account name", "nl": "Account"},
             "Value": {"en": "Comment", "nl": "Reactie"},
             "Date": {"en": "Date", "nl": "Datum en tijd"}
-          }
+          },
+          "inputs": [
+            "liked_comments.json",
+            "liked_comments.html"
+          ]
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
@@ -1174,6 +1195,10 @@ def liked_posts_to_df(
               "textColumn": "Account name",
               "tokenize": false
             }
+          ],
+          "inputs": [
+            "liked_posts.json",
+            "liked_posts.html"
           ]
         }
     """
@@ -1299,7 +1324,11 @@ def story_likes_to_df(
           "headers": {
             "Account name": {"en": "Account name", "nl": "Account"},
             "Date": {"en": "Date", "nl": "Datum en tijd"}
-          }
+          },
+          "inputs": [
+            "story_likes.json",
+            "story_likes.html"
+          ]
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
@@ -1427,7 +1456,11 @@ def saved_posts_to_df(
             "Username": {"en": "Username", "nl": "Account"},
             "Hashtags": {"en": "Hashtags", "nl": "Hashtags"},
             "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
-          }
+          },
+          "inputs": [
+            "saved_posts.json",
+            "saved_posts.html"
+          ]
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
@@ -1611,7 +1644,11 @@ def word_or_phrase_searches_to_df(
           "headers": {
             "Search term": {"en": "Search term", "nl": "Zoekterm"},
             "Date": {"en": "Date", "nl": "Datum en tijd"}
-          }
+          },
+          "inputs": [
+            "word_or_phrase_searches.json",
+            "word_or_phrase_searches.html"
+          ]
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
@@ -1759,7 +1796,11 @@ def stories_published_to_df(
             "Text": {"en": "Text", "nl": "Tekst"},
             "Media type": {"en": "File type", "nl": "Bestandstype"},
             "Date": {"en": "Date", "nl": "Datum en tijd"}
-          }
+          },
+          "inputs": [
+            "media/stories.json",
+            "media/stories.html"
+          ]
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
@@ -1899,7 +1940,11 @@ def advertisers_using_activity_to_df(
           "headers": {
             "Advertiser": {"en": "Advertiser", "nl": "Adverteerder"},
             "Category": {"en": "How they reached you", "nl": "Hoe zij u bereikten"}
-          }
+          },
+          "inputs": [
+            "advertisers_using_your_activity_or_information.json",
+            "advertisers_using_your_activity_or_information.html"
+          ]
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
@@ -2037,7 +2082,11 @@ def ads_viewed_to_df(
             "Name": {"en": "Name", "nl": "Naam"},
             "URL": {"en": "URL", "nl": "URL"},
             "Date": {"en": "Date", "nl": "Datum en tijd"}
-          }
+          },
+          "inputs": [
+            "ads_viewed.json",
+            "ads_viewed.html"
+          ]
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
@@ -2172,7 +2221,10 @@ def profile_searches_to_df(
           "headers": {
             "Name": {"en": "Name", "nl": "Naam"},
             "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
-          }
+          },
+          "inputs": [
+            "profile_searches.json"
+          ]
         }
     """
     result = reader.json(filename)
@@ -2256,7 +2308,10 @@ def threads_viewed_to_df(
             "Author": {"en": "Author", "nl": "Account"},
             "URL": {"en": "URL", "nl": "URL"},
             "Date": {"en": "Date", "nl": "Datum en tijd"}
-          }
+          },
+          "inputs": [
+            "threads_viewed.json"
+          ]
         }
     """
     result = reader.json(filename)
@@ -2355,7 +2410,10 @@ def ads_clicked_to_df(
             "Title": {"en": "Title", "nl": "Titel"},
             "URL": {"en": "URL", "nl": "URL"},
             "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
-          }
+          },
+          "inputs": [
+            "ads_clicked.json"
+          ]
         }
     """
     result = reader.json(filename)
@@ -2455,7 +2513,11 @@ def posts_published_to_df(
           "headers": {
             "Title": {"en": "Title", "nl": "Titel"},
             "Timestamp": {"en": "Timestamp", "nl": "Datum en tijd"}
-          }
+          },
+          "inputs": [
+            "re:(^|/)posts(?:_\\\\d+)?\\\\.json$",
+            "re:(^|/)posts(?:_\\\\d+)?\\\\.html$"
+          ]
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
@@ -2596,7 +2658,11 @@ def subscription_for_no_ads_to_df(
           "headers": {
             "Label": {"en": "Label", "nl": "Label"},
             "Value": {"en": "Value", "nl": "Waarde"}
-          }
+          },
+          "inputs": [
+            "subscription_for_no_ads.json",
+            "subscription_for_no_ads.html"
+          ]
         }
     """
     if validation and validation.current_ddp_category.ddp_filetype == DDPFiletype.HTML:
@@ -2796,6 +2862,10 @@ EXTRACTOR_REGISTRY: dict[str, Callable[..., pd.DataFrame]] = {
     # "followers_to_df": followers_to_df,  # not in algosoc-2026 list
 }
 
+#: Every export file name or ``re:`` pattern an active extractor declares in its
+#: ``Table config::`` ``inputs`` (ADR-0028).
+EXTRACTOR_INPUTS: frozenset[str] = extractor_inputs(load_port_config(EXTRACTOR_REGISTRY, "instagram"))
+
 
 # ---------------------------------------------------------------------------
 # Main extraction & flow
@@ -2979,15 +3049,18 @@ def extraction(
 
 
 def validate_ddp(archive: SeekableBinaryReader) -> MetaValidation:
-    """Recognise an Instagram export by its folder markers, then require at
-    least one of the study's categories.
+    """Recognise an Instagram export by its folder markers or by a file one
+    of its extractors reads, then require at least one of the study's
+    categories or one such file.
 
     Recognition goes through the shared Meta helper, which scores the zip's
-    folder names rather than its file names. ``DDP_CATEGORIES`` now only
-    name the export's formats (json_en, html_en); they no longer drive
-    recognition.
+    folder names and resolves ``EXTRACTOR_INPUTS`` the way the extractors
+    do. ``DDP_CATEGORIES`` now only name the export's formats (json_en,
+    html_en); they no longer drive recognition.
     """
-    return require_study_categories(validate_meta(archive, "instagram", DDP_CATEGORIES), MISSING_CATEGORIES)
+    return require_study_categories(
+        validate_meta(archive, "instagram", DDP_CATEGORIES, inputs=EXTRACTOR_INPUTS), MISSING_CATEGORIES
+    )
 
 
 # The export folders the study draws on: key -> (folder, soft-confirm label).
